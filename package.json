@@ -39,6 +39,7 @@
     "@types/rdf-js": "*",
     "@types/sparqljs": "*",
     "componentsjs": "^4.0.6",
+    "csv-parser": "^3.0.0",
     "sparqljs": "^3.4.1"
   },
   "pre-commit": [
@@ -101,7 +102,7 @@
     "coveralls": "jest --coverage && cat ./coverage/lcov.info | coveralls",
     "lint": "eslint . --ext .ts --cache",
     "build": "npm run build:ts && npm run build:components",
-    "build:components": "componentsjs-generator -s lib",
+    "build:components": "componentsjs-generator -s lib -i .componentsignore",
     "build:ts": "tsc",
     "validate": "npm ls",
     "prepare": "npm run build",
