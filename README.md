@@ -6,7 +6,34 @@
 
 Instantiate SPARQL query templates based on given substitution parameters.
 
-TODO
+For example, given a SPARQL query template and a CSV file,
+it can generate multiple instantiations of this template based on the CSV rows.
+
+Template:
+```sparql
+SELECT * WHERE { ?s ?p ?o. }
+```
+
+CSV file:
+```csv
+s,p
+ex:s1,ex:p1
+ex:s2,ex:p2
+ex:s3,ex:p3
+ex:s4,ex:p4
+ex:s5,ex:p5
+```
+
+The resulting queries for the instantiation of `?s` for a count of 3: 
+```text
+SELECT * WHERE { <ex:s1> ?p ?o. }
+
+SELECT * WHERE { <ex:s2> ?p ?o. }
+
+SELECT * WHERE { <ex:s3> ?p ?o. }
+```
+
+Queries per template are separated by empty newlines.
 
 ## Installation
 
@@ -33,11 +60,137 @@ $ sparql-query-parameter-instantiator path/to/config.json
 
 The config file that should be passed to the command line tool has the following JSON structure:
 
-TODO
+```json
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/sparql-query-parameter-instantiator/^1.0.0/components/context.jsonld",
+  "@id": "urn:sparql-query-parameter-instantiator:default",
+  "@type": "QueryInstantiator",
+  "QueryInstantiator:_count": 5,
+  "QueryInstantiator:_providers": [
+    {
+      "@type": "QueryTemplateProvider",
+      "QueryTemplateProvider:_templateFilePath": "path/to/template1.sparql",
+      "QueryTemplateProvider:_destinationFilePath": "path/to/output.sparql",
+      "QueryTemplateProvider:_variables": [
+        {
+          "@type": "VariableTemplateNamedNode",
+          "VariableTemplateNamedNode:_name": "person",
+          "VariableTemplateNamedNode:_substitutionProvider": {
+            "@type": "SubstitutionProviderCsv",
+            "SubstitutionProviderCsv:_csvFilePath": "path/to/params.csv",
+            "SubstitutionProviderCsv:_columnName": "person"
+          }
+        }
+      ]
+    }
+  ]
+}
+
+```
+
+The important parts in this config file are:
+
+* `"QueryInstantiator:_count"`: How many times each query template should be instantiated.
+* `"QueryInstantiator:_providers"` A list of query templates.
+* `"QueryTemplateProvider:_templateFilePath"`: The path to a SPARQL (text) file.
+* `"QueryTemplateProvider:_destinationFilePath"`: The path of the text file that will be created with the instantiated queries (seperated by empty lines).
+* `"QueryTemplateProvider:_variables"`: An array of variables that have to be instantiated.
+* `"*:_substitionProvider"`: A provider of values for this variable.
 
 ## Configure
 
-TODO
+### Variable Templates
+
+A variable template indicates a variable in the template query that must be instantiated with certain values.
+
+#### Named Node Variable Template
+
+A variable template that always produces IRIs.
+
+```json
+{
+  "QueryTemplateProvider:_variables": [
+    {
+      "@type": "VariableTemplateNamedNode",
+      "VariableTemplateNamedNode:_name": "person",
+      "VariableTemplateNamedNode:_substitutionProvider": { ... }
+    }
+  ]
+}
+```
+
+Parameters:
+
+* `"VariableTemplateNamedNode:_name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
+* `"VariableTemplateNamedNode:_substitionProvider"`: A provider of substitution values.
+
+#### Literal Variable Template
+
+A variable template that always produces literals.
+
+```json
+{
+  "QueryTemplateProvider:_variables": [
+    {
+      "@type": "VariableTemplateLiteral",
+      "VariableTemplateLiteral:_name": "person",
+      "VariableTemplateLiteral:_language": "en-us",
+      "VariableTemplateLiteral:_datatype": "http://www.w3.org/2001/XMLSchema#number",
+      "VariableTemplateLiteral:_substitutionProvider": { ... }
+    }
+  ]
+}
+```
+
+Parameters:
+
+* `"VariableTemplateLiteral:_name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
+* `"VariableTemplateLiteral:_language"`: _(Optional)_ The language for produced literals.
+* `"VariableTemplateLiteral:__datatype"`: _(Optional)_ The datatype for produced literals.
+* `"VariableTemplateLiteral:__substitutionProvider"`: A provider of substitution values.
+
+### Substitution Providers
+
+#### CSV Substitution Provider
+
+Provides values from a CSV file.
+
+```json
+{
+  "VariableTemplateNamedNode:_substitionProvider": {
+    "@type": "SubstitutionProviderCsv",
+    "SubstitutionProviderCsv:_csvFilePath": "path/to/params.csv",
+    "SubstitutionProviderCsv:_columnName": "person"
+  }
+}
+```
+
+Parameters:
+
+* `"SubstitutionProviderCsv:_csvFilePath"`: File path to a CSV file.
+* `"SubstitutionProviderCsv:_columnName"`: The column name of the CSV file to extract values from.
+* `"SubstitutionProviderCsv:_separator"`: _(Optional)_ Column separator.
+
+#### Static Substitution Provider
+
+Provides values statically by defining them directly in the config file.
+
+```json
+{
+  "VariableTemplateNamedNode:_substitionProvider": {
+    "@type": "SubstitutionProviderStatic",
+    "SubstitutionProviderStatic:_values": [
+      "value1",
+      "value2",
+      "value3"
+    ]
+  }
+}
+```
+
+Parameters:
+
+* `"SubstitutionProviderStatic:_values"`: An array of values to provide.
 
 ## License
 
