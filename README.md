@@ -123,6 +123,7 @@ Parameters:
 
 * `"VariableTemplateNamedNode:_name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
 * `"VariableTemplateNamedNode:_substitionProvider"`: A provider of substitution values.
+* `"VariableTemplateNamedNode:_valueTransformers"`: An optional array of value transformers.
 
 #### Literal Variable Template
 
@@ -146,10 +147,13 @@ Parameters:
 
 * `"VariableTemplateLiteral:_name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
 * `"VariableTemplateLiteral:_language"`: _(Optional)_ The language for produced literals.
-* `"VariableTemplateLiteral:__datatype"`: _(Optional)_ The datatype for produced literals.
-* `"VariableTemplateLiteral:__substitutionProvider"`: A provider of substitution values.
+* `"VariableTemplateLiteral:_datatype"`: _(Optional)_ The datatype for produced literals.
+* `"VariableTemplateLiteral:_substitutionProvider"`: A provider of substitution values.
+* `"VariableTemplateLiteral:_valueTransformers"`: An optional array of value transformers.
 
 ### Substitution Providers
+
+Substitution providers supply values for substituting variables in a query template.
 
 #### CSV Substitution Provider
 
@@ -157,7 +161,7 @@ Provides values from a CSV file.
 
 ```json
 {
-  "VariableTemplateNamedNode:_substitionProvider": {
+  "VariableTemplateNamedNode:_substitutionProvider": {
     "@type": "SubstitutionProviderCsv",
     "SubstitutionProviderCsv:_csvFilePath": "path/to/params.csv",
     "SubstitutionProviderCsv:_columnName": "person"
@@ -177,7 +181,7 @@ Provides values statically by defining them directly in the config file.
 
 ```json
 {
-  "VariableTemplateNamedNode:_substitionProvider": {
+  "VariableTemplateNamedNode:_substitutionProvider": {
     "@type": "SubstitutionProviderStatic",
     "SubstitutionProviderStatic:_values": [
       "value1",
@@ -191,6 +195,31 @@ Provides values statically by defining them directly in the config file.
 Parameters:
 
 * `"SubstitutionProviderStatic:_values"`: An array of values to provide.
+
+### Value Transformers
+
+Value transformers can be attached to variable templates
+for modifying a value originating from a substitution provider.
+
+#### Replace IRI Value Transformer
+
+A value transformer that that replaces (parts of) IRIs.
+
+```json
+{
+  "VariableTemplateNamedNode:_valueTransformers": [
+    {
+      "@type": "ValueTransformerReplaceIri",
+      "ValueTransformerReplaceIri:_searchRegex": "^http://www.ldbc.eu",
+      "ValueTransformerReplaceIri:_replacementString": "http://localhost:3000/www.ldbc.eu"
+    }
+  ]
+}
+```
+
+Options:
+* `"ValueTransformerReplaceIri:_searchRegex"`: The regex to search for.
+* `"ValueTransformerReplaceIri:_replacementString"`: The string to replace.
 
 ## License
 
