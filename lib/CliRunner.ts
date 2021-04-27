@@ -4,6 +4,22 @@ import { ComponentsManager } from 'componentsjs';
 import type { QueryInstantiator } from './QueryInstantiator';
 
 /**
+ * Run function for starting the instantiator for a given config.
+ * @param configPath - Path to a config.
+ * @param properties - Components loader properties.
+ */
+export const runConfig = async function(
+  configPath: string,
+  properties: IComponentsManagerBuilderOptions<QueryInstantiator>,
+): Promise<void> {
+  const manager = await ComponentsManager.build(properties);
+  await manager.configRegistry.register(configPath);
+  const instantiator: QueryInstantiator = await manager
+    .instantiate('urn:sparql-query-parameter-instantiator:default');
+  return await instantiator.instantiate();
+};
+
+/**
  * Generic run function for starting the instantiator from a given config
  * @param args - Command line arguments.
  * @param stdin - Standard input stream.
@@ -29,11 +45,7 @@ Usage:
     const configPath = args[0];
 
     // Setup from config file
-    const manager = await ComponentsManager.build(properties);
-    await manager.configRegistry.register(configPath);
-    const instantiator: QueryInstantiator = await manager
-      .instantiate('urn:sparql-query-parameter-instantiator:default');
-    return await instantiator.instantiate();
+    return await runConfig(configPath, properties);
   })().then((): void => {
     // Done
   }).catch(error => {
