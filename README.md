@@ -1,6 +1,6 @@
 # SPARQL Query Parameter Instantiator
 
-[![Build Status](https://travis-ci.com/rubensworks/sparql-query-parameter-instantiator.js.svg?branch=master)](https://travis-ci.com/rubensworks/sparql-query-parameter-instantiator.js)
+[![Build status](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/workflows/CI/badge.svg)](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/actions?query=workflow%3ACI)
 [![Coverage Status](https://coveralls.io/repos/github/rubensworks/sparql-query-parameter-instantiator.js/badge.svg?branch=master)](https://coveralls.io/github/rubensworks/sparql-query-parameter-instantiator.js?branch=master)
 [![npm version](https://badge.fury.io/js/sparql-query-parameter-instantiator.svg)](https://www.npmjs.com/package/sparql-query-parameter-instantiator)
 
