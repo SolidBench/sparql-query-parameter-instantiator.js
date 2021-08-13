@@ -1,6 +1,6 @@
 {
   "name": "sparql-query-parameter-instantiator",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Instantiate SPARQL query templates based on given substitution parameters",
   "keywords": [
     "sparql",
