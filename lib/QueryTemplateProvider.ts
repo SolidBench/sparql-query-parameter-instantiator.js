@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import type * as RDF from 'rdf-js';
+import type * as RDF from '@rdfjs/types';
 import type { SparqlParser } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QueryTemplate } from './QueryTemplate';
