@@ -65,20 +65,20 @@ The config file that should be passed to the command line tool has the following
   "@context": "https://linkedsoftwaredependencies.org/bundles/npm/sparql-query-parameter-instantiator/^1.0.0/components/context.jsonld",
   "@id": "urn:sparql-query-parameter-instantiator:default",
   "@type": "QueryInstantiator",
-  "QueryInstantiator:_count": 5,
-  "QueryInstantiator:_providers": [
+  "count": 5,
+  "providers": [
     {
       "@type": "QueryTemplateProvider",
-      "QueryTemplateProvider:_templateFilePath": "path/to/template1.sparql",
-      "QueryTemplateProvider:_destinationFilePath": "path/to/output.sparql",
-      "QueryTemplateProvider:_variables": [
+      "templateFilePath": "path/to/template1.sparql",
+      "destinationFilePath": "path/to/output.sparql",
+      "variables": [
         {
           "@type": "VariableTemplateNamedNode",
-          "VariableTemplateNamedNode:_name": "person",
-          "VariableTemplateNamedNode:_substitutionProvider": {
+          "name": "person",
+          "substitutionProvider": {
             "@type": "SubstitutionProviderCsv",
-            "SubstitutionProviderCsv:_csvFilePath": "path/to/params.csv",
-            "SubstitutionProviderCsv:_columnName": "person"
+            "csvFilePath": "path/to/params.csv",
+            "columnName": "person"
           }
         }
       ]
@@ -90,11 +90,11 @@ The config file that should be passed to the command line tool has the following
 
 The important parts in this config file are:
 
-* `"QueryInstantiator:_count"`: How many times each query template should be instantiated.
-* `"QueryInstantiator:_providers"` A list of query templates.
-* `"QueryTemplateProvider:_templateFilePath"`: The path to a SPARQL (text) file.
-* `"QueryTemplateProvider:_destinationFilePath"`: The path of the text file that will be created with the instantiated queries (seperated by empty lines).
-* `"QueryTemplateProvider:_variables"`: An array of variables that have to be instantiated.
+* `"count"`: How many times each query template should be instantiated.
+* `"providers"` A list of query templates.
+* `"templateFilePath"`: The path to a SPARQL (text) file.
+* `"destinationFilePath"`: The path of the text file that will be created with the instantiated queries (seperated by empty lines).
+* `"variables"`: An array of variables that have to be instantiated.
 * `"*:_substitionProvider"`: A provider of values for this variable.
 
 ## Configure
@@ -109,11 +109,11 @@ A variable template that always produces IRIs.
 
 ```json
 {
-  "QueryTemplateProvider:_variables": [
+  "variables": [
     {
       "@type": "VariableTemplateNamedNode",
-      "VariableTemplateNamedNode:_name": "person",
-      "VariableTemplateNamedNode:_substitutionProvider": { ... }
+      "name": "person",
+      "substitutionProvider": { ... }
     }
   ]
 }
@@ -121,9 +121,9 @@ A variable template that always produces IRIs.
 
 Parameters:
 
-* `"VariableTemplateNamedNode:_name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
-* `"VariableTemplateNamedNode:_substitionProvider"`: A provider of substitution values.
-* `"VariableTemplateNamedNode:_valueTransformers"`: An optional array of value transformers.
+* `"name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
+* `"substitionProvider"`: A provider of substitution values.
+* `"valueTransformers"`: An optional array of value transformers.
 
 #### Literal Variable Template
 
@@ -131,13 +131,13 @@ A variable template that always produces literals.
 
 ```json
 {
-  "QueryTemplateProvider:_variables": [
+  "variables": [
     {
       "@type": "VariableTemplateLiteral",
-      "VariableTemplateLiteral:_name": "person",
-      "VariableTemplateLiteral:_language": "en-us",
-      "VariableTemplateLiteral:_datatype": "http://www.w3.org/2001/XMLSchema#number",
-      "VariableTemplateLiteral:_substitutionProvider": { ... }
+      "name": "person",
+      "language": "en-us",
+      "datatype": "http://www.w3.org/2001/XMLSchema#number",
+      "substitutionProvider": { ... }
     }
   ]
 }
@@ -145,11 +145,11 @@ A variable template that always produces literals.
 
 Parameters:
 
-* `"VariableTemplateLiteral:_name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
-* `"VariableTemplateLiteral:_language"`: _(Optional)_ The language for produced literals.
-* `"VariableTemplateLiteral:_datatype"`: _(Optional)_ The datatype for produced literals.
-* `"VariableTemplateLiteral:_substitutionProvider"`: A provider of substitution values.
-* `"VariableTemplateLiteral:_valueTransformers"`: An optional array of value transformers.
+* `"name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
+* `"language"`: _(Optional)_ The language for produced literals.
+* `"datatype"`: _(Optional)_ The datatype for produced literals.
+* `"substitutionProvider"`: A provider of substitution values.
+* `"valueTransformers"`: An optional array of value transformers.
 
 ### Substitution Providers
 
@@ -161,19 +161,19 @@ Provides values from a CSV file.
 
 ```json
 {
-  "VariableTemplateNamedNode:_substitutionProvider": {
+  "substitutionProvider": {
     "@type": "SubstitutionProviderCsv",
-    "SubstitutionProviderCsv:_csvFilePath": "path/to/params.csv",
-    "SubstitutionProviderCsv:_columnName": "person"
+    "csvFilePath": "path/to/params.csv",
+    "columnName": "person"
   }
 }
 ```
 
 Parameters:
 
-* `"SubstitutionProviderCsv:_csvFilePath"`: File path to a CSV file.
-* `"SubstitutionProviderCsv:_columnName"`: The column name of the CSV file to extract values from.
-* `"SubstitutionProviderCsv:_separator"`: _(Optional)_ Column separator.
+* `"csvFilePath"`: File path to a CSV file.
+* `"columnName"`: The column name of the CSV file to extract values from.
+* `"separator"`: _(Optional)_ Column separator.
 
 #### Static Substitution Provider
 
@@ -181,9 +181,9 @@ Provides values statically by defining them directly in the config file.
 
 ```json
 {
-  "VariableTemplateNamedNode:_substitutionProvider": {
+  "substitutionProvider": {
     "@type": "SubstitutionProviderStatic",
-    "SubstitutionProviderStatic:_values": [
+    "values": [
       "value1",
       "value2",
       "value3"
@@ -194,7 +194,7 @@ Provides values statically by defining them directly in the config file.
 
 Parameters:
 
-* `"SubstitutionProviderStatic:_values"`: An array of values to provide.
+* `"values"`: An array of values to provide.
 
 ### Value Transformers
 
@@ -207,19 +207,19 @@ A value transformer that that replaces (parts of) IRIs.
 
 ```json
 {
-  "VariableTemplateNamedNode:_valueTransformers": [
+  "valueTransformers": [
     {
       "@type": "ValueTransformerReplaceIri",
-      "ValueTransformerReplaceIri:_searchRegex": "^http://www.ldbc.eu",
-      "ValueTransformerReplaceIri:_replacementString": "http://localhost:3000/www.ldbc.eu"
+      "searchRegex": "^http://www.ldbc.eu",
+      "replacementString": "http://localhost:3000/www.ldbc.eu"
     }
   ]
 }
 ```
 
 Options:
-* `"ValueTransformerReplaceIri:_searchRegex"`: The regex to search for.
-* `"ValueTransformerReplaceIri:_replacementString"`: The string to replace.
+* `"searchRegex"`: The regex to search for.
+* `"replacementString"`: The string to replace.
 
 ## License
 

@@ -1,0 +1,24 @@
+{
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/sparql-query-parameter-instantiator/^1.0.0/components/context.jsonld",
+  "@id": "urn:sparql-query-parameter-instantiator:default",
+  "@type": "QueryInstantiator",
+  "count": 5,
+  "providers": [
+    {
+      "@type": "QueryTemplateProvider",
+      "templateFilePath": "path/to/template1.sparql",
+      "destinationFilePath": "path/to/output.sparql",
+      "variables": [
+        {
+          "@type": "VariableTemplateNamedNode",
+          "name": "person",
+          "substitutionProvider": {
+            "@type": "SubstitutionProviderCsv",
+            "csvFilePath": "path/to/params.csv",
+            "columnName": "person"
+          }
+        }
+      ]
+    }
+  ]
+}
