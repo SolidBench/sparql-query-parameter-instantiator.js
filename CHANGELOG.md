@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.0.0"></a>
+## [v2.0.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v1.2.0...v2.0.0) - 2022-05-04
+
+### Changed
+* [Update to Components.js 5](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/45182d4ee1d5504327d8216b72dcee42e3af140c)
+
 <a name="v1.2.0"></a>
 ## [v1.2.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v1.1.0...v1.2.0) - 2021-08-13
 
