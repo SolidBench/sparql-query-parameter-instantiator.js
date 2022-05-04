@@ -62,7 +62,7 @@ The config file that should be passed to the command line tool has the following
 
 ```json
 {
-  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/sparql-query-parameter-instantiator/^1.0.0/components/context.jsonld",
+  "@context": "https://linkedsoftwaredependencies.org/bundles/npm/sparql-query-parameter-instantiator/^2.0.0/components/context.jsonld",
   "@id": "urn:sparql-query-parameter-instantiator:default",
   "@type": "QueryInstantiator",
   "count": 5,
