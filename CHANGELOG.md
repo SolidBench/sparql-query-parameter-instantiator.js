@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.1.0"></a>
+## [v2.1.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v1.2.0...v2.1.0) - 2022-05-12
+
+### Added
+* [Add shuffle substitution provider](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/194157746b67eedc7c16f070d9a2593f713056b4)
+* [Add union substitution provider](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/6cff5d3bf7d82ef9b6ccf2aacb4a30f349b7e48b)
+
 <a name="v2.0.0"></a>
 ## [v2.0.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v1.2.0...v2.0.0) - 2022-05-04
 
