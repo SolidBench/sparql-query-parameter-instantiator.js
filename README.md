@@ -151,6 +151,33 @@ Parameters:
 * `"substitutionProvider"`: A provider of substitution values.
 * `"valueTransformers"`: An optional array of value transformers.
 
+#### Timestamp Variable Template
+
+A template for instantiating RDF xsd:dateTime Literals from a variable value that represents a UNIX timestamp.
+
+```json
+{
+  "variables": [
+    {
+      "@type": "VariableTemplateTimestamp",
+      "name": "maxDate",
+      "substitutionProvider": {
+        "@type": "SubstitutionProviderCsv",
+        "csvFilePath": "dates.csv",
+        "columnName": "maxDate"
+      }
+    }
+  ]
+}
+```
+
+Parameters:
+
+* `"name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
+* `"datatype"`: _(Optional)_ The datatype for produced literals. Defaults to `xsd:dateTime`.
+* `"substitutionProvider"`: A provider of substitution values.
+* `"valueTransformers"`: An optional array of value transformers.
+
 ### Substitution Providers
 
 Substitution providers supply values for substituting variables in a query template.
