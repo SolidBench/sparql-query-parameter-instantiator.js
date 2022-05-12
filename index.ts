@@ -1,6 +1,7 @@
 export * from './lib/substitution/ISubstitutionProvider';
 export * from './lib/substitution/SubstitutionProviderCsv';
 export * from './lib/substitution/SubstitutionProviderStatic';
+export * from './lib/substitution/SubstitutionProviderUnion';
 export * from './lib/valuetransformer/IValueTransformer';
 export * from './lib/valuetransformer/ValueTransformerReplaceIri';
 export * from './lib/variable/IVariableTemplate';

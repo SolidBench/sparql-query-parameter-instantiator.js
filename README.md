@@ -196,6 +196,37 @@ Parameters:
 
 * `"values"`: An array of values to provide.
 
+#### Union Substitution Provider
+
+A substitution provider that takes the union over the values of the given subsitution provider.
+
+```json
+{
+  "substitutionProvider": {
+    "@type": "SubstitutionProviderUnion",
+    "substitutionProviders": [
+      {
+        "@type": "SubstitutionProviderStatic",
+        "values": [
+          "value1",
+          "value2",
+          "value3"
+        ]
+      },
+      {
+        "@type": "SubstitutionProviderCsv",
+        "csvFilePath": "path/to/params.csv",
+        "columnName": "person"
+      }
+    ]
+  }
+}
+```
+
+Parameters:
+
+* `"substitutionProviders"`: The substitution provider to union over.
+
 ### Value Transformers
 
 Value transformers can be attached to variable templates
