@@ -227,6 +227,32 @@ Parameters:
 
 * `"substitutionProviders"`: The substitution provider to union over.
 
+#### Shuffle Substitution Provider
+
+A substitution provider that wraps over another substitution provider and shuffles all values based on a seed.
+
+```json
+{
+  "substitutionProvider": {
+    "@type": "SubstitutionProviderShuffle",
+    "seed": 12345,
+    "substitutionProvider": {
+      "@type": "SubstitutionProviderStatic",
+      "values": [
+        "value1",
+        "value2",
+        "value3"
+      ]
+    }
+  }
+}
+```
+
+Parameters:
+
+* `"substitutionProvider"`: The substitution provider to shuffle.
+* `"seed"`: The random seed for shuffling.
+
 ### Value Transformers
 
 Value transformers can be attached to variable templates

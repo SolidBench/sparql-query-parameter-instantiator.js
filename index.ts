@@ -1,5 +1,6 @@
 export * from './lib/substitution/ISubstitutionProvider';
 export * from './lib/substitution/SubstitutionProviderCsv';
+export * from './lib/substitution/SubstitutionProviderShuffle';
 export * from './lib/substitution/SubstitutionProviderStatic';
 export * from './lib/substitution/SubstitutionProviderUnion';
 export * from './lib/valuetransformer/IValueTransformer';
