@@ -154,6 +154,96 @@ SELECT * WHERE {
   BIND(<ex:x> AS ?x)
 }`);
     });
+
+    it('should handle FILTER with one operation', () => {
+      expect(instantiate(`
+SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER(?creationDate <= <ex:abc>(?x))
+}`, { x: [ DF.namedNode('ex:s1') ]}, 0))
+        .toEqual(`SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER(?creationDate <= (<ex:abc>(<ex:s1>)))
+}`);
+    });
+
+    it('should handle FILTER with two operations', () => {
+      expect(instantiate(`
+SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER(?creationDate <= <ex:abc>(?x) || ?creationDate >= <ex:abc>(?x))
+}`, { x: [ DF.namedNode('ex:s1') ]}, 0))
+        .toEqual(`SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER((?creationDate <= (<ex:abc>(<ex:s1>))) || (?creationDate >= (<ex:abc>(<ex:s1>))))
+}`);
+    });
+
+    it('should handle FILTER NOT EXISTS', () => {
+      expect(instantiate(`
+SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER NOT EXISTS {
+    ?x ?p ?o.
+  }
+}`, { x: [ DF.namedNode('ex:s1') ]}, 0))
+        .toEqual(`SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER(NOT EXISTS { <ex:s1> ?p ?o. })
+}`);
+    });
+
+    it('should handle FILTER NOT EXISTS with GRAPH', () => {
+      expect(instantiate(`
+SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER NOT EXISTS {
+    GRAPH ?g {
+      ?x ?p ?o.
+    }
+  }
+}`, { x: [ DF.namedNode('ex:s1') ]}, 0))
+        .toEqual(`SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER(NOT EXISTS { GRAPH ?g { <ex:s1> ?p ?o. } })
+}`);
+    });
+
+    it('should handle FILTER NOT EXISTS with groups', () => {
+      expect(instantiate(`
+SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER NOT EXISTS {
+    {
+      ?x ?p ?o.
+    }
+    {
+      ?x ?p ?o.
+    }
+  }
+}`, { x: [ DF.namedNode('ex:s1') ]}, 0))
+        .toEqual(`SELECT * WHERE {
+  ?s ?p ?o.
+  FILTER(NOT EXISTS {
+    { <ex:s1> ?p ?o. }
+    { <ex:s1> ?p ?o. }
+  })
+}`);
+    });
+
+    it('should handle aggregates', () => {
+      expect(instantiate(`
+SELECT (SUM(?s) AS ?sum) WHERE { ?s ?p ?o. }`, { x: [ DF.namedNode('ex:s1') ]}, 0))
+        .toEqual(`SELECT (SUM(?s) AS ?sum) WHERE { ?s ?p ?o. }`);
+    });
+
+    it('should handle GROUP BY', () => {
+      expect(instantiate(`
+SELECT ?s WHERE { ?s ?p ?o. }
+GROUP BY ?s`, { x: [ DF.namedNode('ex:s1') ]}, 0))
+        .toEqual(`SELECT ?s WHERE { ?s ?p ?o. }
+GROUP BY ?s`);
+    });
   });
 });
 

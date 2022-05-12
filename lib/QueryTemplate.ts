@@ -7,7 +7,10 @@ import type { BlankTerm,
   Variable,
   VariableExpression,
   VariableTerm,
-  SelectQuery, PropertyPath, Term } from 'sparqljs';
+  SelectQuery,
+  PropertyPath,
+  Term,
+  Expression } from 'sparqljs';
 import { Generator } from 'sparqljs';
 
 /**
@@ -61,8 +64,24 @@ export class QueryTemplate {
           !(variable.value in variableMapping));
     }
 
+    // Apply expressions in variables
+    syntaxTree.variables = <any> syntaxTree.variables.map(variable => {
+      if ('expression' in variable) {
+        variable.expression = this.instantiateExpression(variable.expression, variableMapping);
+      }
+      return variable;
+    });
+
     // Handle where clause in a recursive manner
     syntaxTree.where = this.instantiatePatterns(syntaxTree.where!, variableMapping);
+
+    // Handle GROUP BY
+    if (syntaxTree.group) {
+      syntaxTree.group = syntaxTree.group.map(group => {
+        group.expression = this.instantiateExpression(group.expression, variableMapping);
+        return group;
+      });
+    }
 
     return syntaxTree;
   }
@@ -88,10 +107,40 @@ export class QueryTemplate {
         case 'service':
           pattern.patterns = this.instantiatePatterns(pattern.patterns, variableMapping);
           return pattern;
+        case 'filter':
+          pattern.expression = this.instantiateExpression(pattern.expression, variableMapping);
+          return pattern;
         default:
           return pattern;
       }
     });
+  }
+
+  public instantiateExpression(expression: Expression, variableMapping: Record<string, RDF.Term>): Expression {
+    if ('type' in expression) {
+      switch (expression.type) {
+        case 'group':
+          expression.patterns = this.instantiatePatterns(expression.patterns, variableMapping);
+          return expression;
+        case 'bgp':
+          expression.triples = expression.triples.map(triple => this.instantiateTriple(triple, variableMapping));
+          return expression;
+        case 'graph':
+          expression.patterns = this.instantiatePatterns(expression.patterns, variableMapping);
+          return expression;
+        case 'operation':
+          expression.args = expression.args.map(arg => this.instantiateExpression(arg, variableMapping));
+          return expression;
+        case 'functionCall':
+          expression.args = expression.args.map(arg => this.instantiateExpression(arg, variableMapping));
+          return expression;
+        case 'aggregate':
+          expression.expression = this.instantiateExpression(expression.expression, variableMapping);
+          return expression;
+      }
+    } else {
+      return <Expression> this.instantiateTerm(<Term> expression, variableMapping);
+    }
   }
 
   public instantiateTriple(triple: Triple, variableMapping: Record<string, RDF.Term>): Triple {
