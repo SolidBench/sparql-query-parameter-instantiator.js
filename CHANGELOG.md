@@ -1,6 +1,15 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.2.0"></a>
+## [v2.2.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.1.0...v2.2.0) - 2022-05-12
+
+### Fixed
+* [Fix variables in filter expressions not being replaced](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/6b85a60cfe75b01239c5f9f75e1f124680022c9d)
+
+### Added
+* [Add timestamp-based variable template](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/e4f8a45f3e5877eac1fcf9ad60c9b708c6c0cc1d)
+
 <a name="v2.1.0"></a>
 ## [v2.1.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v1.2.0...v2.1.0) - 2022-05-12
 
