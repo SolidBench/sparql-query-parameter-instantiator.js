@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.2.1"></a>
+## [v2.2.1](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.2.0...v2.2.1) - 2022-05-17
+
+### Fixed
+* [Fix expressions in BIND not being bound](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/3f1c00722de6b99b4587e03bdb3555570e8cd3a2)
+
 <a name="v2.2.0"></a>
 ## [v2.2.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.1.0...v2.2.0) - 2022-05-12
 
