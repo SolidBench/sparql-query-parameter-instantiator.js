@@ -155,6 +155,36 @@ SELECT * WHERE {
 }`);
     });
 
+    it('should handle BIND with expressions', () => {
+      expect(instantiate(`
+SELECT * WHERE {
+  ?s ?p ?o.
+  BIND(CONCAT("a", ?v) as ?x)
+}`, { v: [ DF.literal('s1') ]}, 0))
+        .toEqual(`SELECT * WHERE {
+  ?s ?p ?o.
+  BIND(CONCAT("a", "s1") AS ?x)
+}`);
+    });
+
+    it('should handle VALUES', () => {
+      expect(instantiate(`
+SELECT * WHERE {
+  ?s ?p ?o.
+  VALUES ?s {
+    <ex:a>
+    <ex:b>
+  }
+}`, { s: [ DF.namedNode('ex:s1') ]}, 0))
+        .toEqual(`SELECT * WHERE {
+  <ex:s1> ?p ?o.
+  VALUES ?s {
+    <ex:a>
+    <ex:b>
+  }
+}`);
+    });
+
     it('should handle FILTER with one operation', () => {
       expect(instantiate(`
 SELECT * WHERE {

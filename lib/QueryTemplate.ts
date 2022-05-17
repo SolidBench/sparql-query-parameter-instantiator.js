@@ -87,6 +87,7 @@ export class QueryTemplate {
   }
 
   public instantiatePatterns(patterns: Pattern[], variableMapping: Record<string, RDF.Term>): Pattern[] {
+    // eslint-disable-next-line array-callback-return
     return patterns.map(pattern => {
       pattern = { ...pattern };
       switch (pattern.type) {
@@ -110,7 +111,10 @@ export class QueryTemplate {
         case 'filter':
           pattern.expression = this.instantiateExpression(pattern.expression, variableMapping);
           return pattern;
-        default:
+        case 'bind':
+          pattern.expression = this.instantiateExpression(pattern.expression, variableMapping);
+          return pattern;
+        case 'values':
           return pattern;
       }
     });
