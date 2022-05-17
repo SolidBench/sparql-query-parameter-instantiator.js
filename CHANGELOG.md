@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.2.2"></a>
+## [v2.2.2](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.2.1...v2.2.2) - 2022-05-17
+
+### Fixed
+* [Fix query template not being deeply copied before instantiating](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/892e8daaa871b2f30f0d9a65b8dcb0e7437418bb)
+
 <a name="v2.2.1"></a>
 ## [v2.2.1](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.2.0...v2.2.1) - 2022-05-17
 
