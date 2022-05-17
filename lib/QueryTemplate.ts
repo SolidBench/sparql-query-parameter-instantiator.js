@@ -45,7 +45,7 @@ export class QueryTemplate {
     }
 
     // Instantiate syntax tree
-    return new Generator().stringify(this.instantiateSyntaxTree({ ...this.syntaxTree }, variableMapping));
+    return new Generator().stringify(this.instantiateSyntaxTree(this.syntaxTree, variableMapping));
   }
 
   public instantiateSyntaxTree(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
@@ -55,6 +55,7 @@ export class QueryTemplate {
     }
 
     // Remove variables
+    syntaxTree = { ...syntaxTree };
     if (!(syntaxTree.variables.length === 1 &&
       'termType' in syntaxTree.variables[0] &&
       syntaxTree.variables[0].termType === 'Wildcard')) {
@@ -77,10 +78,8 @@ export class QueryTemplate {
 
     // Handle GROUP BY
     if (syntaxTree.group) {
-      syntaxTree.group = syntaxTree.group.map(group => {
-        group.expression = this.instantiateExpression(group.expression, variableMapping);
-        return group;
-      });
+      syntaxTree.group = syntaxTree.group
+        .map(group => ({ expression: this.instantiateExpression(group.expression, variableMapping) }));
     }
 
     return syntaxTree;
@@ -96,24 +95,31 @@ export class QueryTemplate {
         case 'bgp':
         case 'graph':
           if ('triples' in pattern) {
-            pattern.triples = pattern.triples.map(triple => this.instantiateTriple(triple, variableMapping));
-          } else {
-            pattern.patterns = this.instantiatePatterns(pattern.patterns, variableMapping);
+            return {
+              type: 'bgp',
+              triples: pattern.triples.map(triple => this.instantiateTriple(triple, variableMapping)),
+            };
           }
-          return pattern;
+          return {
+            type: 'graph',
+            name: pattern.name,
+            patterns: this.instantiatePatterns(pattern.patterns, variableMapping),
+          };
         case 'union':
         case 'group':
         case 'optional':
         case 'minus':
         case 'service':
-          pattern.patterns = this.instantiatePatterns(pattern.patterns, variableMapping);
-          return pattern;
+          return {
+            ...pattern,
+            patterns: this.instantiatePatterns(pattern.patterns, variableMapping),
+          };
         case 'filter':
-          pattern.expression = this.instantiateExpression(pattern.expression, variableMapping);
-          return pattern;
         case 'bind':
-          pattern.expression = this.instantiateExpression(pattern.expression, variableMapping);
-          return pattern;
+          return {
+            ...pattern,
+            expression: this.instantiateExpression(pattern.expression, variableMapping),
+          };
         case 'values':
           return pattern;
       }
@@ -124,23 +130,27 @@ export class QueryTemplate {
     if ('type' in expression) {
       switch (expression.type) {
         case 'group':
-          expression.patterns = this.instantiatePatterns(expression.patterns, variableMapping);
-          return expression;
-        case 'bgp':
-          expression.triples = expression.triples.map(triple => this.instantiateTriple(triple, variableMapping));
-          return expression;
         case 'graph':
-          expression.patterns = this.instantiatePatterns(expression.patterns, variableMapping);
-          return expression;
+          return {
+            ...expression,
+            patterns: this.instantiatePatterns(expression.patterns, variableMapping),
+          };
+        case 'bgp':
+          return {
+            ...expression,
+            triples: expression.triples.map(triple => this.instantiateTriple(triple, variableMapping)),
+          };
         case 'operation':
-          expression.args = expression.args.map(arg => this.instantiateExpression(arg, variableMapping));
-          return expression;
         case 'functionCall':
-          expression.args = expression.args.map(arg => this.instantiateExpression(arg, variableMapping));
-          return expression;
+          return {
+            ...expression,
+            args: expression.args.map(arg => this.instantiateExpression(arg, variableMapping)),
+          };
         case 'aggregate':
-          expression.expression = this.instantiateExpression(expression.expression, variableMapping);
-          return expression;
+          return {
+            ...expression,
+            expression: this.instantiateExpression(expression.expression, variableMapping),
+          };
       }
     } else {
       return <Expression> this.instantiateTerm(<Term> expression, variableMapping);
