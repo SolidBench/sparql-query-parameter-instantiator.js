@@ -51,9 +51,19 @@ describe('VariableTemplateTimestamp', () => {
     });
 
     describe('createTerm', () => {
-      it('should produce a literal', () => {
+      it('should produce a literal from a string', () => {
         expect(variable.createTerm('1354060800000')).toEqualRdfTerm(DF
           .literal('2012-11-28T00:00:00.000Z', DF.namedNode('http://www.w3.org/2001/XMLSchema#dateTime')));
+      });
+
+      it('should produce a literal from a number', () => {
+        expect(variable.createTerm(1_354_060_800_000)).toEqualRdfTerm(DF
+          .literal('2012-11-28T00:00:00.000Z', DF.namedNode('http://www.w3.org/2001/XMLSchema#dateTime')));
+      });
+
+      it('should throw for an array', () => {
+        expect(() => variable.createTerm([ 123 ]))
+          .toThrowError('Received unsupported array value for the VariableTemplateTimestamp for varName');
       });
     });
   });

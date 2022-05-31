@@ -1,6 +1,7 @@
 import type * as RDF from '@rdfjs/types';
 import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
 import type { IValueTransformer } from '../valuetransformer/IValueTransformer';
+import type { RawTerm } from './IVariableTemplate';
 import { VariableTemplateAdapter } from './VariableTemplateAdapter';
 
 /**
@@ -19,7 +20,13 @@ export class VariableTemplateTimestamp extends VariableTemplateAdapter {
     this.datatype = this.DF.namedNode(datatype);
   }
 
-  public createTermInner(value: string): RDF.Term {
-    return this.DF.literal(new Date(Number.parseInt(value, 10)).toISOString(), this.datatype);
+  public createTermInner(value: RawTerm): RDF.Term {
+    if (Array.isArray(value)) {
+      throw new Error(`Received unsupported array value for the VariableTemplateTimestamp for ${this.name}`);
+    }
+    return this.DF.literal(
+      new Date(typeof value === 'number' ? value : Number.parseInt(value, 10)).toISOString(),
+      this.datatype,
+    );
   }
 }

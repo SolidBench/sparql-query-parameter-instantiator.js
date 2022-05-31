@@ -7,5 +7,7 @@ import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvide
 export interface IVariableTemplate {
   getName: () => string;
   getSubstitutionProvider: () => ISubstitutionProvider | undefined;
-  createTerm: (value: string) => RDF.Term;
+  createTerm: (value: RawTerm) => RDF.Term;
 }
+
+export type RawTerm = string | number | RawTerm[];

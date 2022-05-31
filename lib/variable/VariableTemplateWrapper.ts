@@ -1,6 +1,6 @@
 import type * as RDF from '@rdfjs/types';
 import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
-import type { IVariableTemplate } from './IVariableTemplate';
+import type { IVariableTemplate, RawTerm } from './IVariableTemplate';
 
 /**
  * A template for wrapper another template and optionally overriding the substitution provider.
@@ -11,7 +11,7 @@ export class VariableTemplateWrapper implements IVariableTemplate {
     public readonly substitutionProvider?: ISubstitutionProvider,
   ) {}
 
-  public createTerm(value: string): RDF.Term {
+  public createTerm(value: RawTerm): RDF.Term {
     return this.variableTemplate.createTerm(value);
   }
 

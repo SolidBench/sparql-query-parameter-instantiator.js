@@ -1,6 +1,7 @@
 import type * as RDF from '@rdfjs/types';
 import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
 import type { IValueTransformer } from '../valuetransformer/IValueTransformer';
+import type { RawTerm } from './IVariableTemplate';
 import { VariableTemplateAdapter } from './VariableTemplateAdapter';
 
 /**
@@ -22,7 +23,10 @@ export class VariableTemplateLiteral extends VariableTemplateAdapter {
     this.datatype = datatype ? this.DF.namedNode(datatype) : undefined;
   }
 
-  public createTermInner(value: string): RDF.Term {
-    return this.DF.literal(value, this.language || this.datatype);
+  public createTermInner(value: RawTerm): RDF.Term {
+    if (Array.isArray(value)) {
+      throw new Error(`Received unsupported array value for the VariableTemplateLiteral for ${this.name}`);
+    }
+    return this.DF.literal(`${value}`, this.language || this.datatype);
   }
 }

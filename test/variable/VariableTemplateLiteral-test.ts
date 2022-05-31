@@ -54,8 +54,17 @@ describe('VariableTemplateLiteral', () => {
     });
 
     describe('createTerm', () => {
-      it('should produce a literal', () => {
+      it('should produce a literal from a string', () => {
         expect(variable.createTerm('ex:a')).toEqualRdfTerm(DF.literal('ex:a'));
+      });
+
+      it('should produce a literal from a number', () => {
+        expect(variable.createTerm(123)).toEqualRdfTerm(DF.literal('123'));
+      });
+
+      it('should throw for an array', () => {
+        expect(() => variable.createTerm([ 123 ]))
+          .toThrowError('Received unsupported array value for the VariableTemplateLiteral for varName');
       });
     });
   });

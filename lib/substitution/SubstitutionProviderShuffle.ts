@@ -1,3 +1,4 @@
+import type { RawTerm } from '../variable/IVariableTemplate';
 import type { ISubstitutionProvider } from './ISubstitutionProvider';
 
 /**
@@ -16,7 +17,7 @@ export class SubstitutionProviderShuffle implements ISubstitutionProvider {
     this.seed = seed;
   }
 
-  public async getValues(): Promise<string[]> {
+  public async getValues(): Promise<RawTerm[]> {
     return this.shuffle(await this.substitutionProvider.getValues());
   }
 
@@ -25,7 +26,7 @@ export class SubstitutionProviderShuffle implements ISubstitutionProvider {
     return x - Math.floor(x);
   }
 
-  protected shuffle(array: string[]): string[] {
+  protected shuffle(array: RawTerm[]): RawTerm[] {
     let currentIndex: number = array.length;
     let randomIndex;
 

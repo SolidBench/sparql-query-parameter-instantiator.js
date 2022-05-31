@@ -2,15 +2,15 @@ import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
 import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
 import type { IValueTransformer } from '../valuetransformer/IValueTransformer';
-import type { IVariableTemplate } from './IVariableTemplate';
+import type { IVariableTemplate, RawTerm } from './IVariableTemplate';
 
 /**
  * An adapter for instantiating RDF terms from a variable value.
  */
 export abstract class VariableTemplateAdapter implements IVariableTemplate {
-  private readonly name: string;
-  private readonly substitutionProvider: ISubstitutionProvider | undefined;
-  private readonly valueTransformers: IValueTransformer[];
+  protected readonly name: string;
+  protected readonly substitutionProvider: ISubstitutionProvider | undefined;
+  protected readonly valueTransformers: IValueTransformer[];
   protected readonly DF = new DataFactory();
 
   public constructor(
@@ -31,7 +31,7 @@ export abstract class VariableTemplateAdapter implements IVariableTemplate {
     return this.substitutionProvider;
   }
 
-  public createTerm(value: string): RDF.Term {
+  public createTerm(value: RawTerm): RDF.Term {
     let term: RDF.Term = this.createTermInner(value);
     for (const valueTransformer of this.valueTransformers) {
       term = valueTransformer.transform(term);
@@ -39,5 +39,5 @@ export abstract class VariableTemplateAdapter implements IVariableTemplate {
     return term;
   }
 
-  public abstract createTermInner(value: string): RDF.Term;
+  public abstract createTermInner(value: RawTerm): RDF.Term;
 }

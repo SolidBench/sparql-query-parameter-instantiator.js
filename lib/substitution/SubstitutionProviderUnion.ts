@@ -1,3 +1,4 @@
+import type { RawTerm } from '../variable/IVariableTemplate';
 import type { ISubstitutionProvider } from './ISubstitutionProvider';
 
 /**
@@ -13,7 +14,7 @@ export class SubstitutionProviderUnion implements ISubstitutionProvider {
     this.substitutionProviders = substitutionProviders;
   }
 
-  public async getValues(): Promise<string[]> {
+  public async getValues(): Promise<RawTerm[]> {
     return (await Promise.all(this.substitutionProviders
       .map(substitutionProvider => substitutionProvider.getValues()))).flat();
   }

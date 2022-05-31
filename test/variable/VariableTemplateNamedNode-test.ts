@@ -44,8 +44,17 @@ describe('VariableTemplateNamedNode', () => {
     });
 
     describe('createTerm', () => {
-      it('should produce a named node', () => {
+      it('should produce a named node from a string', () => {
         expect(variable.createTerm('ex:a')).toEqualRdfTerm(DF.namedNode('ex:c'));
+      });
+
+      it('should produce a named node from a number', () => {
+        expect(variable.createTerm(123)).toEqualRdfTerm(DF.namedNode('123'));
+      });
+
+      it('should throw for an array', () => {
+        expect(() => variable.createTerm([ 123 ]))
+          .toThrowError('Received unsupported array value for the VariableTemplateNamedNode for varName');
       });
     });
   });

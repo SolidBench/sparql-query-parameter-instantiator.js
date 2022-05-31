@@ -9,7 +9,7 @@ const DF = new DataFactory();
  * A template for that always produces a new blank node.
  */
 export class VariableTemplateVoid implements IVariableTemplate {
-  public createTerm(value: string): RDF.Term {
+  public createTerm(): RDF.Term {
     return DF.blankNode();
   }
 
