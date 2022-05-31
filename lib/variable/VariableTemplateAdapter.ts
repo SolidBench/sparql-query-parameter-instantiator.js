@@ -9,13 +9,13 @@ import type { IVariableTemplate } from './IVariableTemplate';
  */
 export abstract class VariableTemplateAdapter implements IVariableTemplate {
   private readonly name: string;
-  private readonly substitutionProvider: ISubstitutionProvider;
+  private readonly substitutionProvider: ISubstitutionProvider | undefined;
   private readonly valueTransformers: IValueTransformer[];
   protected readonly DF = new DataFactory();
 
   public constructor(
     name: string,
-    substitutionProvider: ISubstitutionProvider,
+    substitutionProvider?: ISubstitutionProvider,
     valueTransformers?: IValueTransformer[],
   ) {
     this.name = name;
@@ -27,7 +27,7 @@ export abstract class VariableTemplateAdapter implements IVariableTemplate {
     return this.name;
   }
 
-  public getSubstitutionProvider(): ISubstitutionProvider {
+  public getSubstitutionProvider(): ISubstitutionProvider | undefined {
     return this.substitutionProvider;
   }
 

@@ -1,22 +1,23 @@
 import type * as RDF from '@rdfjs/types';
+import { DataFactory } from 'rdf-data-factory';
 import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
 import type { IVariableTemplate } from './IVariableTemplate';
 
-export class VariableTemplateWrapper implements IVariableTemplate {
-  public constructor(
-    public readonly variableTemplate: IVariableTemplate,
-    public readonly substitutionProvider?: ISubstitutionProvider,
-  ) {}
+const DF = new DataFactory();
 
+/**
+ * A template for that always produces a new blank node.
+ */
+export class VariableTemplateVoid implements IVariableTemplate {
   public createTerm(value: string): RDF.Term {
-    return this.variableTemplate.createTerm(value);
+    return DF.blankNode();
   }
 
   public getName(): string {
-    return this.variableTemplate.getName();
+    return '__void';
   }
 
   public getSubstitutionProvider(): ISubstitutionProvider | undefined {
-    return this.substitutionProvider || this.variableTemplate.getSubstitutionProvider();
+    return undefined;
   }
 }

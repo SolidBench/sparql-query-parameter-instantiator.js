@@ -12,7 +12,7 @@ export class VariableTemplateLiteral extends VariableTemplateAdapter {
 
   public constructor(
     name: string,
-    substitutionProvider: ISubstitutionProvider,
+    substitutionProvider?: ISubstitutionProvider,
     valueTransformers?: IValueTransformer[],
     language?: string,
     datatype?: string,

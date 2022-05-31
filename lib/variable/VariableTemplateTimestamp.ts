@@ -11,7 +11,7 @@ export class VariableTemplateTimestamp extends VariableTemplateAdapter {
 
   public constructor(
     name: string,
-    substitutionProvider: ISubstitutionProvider,
+    substitutionProvider?: ISubstitutionProvider,
     valueTransformers?: IValueTransformer[],
     datatype = 'http://www.w3.org/2001/XMLSchema#dateTime',
   ) {

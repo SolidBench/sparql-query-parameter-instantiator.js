@@ -81,6 +81,21 @@ describe('QueryTemplateProvider', () => {
         ],
       });
     });
+
+    it('throws when a template has an undefined substitution provider', async() => {
+      provider = new QueryTemplateProvider(
+        'template1',
+        'destination1',
+        [
+          new VariableTemplateNamedNode(
+            'var1',
+            undefined,
+          ),
+        ],
+      );
+      await expect(provider.createTemplate()).rejects
+        .toThrowError(`The variable template 'template1' for 'var1' has no substitution provider configured`);
+    });
   });
 
   describe('saveQueriesFile', () => {

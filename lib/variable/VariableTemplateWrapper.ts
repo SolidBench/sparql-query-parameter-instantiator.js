@@ -2,7 +2,10 @@ import type * as RDF from '@rdfjs/types';
 import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
 import type { IVariableTemplate } from './IVariableTemplate';
 
-export class VariableTemplatedWrapper implements IVariableTemplate {
+/**
+ * A template for wrapper another template and optionally overriding the substitution provider.
+ */
+export class VariableTemplateWrapper implements IVariableTemplate {
   public constructor(
     public readonly variableTemplate: IVariableTemplate,
     public readonly substitutionProvider?: ISubstitutionProvider,

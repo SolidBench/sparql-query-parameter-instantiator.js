@@ -9,7 +9,7 @@ import { VariableTemplateAdapter } from './VariableTemplateAdapter';
 export class VariableTemplateNamedNode extends VariableTemplateAdapter {
   public constructor(
     name: string,
-    substitutionProvider: ISubstitutionProvider,
+    substitutionProvider?: ISubstitutionProvider,
     valueTransformers?: IValueTransformer[],
   ) {
     super(name, substitutionProvider, valueTransformers);

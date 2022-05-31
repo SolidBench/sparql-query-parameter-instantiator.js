@@ -36,7 +36,11 @@ export class QueryTemplateProvider {
     const variableMappings: Record<string, RDF.Term[]> = {};
     for (const variableTemplate of this.variables) {
       const variableName = variableTemplate.getName();
-      variableMappings[variableName] = (await variableTemplate.getSubstitutionProvider().getValues())
+      const substitutionProvider = variableTemplate.getSubstitutionProvider();
+      if (!substitutionProvider) {
+        throw new Error(`The variable template '${this.templateFilePath}' for '${variableName}' has no substitution provider configured`);
+      }
+      variableMappings[variableName] = (await substitutionProvider.getValues())
         .map(value => variableTemplate.createTerm(value));
     }
     return new QueryTemplate(syntaxTree, variableMappings);

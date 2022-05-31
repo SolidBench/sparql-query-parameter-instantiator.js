@@ -10,6 +10,8 @@ export * from './lib/variable/VariableTemplateAdapter';
 export * from './lib/variable/VariableTemplateLiteral';
 export * from './lib/variable/VariableTemplateNamedNode';
 export * from './lib/variable/VariableTemplateTimestamp';
+export * from './lib/variable/VariableTemplateVoid';
+export * from './lib/variable/VariableTemplateWrapper';
 export * from './lib/CliRunner';
 export * from './lib/QueryInstantiator';
 export * from './lib/QueryTemplate';
