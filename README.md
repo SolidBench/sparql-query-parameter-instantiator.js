@@ -178,6 +178,36 @@ Parameters:
 * `"substitutionProvider"`: A provider of substitution values.
 * `"valueTransformers"`: An optional array of value transformers.
 
+#### List Variable Template
+
+A template for instantiating arrays as RDF Literals concatenated by a given separator.
+An inner variable template must be passed, which will be invoked for every array value.
+
+```json
+{
+  "variables": [
+    {
+      "@type": "VariableTemplateList",
+      "name": "tagNames",
+      "separator": ", ",
+      "substitutionProvider": { ... }
+      "innerTemplate": {
+        "@type": "VariableTemplateLiteral",
+        "name": "tagName"
+      }
+    }
+  ]
+}
+```
+
+Parameters:
+
+* `"name"`: The name of the variable in the SPARQL query template to instantiate (without `?` prefix).
+* `"separator"`: The separator string.
+* `"innerTemplate"`: The variable template to apply for each list element.
+* `"substitutionProvider"`: A provider of substitution values.
+* `"valueTransformers"`: An optional array of value transformers.
+
 ### Substitution Providers
 
 Substitution providers supply values for substituting variables in a query template.

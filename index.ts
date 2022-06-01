@@ -7,6 +7,7 @@ export * from './lib/valuetransformer/IValueTransformer';
 export * from './lib/valuetransformer/ValueTransformerReplaceIri';
 export * from './lib/variable/IVariableTemplate';
 export * from './lib/variable/VariableTemplateAdapter';
+export * from './lib/variable/VariableTemplateList';
 export * from './lib/variable/VariableTemplateLiteral';
 export * from './lib/variable/VariableTemplateNamedNode';
 export * from './lib/variable/VariableTemplateTimestamp';
