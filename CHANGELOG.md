@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.3.0"></a>
+## [v2.3.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.2.2...v2.3.0) - 2022-06-01
+
+### Added
+* [Add VariableTemplateList](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/6a0aa0d9fdec166fb4acb2cf135454118bc38d20)
+* [Add void and wrapper templates](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/bf6213553bdbd9b3640fe95dc8703d1362234628)
+
+### Changed
+* [Allow substitution providers to be undefined](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/a049e84e0d41d92d21141cd2bdfdeb3c7e60ef55)
+* [Allow numbers and arrays to be passed into variable templates](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/5aece873fc84d3ff244d20ace13b467af1859b06)
+
 <a name="v2.2.2"></a>
 ## [v2.2.2](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.2.1...v2.2.2) - 2022-05-17
 
