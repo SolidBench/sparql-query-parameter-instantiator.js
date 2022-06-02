@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.4.0"></a>
+## [v2.4.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.3.0...v2.4.0) - 2022-06-02
+
+### Added
+* [Allow custom construction settings to be passed to runner](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/4be002d4b6efadd400fbeafb85db5f86a939ba8d)
+
 <a name="v2.3.0"></a>
 ## [v2.3.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.2.2...v2.3.0) - 2022-06-01
 
