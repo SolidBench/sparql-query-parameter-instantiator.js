@@ -1,6 +1,7 @@
 import { DataFactory } from 'rdf-data-factory';
 import type { IValueTransformer } from '../../lib/valuetransformer/IValueTransformer';
 import { ValueTransformerPad } from '../../lib/valuetransformer/ValueTransformerPad';
+import 'jest-rdf';
 
 const DF = new DataFactory();
 
@@ -18,6 +19,13 @@ describe('ValueTransformerPad', () => {
           .toEqual(DF.literal('00123'));
         expect(transformer.transform(DF.literal('123456')))
           .toEqual(DF.literal('123456'));
+      });
+
+      it('should keep the original term type', async() => {
+        expect(transformer.transform(DF.namedNode('123')))
+          .toEqualRdfTerm(DF.namedNode('00123'));
+        expect(transformer.transform(DF.literal('123456')))
+          .toEqualRdfTerm(DF.literal('123456'));
       });
     });
   });

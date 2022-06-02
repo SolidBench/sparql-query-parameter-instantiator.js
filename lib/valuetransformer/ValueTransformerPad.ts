@@ -15,8 +15,9 @@ export class ValueTransformerPad implements IValueTransformer {
   ) {}
 
   public transform(term: RDF.Term): RDF.Term {
-    return DF.literal(this.start ?
+    const value = this.start ?
       term.value.padStart(this.paddingLength, this.paddingCharacter) :
-      term.value.padEnd(this.paddingLength, this.paddingCharacter));
+      term.value.padEnd(this.paddingLength, this.paddingCharacter);
+    return term.termType === 'NamedNode' ? DF.namedNode(value) : DF.literal(value);
   }
 }
