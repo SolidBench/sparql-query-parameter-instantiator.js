@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.5.0"></a>
+## [v2.5.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.4.0...v2.5.0) - 2022-06-02
+
+### Added
+* [Add pad transformer](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/0b2154691484441b05cb43d664e4265296fa85a4)
+
 <a name="v2.4.0"></a>
 ## [v2.4.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.3.0...v2.4.0) - 2022-06-02
 
