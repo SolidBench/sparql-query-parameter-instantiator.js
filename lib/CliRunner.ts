@@ -1,5 +1,5 @@
 import type { ReadStream, WriteStream } from 'tty';
-import type { IComponentsManagerBuilderOptions } from 'componentsjs';
+import type { IComponentsManagerBuilderOptions, IConstructionSettings } from 'componentsjs';
 import { ComponentsManager } from 'componentsjs';
 import type { QueryInstantiator } from './QueryInstantiator';
 
@@ -7,15 +7,17 @@ import type { QueryInstantiator } from './QueryInstantiator';
  * Run function for starting the instantiator for a given config.
  * @param configPath - Path to a config.
  * @param properties - Components loader properties.
+ * @param constructionSettings - Settings for instantiation.
  */
 export const runConfig = async function(
   configPath: string,
   properties: IComponentsManagerBuilderOptions<QueryInstantiator>,
+  constructionSettings?: IConstructionSettings,
 ): Promise<void> {
   const manager = await ComponentsManager.build(properties);
   await manager.configRegistry.register(configPath);
   const instantiator: QueryInstantiator = await manager
-    .instantiate('urn:sparql-query-parameter-instantiator:default');
+    .instantiate('urn:sparql-query-parameter-instantiator:default', constructionSettings);
   return await instantiator.instantiate();
 };
 
@@ -26,6 +28,7 @@ export const runConfig = async function(
  * @param stdout - Standard output stream.
  * @param stderr - Standard error stream.
  * @param properties - Components loader properties.
+ * @param constructionSettings - Settings for instantiation.
  */
 export const runCustom = function(
   args: string[],
@@ -33,6 +36,7 @@ export const runCustom = function(
   stdout: WriteStream,
   stderr: WriteStream,
   properties: IComponentsManagerBuilderOptions<QueryInstantiator>,
+  constructionSettings?: IConstructionSettings,
 ): void {
   (async(): Promise<void> => {
     if (args.length !== 1) {
@@ -45,7 +49,7 @@ Usage:
     const configPath = args[0];
 
     // Setup from config file
-    return await runConfig(configPath, properties);
+    return await runConfig(configPath, properties, constructionSettings);
   })().then((): void => {
     // Done
   }).catch(error => {
