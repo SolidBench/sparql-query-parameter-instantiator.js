@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.5.1"></a>
+## [v2.5.1](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.5.0...v2.5.1) - 2022-06-02
+
+### Fixed
+* [Fix pad transformer losing original term type](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/commit/c2df43bfdf7e68d7cf73590cee70d68e2a214382)
+
 <a name="v2.5.0"></a>
 ## [v2.5.0](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.4.0...v2.5.0) - 2022-06-02
 
