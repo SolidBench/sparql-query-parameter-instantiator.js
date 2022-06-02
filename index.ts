@@ -4,6 +4,7 @@ export * from './lib/substitution/SubstitutionProviderShuffle';
 export * from './lib/substitution/SubstitutionProviderStatic';
 export * from './lib/substitution/SubstitutionProviderUnion';
 export * from './lib/valuetransformer/IValueTransformer';
+export * from './lib/valuetransformer/ValueTransformerPad';
 export * from './lib/valuetransformer/ValueTransformerReplaceIri';
 export * from './lib/variable/IVariableTemplate';
 export * from './lib/variable/VariableTemplateAdapter';

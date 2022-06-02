@@ -335,6 +335,28 @@ Options:
 * `"searchRegex"`: The regex to search for.
 * `"replacementString"`: The string to replace.
 
+#### Replace IRI Value Transformer
+
+A value transformer that pads strings until a given length.
+
+```json
+{
+  "valueTransformers": [
+    {
+      "@type": "ValueTransformerPad",
+      "paddingCharacter": "0",
+      "paddingLength": "20",
+      "start": true
+    }
+  ]
+}
+```
+
+Options:
+* `"paddingCharacter"`: The character to pad.
+* `"paddingLength"`: The string length to reach.
+* `"start"`: If padding should happen at the start of the string, otherwise it will pad from the end.
+
 ## License
 
 This software is written by [Ruben Taelman](http://rubensworks.net/).
