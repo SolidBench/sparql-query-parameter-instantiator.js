@@ -1,7 +1,7 @@
 # SPARQL Query Parameter Instantiator
 
-[![Build status](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/workflows/CI/badge.svg)](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/actions?query=workflow%3ACI)
-[![Coverage Status](https://coveralls.io/repos/github/rubensworks/sparql-query-parameter-instantiator.js/badge.svg?branch=master)](https://coveralls.io/github/rubensworks/sparql-query-parameter-instantiator.js?branch=master)
+[![Build status](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/workflows/CI/badge.svg)](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/actions?query=workflow%3ACI)
+[![Coverage Status](https://coveralls.io/repos/github/SolidBench/sparql-query-parameter-instantiator.js/badge.svg?branch=master)](https://coveralls.io/github/SolidBench/sparql-query-parameter-instantiator.js?branch=master)
 [![npm version](https://badge.fury.io/js/sparql-query-parameter-instantiator.svg)](https://www.npmjs.com/package/sparql-query-parameter-instantiator)
 
 Instantiate SPARQL query templates based on given substitution parameters.

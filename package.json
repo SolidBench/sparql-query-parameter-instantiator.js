@@ -12,12 +12,12 @@
   ],
   "main": "index.js",
   "typings": "index",
-  "repository": "git@github.com:rubensworks/sparql-query-parameter-instantiator.js.git",
+  "repository": "git@github.com:SolidBench/sparql-query-parameter-instantiator.js.git",
   "author": "Ruben Taelman <rubensworks@gmail.com>",
   "bugs": {
-    "url": "https://github.com/rubensworks/sparql-query-parameter-instantiator.js/issues"
+    "url": "https://github.com/SolidBench/sparql-query-parameter-instantiator.js/issues"
   },
-  "homepage": "https://github.com/rubensworks/sparql-query-parameter-instantiator.js#readme",
+  "homepage": "https://github.com/SolidBench/sparql-query-parameter-instantiator.js#readme",
   "bin": {
     "sparql-query-parameter-instantiator": "./bin/runner.js"
   },
