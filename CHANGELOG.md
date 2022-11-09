@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.5.2"></a>
+## [v2.5.2](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/compare/v2.5.1...v2.5.2) - 2022-11-09
+
+### Fixed
+* [Include source map files in packed files](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/commit/de14ea2035a8ad98464f3282caf5d4391c263fa7)
+
 <a name="v2.5.1"></a>
 ## [v2.5.1](https://github.com/rubensworks/sparql-query-parameter-instantiator.js/compare/v2.5.0...v2.5.1) - 2022-06-02
 
