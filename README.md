@@ -335,6 +335,48 @@ Options:
 * `"searchRegex"`: The regex to search for.
 * `"replacementString"`: The string to replace.
 
+#### Distribute IRI Value Transformer
+
+A value transformer that that replaces (parts of) IRIs, deterministically distributing the replacements over a list of multiple destination IRI based on a matched number.
+This is fully compatible with rdf-dataset-fragmenter QuadTransformerDistributeIri which produces the same deterministic replacements.
+
+```json
+{
+  "valueTransformers": [
+    {
+      "@type": "ValueTransformerDistributeIri",
+      "searchRegex": "^http://www.ldbc.eu",
+      "replacementStrings": [
+        "http://localhost:3000/www.ldbc.eu",
+        "http://localhost:3030/www.ldbc.eu",
+        "http://localhost:3060/www.ldbc.eu"
+      ]
+    }
+  ]
+}
+```
+
+This requires at least one group-based replacement, of which the first group must match a number.
+
+The matched number is used to choose one of the `replacementStrings` in a deterministic way: `replacementStrings[number % replacementStrings.length]`
+
+```json
+{
+  "@type": "ValueTransformerDistributeIri",
+  "searchRegex": "^http://www.ldbc.eu/data/pers([0-9]*)$",
+  "replacementStrings": [
+    "https://one.example.com/users$1/profile/card#me",
+    "https://two.example.com/users$1/profile/card#me",
+    "https://three.example.com/users$1/profile/card#me",
+    "https://four.example.com/users$1/profile/card#me"
+  ]
+}
+```
+
+Options:
+* `"searchRegex"`: The regex to search for. A group is identified via `()` in the search regex. There must be at least one group. The first group must match a number.
+* `"replacementStrings"`: A list of string to use as replacements. A reference to the matched group can be made via `$...`.
+
 #### Replace IRI Value Transformer
 
 A value transformer that pads strings until a given length.
