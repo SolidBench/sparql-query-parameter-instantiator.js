@@ -338,7 +338,7 @@ Options:
 #### Distribute IRI Value Transformer
 
 A value transformer that that replaces (parts of) IRIs, deterministically distributing the replacements over a list of multiple destination IRI based on a matched number.
-This is fully compatible with rdf-dataset-fragmenter QuadTransformerDistributeIri which produces the same deterministic replacements.
+This is fully compatible with [`rdf-dataset-fragmenter`](https://github.com/SolidBench/rdf-dataset-fragmenter.js)'s `QuadTransformerDistributeIri` which produces the same deterministic replacements.
 
 ```json
 {
