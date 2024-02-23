@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.6.0"></a>
+## [v2.6.0](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/compare/v2.5.2...v2.6.0) - 2024-02-23
+
+### Added
+* [Add ValueTransformerDistributeIri](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/commit/7318a1bdaf24abffebbfec54e338c07c8c7689f2)
+
 <a name="v2.5.2"></a>
 ## [v2.5.2](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/compare/v2.5.1...v2.5.2) - 2022-11-09
 
