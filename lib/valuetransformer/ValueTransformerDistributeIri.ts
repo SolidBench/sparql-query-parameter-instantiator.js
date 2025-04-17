@@ -34,6 +34,7 @@ export class ValueTransformerDistributeIri implements IValueTransformer {
         }
         const nr = Number.parseInt(match[1], 10);
         if (Number.isNaN(nr)) {
+          // eslint-disable-next-line unicorn/prefer-type-error
           throw new Error(`ValueTransformerDistributeIri error: The first capture group in "searchRegex"
                must always match a number, but it matched "${match[1]}" instead.`);
         }

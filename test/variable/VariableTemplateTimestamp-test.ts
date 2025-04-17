@@ -3,6 +3,7 @@ import { DataFactory } from 'rdf-data-factory';
 import type { ISubstitutionProvider } from '../../lib/substitution/ISubstitutionProvider';
 import { ValueTransformerReplaceIri } from '../../lib/valuetransformer/ValueTransformerReplaceIri';
 import { VariableTemplateTimestamp } from '../../lib/variable/VariableTemplateTimestamp';
+
 const DF = new DataFactory();
 
 describe('VariableTemplateTimestamp', () => {
@@ -30,7 +31,7 @@ describe('VariableTemplateTimestamp', () => {
 
     describe('getName', () => {
       it('should return the name', () => {
-        expect(variable.getName()).toEqual('varName');
+        expect(variable.getName()).toBe('varName');
       });
     });
 
@@ -63,7 +64,7 @@ describe('VariableTemplateTimestamp', () => {
 
       it('should throw for an array', () => {
         expect(() => variable.createTerm([ 123 ]))
-          .toThrowError('Received unsupported array value for the VariableTemplateTimestamp for varName');
+          .toThrow('Received unsupported array value for the VariableTemplateTimestamp for varName');
       });
     });
   });

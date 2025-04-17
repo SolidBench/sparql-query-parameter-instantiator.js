@@ -24,7 +24,7 @@ ex:s4,ex:p4
 ex:s5,ex:p5
 ```
 
-The resulting queries for the instantiation of `?s` for a count of 3: 
+The resulting queries for the instantiation of `?s` for a count of 3:
 ```text
 SELECT * WHERE { <ex:s1> ?p ?o. }
 
@@ -85,7 +85,6 @@ The config file that should be passed to the command line tool has the following
     }
   ]
 }
-
 ```
 
 The important parts in this config file are:
@@ -113,7 +112,7 @@ A variable template that always produces IRIs.
     {
       "@type": "VariableTemplateNamedNode",
       "name": "person",
-      "substitutionProvider": { ... }
+      "substitutionProvider": {}
     }
   ]
 }
@@ -137,7 +136,7 @@ A variable template that always produces literals.
       "name": "person",
       "language": "en-us",
       "datatype": "http://www.w3.org/2001/XMLSchema#number",
-      "substitutionProvider": { ... }
+      "substitutionProvider": {}
     }
   ]
 }
@@ -190,7 +189,7 @@ An inner variable template must be passed, which will be invoked for every array
       "@type": "VariableTemplateList",
       "name": "tagNames",
       "separator": ", ",
-      "substitutionProvider": { ... }
+      "substitutionProvider": {},
       "innerTemplate": {
         "@type": "VariableTemplateLiteral",
         "name": "tagName"

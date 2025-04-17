@@ -11,6 +11,7 @@ export abstract class VariableTemplateAdapter implements IVariableTemplate {
   protected readonly name: string;
   protected readonly substitutionProvider: ISubstitutionProvider | undefined;
   protected readonly valueTransformers: IValueTransformer[];
+  // eslint-disable-next-line ts/naming-convention
   protected readonly DF = new DataFactory();
 
   public constructor(
@@ -20,6 +21,7 @@ export abstract class VariableTemplateAdapter implements IVariableTemplate {
   ) {
     this.name = name;
     this.substitutionProvider = substitutionProvider;
+    // eslint-disable-next-line ts/prefer-nullish-coalescing
     this.valueTransformers = valueTransformers || [];
   }
 

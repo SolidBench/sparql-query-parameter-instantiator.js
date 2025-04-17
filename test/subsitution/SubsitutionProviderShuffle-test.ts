@@ -15,7 +15,7 @@ describe('SubstitutionProviderShuffle', () => {
 
     describe('getValues', () => {
       it('returns the rows of the subprovider in a shuffled manner', async() => {
-        expect(await provider.getValues()).toEqual([ 'a2', 'a1', 'a3' ]);
+        await expect(provider.getValues()).resolves.toEqual([ 'a2', 'a1', 'a3' ]);
 
         expect(subprovider1.getValues).toHaveBeenCalledTimes(1);
       });

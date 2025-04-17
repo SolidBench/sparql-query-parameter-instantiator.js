@@ -1,4 +1,4 @@
-import { Readable } from 'stream';
+import { Readable } from 'node:stream';
 import { QueryInstantiator } from '../lib/QueryInstantiator';
 import { QueryTemplateProvider } from '../lib/QueryTemplateProvider';
 import { SubstitutionProviderStatic } from '../lib/substitution/SubstitutionProviderStatic';
@@ -14,7 +14,7 @@ const writeStream = {
   emit: jest.fn(),
   end: jest.fn(),
 };
-jest.mock('fs', () => ({
+jest.mock('node:fs', () => ({
   createReadStream(filePath: string) {
     if (filePath in files) {
       return streamifyString(files[filePath]);
@@ -25,7 +25,7 @@ jest.mock('fs', () => ({
     };
     return ret;
   },
-  createWriteStream(filePath: string) {
+  createWriteStream(_filePath: string) {
     return writeStream;
   },
   promises: {
@@ -89,7 +89,7 @@ describe('QueryInstantiator', () => {
 
       await instantiator.instantiate();
 
-      expect(filesOut.destination1).toEqual(`SELECT * WHERE {
+      expect(filesOut.destination1).toBe(`SELECT * WHERE {
   <ex:a1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <ex:o1>.
   ?var3 <ex:p> <ex:a2>.
 }
@@ -103,7 +103,7 @@ SELECT * WHERE {
   <ex:c1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <ex:o1>.
   ?var3 <ex:p> <ex:c2>.
 }`);
-      expect(filesOut.destination2).toEqual(`SELECT * WHERE {
+      expect(filesOut.destination2).toBe(`SELECT * WHERE {
   ?var1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <ex:o2>.
   <ex:a3> <ex:p> ?var2.
 }

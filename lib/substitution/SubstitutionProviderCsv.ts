@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import * as csvParser from 'csv-parser';
 import type { ISubstitutionProvider } from './ISubstitutionProvider';
 
@@ -23,11 +23,11 @@ export class SubstitutionProviderCsv implements ISubstitutionProvider {
         .on('error', reject)
         .pipe(csvParser({ separator: this.separator }))
         .on('error', reject)
-        .on('data', data => {
+        .on('data', (data) => {
           if (!(this.columnName in data)) {
             reject(new Error(`The column ${this.columnName} was not set in the CSV file ${this.csvFilePath}`));
           }
-          results.push(data[this.columnName]);
+          results.push(<string>data[this.columnName]);
         })
         .on('end', () => resolve(results));
     });

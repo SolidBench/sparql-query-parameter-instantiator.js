@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import type * as RDF from '@rdfjs/types';
 import type { SparqlParser } from 'sparqljs';
 import { Parser } from 'sparqljs';
@@ -54,4 +54,3 @@ export class QueryTemplateProvider {
     await fs.promises.writeFile(this.destinationFilePath, queriesFile, 'utf8');
   }
 }
-

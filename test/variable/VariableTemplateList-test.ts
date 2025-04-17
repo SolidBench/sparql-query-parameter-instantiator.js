@@ -3,6 +3,7 @@ import { DataFactory } from 'rdf-data-factory';
 import type { ISubstitutionProvider } from '../../lib/substitution/ISubstitutionProvider';
 import { VariableTemplateList } from '../../lib/variable/VariableTemplateList';
 import { VariableTemplateLiteral } from '../../lib/variable/VariableTemplateLiteral';
+
 const DF = new DataFactory();
 
 describe('VariableTemplateNamedNode', () => {
@@ -31,18 +32,18 @@ describe('VariableTemplateNamedNode', () => {
 
       it('should throw for a string', () => {
         expect(() => variable.createTerm('a'))
-          .toThrowError(`Received unsupported non-array value for the VariableTemplateList for varNames`);
+          .toThrow(`Received unsupported non-array value for the VariableTemplateList for varNames`);
       });
 
       it('should throw for a number', () => {
         expect(() => variable.createTerm(123))
-          .toThrowError(`Received unsupported non-array value for the VariableTemplateList for varNames`);
+          .toThrow(`Received unsupported non-array value for the VariableTemplateList for varNames`);
       });
     });
 
     describe('getName', () => {
       it('should return the name', () => {
-        expect(variable.getName()).toEqual('varNames');
+        expect(variable.getName()).toBe('varNames');
       });
     });
 

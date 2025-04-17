@@ -1,9 +1,11 @@
-import { Readable } from 'stream';
+import { Readable } from 'node:stream';
 import { DataFactory } from 'rdf-data-factory';
 import { QueryTemplateProvider } from '../lib/QueryTemplateProvider';
 import { SubstitutionProviderStatic } from '../lib/substitution/SubstitutionProviderStatic';
 import { VariableTemplateNamedNode } from '../lib/variable/VariableTemplateNamedNode';
+
 const streamifyString = require('streamify-string');
+
 const DF = new DataFactory();
 
 const files: Record<string, string> = {};
@@ -14,7 +16,7 @@ const writeStream = {
   emit: jest.fn(),
   end: jest.fn(),
 };
-jest.mock('fs', () => ({
+jest.mock('node:fs', () => ({
   createReadStream(filePath: string) {
     if (filePath in files) {
       return streamifyString(files[filePath]);
@@ -25,7 +27,7 @@ jest.mock('fs', () => ({
     };
     return ret;
   },
-  createWriteStream(filePath: string) {
+  createWriteStream(_filePath: string) {
     return writeStream;
   },
   promises: {
@@ -94,14 +96,14 @@ describe('QueryTemplateProvider', () => {
         ],
       );
       await expect(provider.createTemplate()).rejects
-        .toThrowError(`The variable template 'template1' for 'var1' has no substitution provider configured`);
+        .toThrow(`The variable template 'template1' for 'var1' has no substitution provider configured`);
     });
   });
 
   describe('saveQueriesFile', () => {
     it('should write contents to a file', async() => {
       await provider.saveQueriesFile('contents');
-      expect(filesOut.destination1).toEqual('contents');
+      expect(filesOut.destination1).toBe('contents');
     });
   });
 });
