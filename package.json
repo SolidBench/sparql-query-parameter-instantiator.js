@@ -1,7 +1,16 @@
 {
   "name": "sparql-query-parameter-instantiator",
   "version": "2.6.0",
+  "packageManager": "yarn@1.22.22",
   "description": "Instantiate SPARQL query templates based on given substitution parameters",
+  "author": "Ruben Taelman <rubensworks@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/SolidBench/sparql-query-parameter-instantiator.js#readme",
+  "repository": "git@github.com:SolidBench/sparql-query-parameter-instantiator.js.git",
+  "lsd:module": true,
+  "bugs": {
+    "url": "https://github.com/SolidBench/sparql-query-parameter-instantiator.js/issues"
+  },
   "keywords": [
     "sparql",
     "rdf",
@@ -10,104 +19,62 @@
     "template",
     "subsitution parameters"
   ],
-  "main": "index.js",
-  "typings": "index",
-  "repository": "git@github.com:SolidBench/sparql-query-parameter-instantiator.js.git",
-  "author": "Ruben Taelman <rubensworks@gmail.com>",
-  "bugs": {
-    "url": "https://github.com/SolidBench/sparql-query-parameter-instantiator.js/issues"
-  },
-  "homepage": "https://github.com/SolidBench/sparql-query-parameter-instantiator.js#readme",
+  "main": "lib/index.js",
+  "typings": "lib/index",
   "bin": {
     "sparql-query-parameter-instantiator": "./bin/runner.js"
   },
-  "license": "MIT",
-  "lsd:module": true,
   "files": [
     "bin/**/*.d.ts",
     "bin/**/*.js",
     "bin/**/*.js.map",
+    "components",
     "lib/**/*.d.ts",
     "lib/**/*.js",
-    "lib/**/*.js.map",
-    "index.d.ts",
-    "index.js.map",
-    "index.js",
-    "components"
+    "lib/**/*.js.map"
   ],
   "engines": {
     "node": ">=14.0"
-  },
-  "dependencies": {
-    "@rdfjs/types": "*",
-    "@types/sparqljs": "*",
-    "componentsjs": "^5.0.1",
-    "csv-parser": "^3.0.0",
-    "sparqljs": "^3.4.1"
-  },
-  "pre-commit": [
-    "build",
-    "lint",
-    "test"
-  ],
-  "devDependencies": {
-    "@rubensworks/eslint-config": "^1.0.1",
-    "@types/jest": "^28.0.0",
-    "@typescript-eslint/eslint-plugin": "^5.0.0",
-    "@typescript-eslint/parser": "^5.0.0",
-    "arrayify-stream": "^2.0.0",
-    "componentsjs-generator": "^3.0.3",
-    "coveralls": "^3.0.0",
-    "eslint": "^7.9.0",
-    "eslint-config-es": "^3.23.0",
-    "eslint-import-resolver-typescript": "^2.3.0",
-    "eslint-plugin-import": "^2.22.0",
-    "eslint-plugin-jest": "^25.0.0",
-    "eslint-plugin-tsdoc": "^0.2.7",
-    "eslint-plugin-unused-imports": "^2.0.0",
-    "jest": "^28.0.0",
-    "jest-rdf": "^1.7.0",
-    "manual-git-changelog": "^1.0.0",
-    "pre-commit": "^1.2.2",
-    "rdf-data-factory": "^1.1.0",
-    "stream-to-string": "^1.2.0",
-    "streamify-array": "^1.0.1",
-    "streamify-string": "^1.0.1",
-    "ts-jest": "^28.0.0",
-    "typescript": "^4.6.4"
-  },
-  "jest": {
-    "transform": {
-      "^.+\\.ts$": "ts-jest"
-    },
-    "transformIgnorePatterns": [
-      "[/\\\\]node_modules[/\\\\].+\\.(js|jsx)$"
-    ],
-    "testRegex": "(/test/.*|(\\.|/)(test|spec))\\-test.ts$",
-    "moduleFileExtensions": [
-      "ts",
-      "js"
-    ],
-    "collectCoverage": true,
-    "coverageThreshold": {
-      "global": {
-        "branches": 100,
-        "functions": 100,
-        "lines": 100,
-        "statements": 100
-      }
-    }
   },
   "scripts": {
     "test": "jest ${1}",
     "test-watch": "jest ${1} --watch",
     "coveralls": "jest --coverage && cat ./coverage/lcov.info | coveralls",
-    "lint": "eslint . --ext .ts --cache",
-    "build": "npm run build:ts && npm run build:components",
+    "lint": "eslint . --cache",
+    "build": "yarn run build:ts && yarn run build:components",
     "build:components": "componentsjs-generator -s lib -i .componentsignore",
     "build:ts": "tsc",
-    "validate": "npm ls",
-    "prepare": "npm run build",
+    "validate": "yarn ls",
+    "prepare": "husky && yarn run build",
     "version": "manual-git-changelog onversion"
+  },
+  "dependencies": {
+    "@rdfjs/types": "*",
+    "@types/sparqljs": "*",
+    "componentsjs": "^6.0.0",
+    "csv-parser": "^3.0.0",
+    "sparqljs": "^3.7.0"
+  },
+  "devDependencies": {
+    "@rubensworks/eslint-config": "^3.0.0",
+    "@types/jest": "^29.0.0",
+    "arrayify-stream": "^2.0.0",
+    "componentsjs-generator": "^4.0.0",
+    "eslint": "^8.0.0",
+    "husky": "^9.0.0",
+    "jest": "^29.0.0",
+    "jest-rdf": "^1.8.0",
+    "manual-git-changelog": "^1.0.0",
+    "rdf-data-factory": "^1.1.0",
+    "stream-to-string": "^1.2.0",
+    "streamify-array": "^1.0.1",
+    "streamify-string": "^1.0.1",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "resolutions": {
+    "@rdfjs/types": "1.1.2",
+    "@types/node": "^22.0.0",
+    "@types/sparqljs": "3.1.12"
   }
 }
