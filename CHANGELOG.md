@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.7.0"></a>
+## [v2.7.0](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/compare/v2.6.0...v2.7.0) - 2025-04-18
+
+### Changed
+* [Update repository setup to be in line with rdf-dataset-fragmenter (#15)](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/commit/d0b4ca8900344272157cd2e1b6695369ca9f4ff2)
+
 <a name="v2.6.0"></a>
 ## [v2.6.0](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/compare/v2.5.2...v2.6.0) - 2024-02-23
 
