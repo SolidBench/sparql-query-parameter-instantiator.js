@@ -3,6 +3,7 @@ import { DataFactory } from 'rdf-data-factory';
 import type { ISubstitutionProvider } from '../../lib/substitution/ISubstitutionProvider';
 import { ValueTransformerReplaceIri } from '../../lib/valuetransformer/ValueTransformerReplaceIri';
 import { VariableTemplateNamedNode } from '../../lib/variable/VariableTemplateNamedNode';
+
 const DF = new DataFactory();
 
 describe('VariableTemplateNamedNode', () => {
@@ -23,7 +24,7 @@ describe('VariableTemplateNamedNode', () => {
 
     describe('getName', () => {
       it('should return the name', () => {
-        expect(variable.getName()).toEqual('varName');
+        expect(variable.getName()).toBe('varName');
       });
     });
 
@@ -54,7 +55,7 @@ describe('VariableTemplateNamedNode', () => {
 
       it('should throw for an array', () => {
         expect(() => variable.createTerm([ 123 ]))
-          .toThrowError('Received unsupported array value for the VariableTemplateNamedNode for varName');
+          .toThrow('Received unsupported array value for the VariableTemplateNamedNode for varName');
       });
     });
   });

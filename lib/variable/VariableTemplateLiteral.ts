@@ -25,8 +25,10 @@ export class VariableTemplateLiteral extends VariableTemplateAdapter {
 
   public createTermInner(value: RawTerm): RDF.Term {
     if (Array.isArray(value)) {
+      // eslint-disable-next-line unicorn/prefer-type-error
       throw new Error(`Received unsupported array value for the VariableTemplateLiteral for ${this.name}`);
     }
+    // eslint-disable-next-line ts/prefer-nullish-coalescing
     return this.DF.literal(`${value}`, this.language || this.datatype);
   }
 }

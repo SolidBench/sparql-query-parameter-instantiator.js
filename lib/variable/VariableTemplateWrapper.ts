@@ -20,6 +20,7 @@ export class VariableTemplateWrapper implements IVariableTemplate {
   }
 
   public getSubstitutionProvider(): ISubstitutionProvider | undefined {
+    // eslint-disable-next-line ts/prefer-nullish-coalescing
     return this.substitutionProvider || this.variableTemplate.getSubstitutionProvider();
   }
 }

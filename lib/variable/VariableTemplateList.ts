@@ -21,6 +21,7 @@ export class VariableTemplateList extends VariableTemplateAdapter {
 
   public createTermInner(value: RawTerm): RDF.Term {
     if (!Array.isArray(value)) {
+      // eslint-disable-next-line unicorn/prefer-type-error
       throw new Error(`Received unsupported non-array value for the VariableTemplateList for ${this.name}`);
     }
     return this.DF.literal(

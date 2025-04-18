@@ -50,7 +50,7 @@ describe('ValueTransformerDistributeIri', () => {
 
       expect(() => badTransformer.transform(
         DF.namedNode('http://www.ldbc.eu/data/pers0495'),
-      )).toThrow();
+      )).toThrow('ValueTransformerDistributeIri error: The first capture group in "searchRegex"');
     });
 
     it('should throw error when no regex groups', async() => {
@@ -61,7 +61,7 @@ describe('ValueTransformerDistributeIri', () => {
 
       expect(() => badTransformer.transform(
         DF.namedNode('http://www.ldbc.eu/data/pers0495'),
-      )).toThrow();
+      )).toThrow('ValueTransformerDistributeIri error: The "searchRegex" did not contain any groups.');
     });
   });
 });

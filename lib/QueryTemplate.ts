@@ -1,7 +1,9 @@
 import type * as RDF from '@rdfjs/types';
-import type { BlankTerm,
+import type {
+  BlankTerm,
   IriTerm,
-  Pattern, QuadTerm,
+  Pattern,
+  QuadTerm,
   SparqlQuery,
   Triple,
   Variable,
@@ -10,7 +12,8 @@ import type { BlankTerm,
   SelectQuery,
   PropertyPath,
   Term,
-  Expression } from 'sparqljs';
+  Expression,
+} from 'sparqljs';
 import { Generator } from 'sparqljs';
 
 /**
@@ -66,7 +69,7 @@ export class QueryTemplate {
     }
 
     // Apply expressions in variables
-    syntaxTree.variables = <any> syntaxTree.variables.map(variable => {
+    syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
       if ('expression' in variable) {
         variable.expression = this.instantiateExpression(variable.expression, variableMapping);
       }
@@ -87,7 +90,7 @@ export class QueryTemplate {
 
   public instantiatePatterns(patterns: Pattern[], variableMapping: Record<string, RDF.Term>): Pattern[] {
     // eslint-disable-next-line array-callback-return
-    return patterns.map(pattern => {
+    return patterns.map((pattern) => {
       pattern = { ...pattern };
       switch (pattern.type) {
         case 'query':
@@ -131,12 +134,12 @@ export class QueryTemplate {
       switch (expression.type) {
         case 'group':
         case 'graph':
-          return {
+          return <Expression> {
             ...expression,
             patterns: this.instantiatePatterns(expression.patterns, variableMapping),
           };
         case 'bgp':
-          return {
+          return <Expression> {
             ...expression,
             triples: expression.triples.map(triple => this.instantiateTriple(triple, variableMapping)),
           };

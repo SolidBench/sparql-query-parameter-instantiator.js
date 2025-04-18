@@ -18,6 +18,7 @@ export class VariableTemplateNamedNode extends VariableTemplateAdapter {
 
   public createTermInner(value: RawTerm): RDF.Term {
     if (Array.isArray(value)) {
+      // eslint-disable-next-line unicorn/prefer-type-error
       throw new Error(`Received unsupported array value for the VariableTemplateNamedNode for ${this.name}`);
     }
     return this.DF.namedNode(`${value}`);

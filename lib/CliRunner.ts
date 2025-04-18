@@ -1,4 +1,4 @@
-import type { ReadStream, WriteStream } from 'tty';
+import type { ReadStream, WriteStream } from 'node:tty';
 import type { IComponentsManagerBuilderOptions, IConstructionSettings } from 'componentsjs';
 import { ComponentsManager } from 'componentsjs';
 import type { QueryInstantiator } from './QueryInstantiator';
@@ -9,7 +9,7 @@ import type { QueryInstantiator } from './QueryInstantiator';
  * @param properties - Components loader properties.
  * @param constructionSettings - Settings for instantiation.
  */
-export const runConfig = async function(
+export async function runConfig(
   configPath: string,
   properties: IComponentsManagerBuilderOptions<QueryInstantiator>,
   constructionSettings?: IConstructionSettings,
@@ -30,7 +30,7 @@ export const runConfig = async function(
  * @param properties - Components loader properties.
  * @param constructionSettings - Settings for instantiation.
  */
-export const runCustom = function(
+export function runCustom(
   args: string[],
   stdin: ReadStream,
   stdout: WriteStream,
@@ -52,7 +52,7 @@ Usage:
     return await runConfig(configPath, properties, constructionSettings);
   })().then((): void => {
     // Done
-  }).catch(error => {
+  }).catch((error) => {
     process.stderr.write(`${error.stack}\n`);
     // eslint-disable-next-line unicorn/no-process-exit
     process.exit(1);
@@ -63,7 +63,7 @@ Usage:
  * Run function for starting the server from the command line
  * @param moduleRootPath - Path to the module's root.
  */
-export const runCli = function(moduleRootPath: string): void {
+export function runCli(moduleRootPath: string): void {
   const argv = process.argv.slice(2);
   runCustom(argv, process.stdin, process.stdout, process.stderr, { mainModulePath: moduleRootPath });
 };

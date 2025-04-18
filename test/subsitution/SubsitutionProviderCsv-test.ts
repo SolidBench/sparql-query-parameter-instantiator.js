@@ -1,9 +1,10 @@
-import { Readable } from 'stream';
+import { Readable } from 'node:stream';
 import { SubstitutionProviderCsv } from '../../lib/substitution/SubstitutionProviderCsv';
+
 const streamifyString = require('streamify-string');
 
 const files: Record<string, string> = {};
-jest.mock('fs', () => ({
+jest.mock('node:fs', () => ({
   createReadStream(filePath: string) {
     if (filePath in files) {
       return streamifyString(files[filePath]);
@@ -30,7 +31,7 @@ a3,b3,c3`;
 
     describe('getValues', () => {
       it('returns the rows of the configured column', async() => {
-        expect(await provider.getValues()).toEqual([ 'b1', 'b2', 'b3' ]);
+        await expect(provider.getValues()).resolves.toEqual([ 'b1', 'b2', 'b3' ]);
       });
     });
   });
@@ -47,7 +48,7 @@ a3,b3,c3`;
     describe('getValues', () => {
       it('should throw', async() => {
         await expect(provider.getValues()).rejects
-          .toThrowError('The column colOther was not set in the CSV file file.csv');
+          .toThrow('The column colOther was not set in the CSV file file.csv');
       });
     });
   });
@@ -59,7 +60,7 @@ a3,b3,c3`;
 
     describe('getValues', () => {
       it('should throw', async() => {
-        await expect(provider.getValues()).rejects.toThrowError('Unknown file in SubstitutionProviderCsv');
+        await expect(provider.getValues()).rejects.toThrow('Unknown file in SubstitutionProviderCsv');
       });
     });
   });
