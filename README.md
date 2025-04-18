@@ -112,7 +112,7 @@ A variable template that always produces IRIs.
     {
       "@type": "VariableTemplateNamedNode",
       "name": "person",
-      "substitutionProvider": { ... }
+      "substitutionProvider": { /* ... */ }
     }
   ]
 }
@@ -136,7 +136,7 @@ A variable template that always produces literals.
       "name": "person",
       "language": "en-us",
       "datatype": "http://www.w3.org/2001/XMLSchema#number",
-      "substitutionProvider": { ... }
+      "substitutionProvider": { /* ... */ }
     }
   ]
 }
@@ -189,7 +189,7 @@ An inner variable template must be passed, which will be invoked for every array
       "@type": "VariableTemplateList",
       "name": "tagNames",
       "separator": ", ",
-      "substitutionProvider": { ... }
+      "substitutionProvider": { /* ... */ },
       "innerTemplate": {
         "@type": "VariableTemplateLiteral",
         "name": "tagName"
