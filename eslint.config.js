@@ -24,4 +24,10 @@ module.exports = config([
       'jest/no-untyped-mock-factory': 'off',
     },
   },
+  {
+    ignores: [
+      // The readme file uses { ... } in examples which breaks the parsing
+      'README.md',
+    ],
+  },
 ]);
