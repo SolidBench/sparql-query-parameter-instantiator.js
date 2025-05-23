@@ -1,5 +1,5 @@
 import type * as RDF from '@rdfjs/types';
-import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
+import type { ISubstitutionProvider, ISubstitutionProviderProbabilities } from '../substitution/ISubstitutionProvider';
 import type { IValueTransformer } from '../valuetransformer/IValueTransformer';
 import type { IVariableTemplate, RawTerm } from './IVariableTemplate';
 import { VariableTemplateAdapter } from './VariableTemplateAdapter';
@@ -13,7 +13,7 @@ export class VariableTemplateList extends VariableTemplateAdapter {
     name: string,
     public readonly separator: string,
     public readonly innerTemplate: IVariableTemplate,
-    substitutionProvider?: ISubstitutionProvider,
+    substitutionProvider?: ISubstitutionProvider | ISubstitutionProviderProbabilities,
     valueTransformers?: IValueTransformer[],
   ) {
     super(name, substitutionProvider, valueTransformers);

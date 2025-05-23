@@ -45,6 +45,7 @@ jest.mock('node:fs', () => ({
 
 describe('QueryTemplateProvider', () => {
   let provider: QueryTemplateProvider;
+  let provider2: QueryTemplateProvider;
   beforeEach(() => {
     provider = new QueryTemplateProvider(
       'template1',
@@ -59,6 +60,8 @@ describe('QueryTemplateProvider', () => {
           new SubstitutionProviderStatic([ 'ex:a2', 'ex:b2', 'ex:c2' ]),
         ),
       ],
+      "t1",
+      ['template2']
     );
   });
 
@@ -94,6 +97,8 @@ describe('QueryTemplateProvider', () => {
             undefined,
           ),
         ],
+        "t1",
+        ['template2']
       );
       await expect(provider.createTemplate()).rejects
         .toThrow(`The variable template 'template1' for 'var1' has no substitution provider configured`);
@@ -106,4 +111,31 @@ describe('QueryTemplateProvider', () => {
       expect(filesOut.destination1).toBe('contents');
     });
   });
+
+  describe('validateNextTemplateFilePaths', () => {
+    beforeEach(() => {
+      provider2 = new QueryTemplateProvider(
+        'template2',
+        'destination1',
+        [
+          new VariableTemplateNamedNode(
+            'var1',
+            new SubstitutionProviderStatic([ 'ex:a1', 'ex:b1', 'ex:c1' ]),
+          ),
+          new VariableTemplateNamedNode(
+            'var2',
+            new SubstitutionProviderStatic([ 'ex:a2', 'ex:b2', 'ex:c2' ]),
+          ),
+        ],
+        "t2",
+        ['template1'],
+      );
+    })
+    it('should return true when validating for both providers', () => {
+      expect(provider.validateNextTemplateFilePaths([provider])).toEqual(false);
+    });
+    it('should return false when a provider is missing', () => {
+      expect(provider.validateNextTemplateFilePaths([provider, provider2])).toEqual(true);
+    })
+  })
 });

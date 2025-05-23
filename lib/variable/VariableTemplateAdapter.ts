@@ -1,6 +1,6 @@
 import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
-import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
+import type { ISubstitutionProvider, ISubstitutionProviderProbabilities } from '../substitution/ISubstitutionProvider';
 import type { IValueTransformer } from '../valuetransformer/IValueTransformer';
 import type { IVariableTemplate, RawTerm } from './IVariableTemplate';
 
@@ -9,7 +9,8 @@ import type { IVariableTemplate, RawTerm } from './IVariableTemplate';
  */
 export abstract class VariableTemplateAdapter implements IVariableTemplate {
   protected readonly name: string;
-  protected readonly substitutionProvider: ISubstitutionProvider | undefined;
+  protected readonly substitutionProvider: ISubstitutionProvider | 
+  ISubstitutionProviderProbabilities |undefined;
   protected readonly valueTransformers: IValueTransformer[];
   // eslint-disable-next-line ts/naming-convention
   protected readonly DF = new DataFactory();
@@ -29,7 +30,7 @@ export abstract class VariableTemplateAdapter implements IVariableTemplate {
     return this.name;
   }
 
-  public getSubstitutionProvider(): ISubstitutionProvider | undefined {
+  public getSubstitutionProvider(): ISubstitutionProvider | ISubstitutionProviderProbabilities | undefined {
     return this.substitutionProvider;
   }
 

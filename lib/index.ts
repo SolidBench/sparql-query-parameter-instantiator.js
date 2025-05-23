@@ -19,3 +19,8 @@ export * from './CliRunner';
 export * from './QueryInstantiator';
 export * from './QueryTemplate';
 export * from './QueryTemplateProvider';
+export * from './QuerySequenceInstantiator';
+export * from './QuerySequenceTemplate';
+export * from './QuerySequenceTemplateProvider';
+export * from './substitution/SubstitutionProviderSimilarityBasedProbabilty';
+export * from './substitution/SubstitutionProviderCsvTruncated';

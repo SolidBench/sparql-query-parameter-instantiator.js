@@ -1,6 +1,6 @@
 import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
-import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
+import type { ISubstitutionProvider, ISubstitutionProviderProbabilities } from '../substitution/ISubstitutionProvider';
 import type { IVariableTemplate } from './IVariableTemplate';
 
 const DF = new DataFactory();
@@ -17,7 +17,7 @@ export class VariableTemplateVoid implements IVariableTemplate {
     return '__void';
   }
 
-  public getSubstitutionProvider(): ISubstitutionProvider | undefined {
+  public getSubstitutionProvider(): ISubstitutionProvider | ISubstitutionProviderProbabilities |undefined {
     return undefined;
   }
 }

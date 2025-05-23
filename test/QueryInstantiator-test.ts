@@ -61,6 +61,8 @@ describe('QueryInstantiator', () => {
             new SubstitutionProviderStatic([ 'ex:a2', 'ex:b2', 'ex:c2' ]),
           ),
         ],
+        "t1",
+        ['template2']
       ),
       new QueryTemplateProvider(
         'template2',
@@ -71,6 +73,8 @@ describe('QueryInstantiator', () => {
             new SubstitutionProviderStatic([ 'ex:a3', 'ex:b3', 'ex:c3' ]),
           ),
         ],
+        "t2",
+        ['template1']
       ),
     ];
     instantiator = new QueryInstantiator(providers, 3);
