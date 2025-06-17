@@ -13,7 +13,6 @@ export class QueryInstantiator {
   }
 
   protected async instantiateProvider(provider: QueryTemplateProvider): Promise<void> {
-    console.log(provider)
     const template = await provider.createTemplate();
 
     // Create queries files

@@ -1,6 +1,6 @@
 import type * as RDF from '@rdfjs/types';
 import seedrandom = require('seedrandom');
-import type {
+import {
   BlankTerm,
   IriTerm,
   Pattern,
@@ -14,8 +14,16 @@ import type {
   PropertyPath,
   Term,
   Expression,
+  BgpPattern,
+  Wildcard,
+  BlockPattern,
+  FilterPattern,
+  OptionalPattern,
+  UnionPattern,
 } from 'sparqljs';
 import { Generator } from 'sparqljs';
+import { IEntityLogits, IQueryRefinementPattern, ITargetTriplePattern } from './QuerySequenceTemplateProvider';
+import { DataFactory } from 'rdf-data-factory';
 
 /**
  * Data object for a query template.
@@ -23,16 +31,24 @@ import { Generator } from 'sparqljs';
 export class QuerySequenceTemplate {
   private readonly syntaxTree: SparqlQuery;
   private readonly variableMappings: Record<string, RDF.Term[]>;
-  private readonly variableProbabilities: Record<string, number[]> | undefined;
+  private readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
+  private readonly rng: seedrandom.PRNG | undefined;
+  private readonly DF: DataFactory = new DataFactory();
+  private readonly refinementPatterns?: IQueryRefinementPattern[];
+  public readonly instantiationCounts: Record<string, Record<string, Record<string, number>>> = {};
 
   public constructor(
     syntaxTree: SparqlQuery,
     variableMappings: Record<string, RDF.Term[]>,
-    variableProbabilities?: Record<string, number[]>
+    variableProbabilities: Record<string, Record<string, IEntityLogits[]>>,
+    refinementPatterns?: IQueryRefinementPattern[],
+    rng?: seedrandom.PRNG
   ) {
     this.syntaxTree = syntaxTree;
     this.variableMappings = variableMappings;
     this.variableProbabilities = variableProbabilities;
+    this.refinementPatterns = refinementPatterns;
+    this.rng = rng;
   }
 
   /**
@@ -40,19 +56,46 @@ export class QuerySequenceTemplate {
    * This counter value is used to determine what variable value should be used.
    * @param counter The current counter value.
    */
-  public instantiate(counter: number, rng?: seedrandom.PRNG): string {
+  public instantiate(counter: number, instantiateRefinementPattern: boolean, user?: string): string {
     // Determine variables to instantiate with
     const variableMapping: Record<string, RDF.Term> = {};
     for (const variable of Object.keys(this.variableMappings)) {
       const values = this.variableMappings[variable];
-      if (values.length <= counter) {
-        throw new Error(`Attempted to instantiate a query template more than the number of provided subsitution parameters (${values.length})`);
+      // When no probabilities and rng is given, we simply cycle through the provided
+      // values to instantiate queries in the sequence.
+      if (Object.keys(this.variableProbabilities).length === 0){
+        const instantiationIndex = counter % values.length;
+        variableMapping[variable] = values[instantiationIndex];
       }
-      variableMapping[variable] = values[counter];
-    }
+      else if (Object.keys(this.variableProbabilities).length > 0 && this.rng && user){
+        const sampledValue: RDF.Term = this.sampleVariableTerm(variable, user);
+        variableMapping[variable] = sampledValue;
 
+        // Track instantiation counts for the variable and user
+        this.updateCounter(user, variable, sampledValue.value);
+      }
+      else{
+        throw new Error(
+          `Either rng (${this.rng ? "defined" : "undefined"}), ` +
+          `probabilities (${Object.keys(this.variableProbabilities).length > 0 ? "defined" : "undefined"}), ` +
+          `or base user (${user ? "defined" : "undefined"}) are not given.`
+        );      
+      }
+    }
+    const instantiatedSyntaxTree = this.instantiateSyntaxTree(this.syntaxTree, variableMapping);
+    if (instantiateRefinementPattern) {
+      if (!this.refinementPatterns) {
+        throw new Error(`No refinement patterns available for instantiation`);
+      }
+      this.createRefinementSequence(
+        this.refinementPatterns, 
+        instantiatedSyntaxTree, 
+        4,
+        variableMapping 
+      );
+    }
     // Instantiate syntax tree
-    return new Generator().stringify(this.instantiateSyntaxTree(this.syntaxTree, variableMapping));
+    return new Generator().stringify(instantiatedSyntaxTree);
   }
 
   public instantiateSyntaxTree(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
@@ -185,4 +228,501 @@ export class QuerySequenceTemplate {
     }
     return term;
   }
+
+  public createRefinementSequence(
+    refinementPatterns: IQueryRefinementPattern[], 
+    query: SelectQuery, 
+    nSteps: number,
+    variableMapping: Record<string, RDF.Term>
+  ): string[] {
+    const addedPatterns: ITargetTriplePattern[] = [];
+    const removedTriples = [];
+
+    for (let i = 0; i < nSteps; i++) {
+      const operatorTriples: Record<string, Triple[][]> = this.extractTriplePatternsPerOperator(
+        query.where!,
+      )
+      const validPatterns = this.findValidRefinementPatterns(
+        operatorTriples,
+        refinementPatterns, 
+        addedPatterns, 
+        removedTriples,
+      );
+      const patternToApply = this.sampleRandom(validPatterns);
+      const {query: refinedQuery, removedTriplePatterns} = 
+        this.applyRefinementPattern(
+          patternToApply, query, operatorTriples,
+          variableMapping, removedTriples);
+
+      removedTriples.push(...removedTriplePatterns);
+      addedPatterns.push(...patternToApply.target);
+    }
+    return [];
+  }
+
+  public applyRefinementPattern(
+    pattern: IQueryRefinementPattern, query: SelectQuery,
+    operatorTriples: Record<string, Triple[][]>,
+    variableMapping: Record<string, RDF.Term>,
+    previouslyRemovedTriplePatterns: Triple[]
+  ): IRefinementOutput{
+    let removedTriplePatterns: Triple[] = [];
+    if (pattern.location === undefined) {
+      throw new Error(`Location for addition refinement pattern ${pattern.description} is not defined`);
+    }
+    const patternType = pattern.type.toLowerCase();
+    // Extract BGPs. We can probably use this as a function parameter and not use the Triple[][] 
+    // representation, but we'll have to change some tests (AGAIN).
+    const operatorToBgp: Record<string, BgpPattern[]> = {};
+    this.extractBgpPerOperator(query.where!, operatorToBgp, "query");
+
+    if (pattern.operation === "addition"){
+      switch (patternType) {
+        case "optional":
+          let groupPatternOptional = operatorToBgp[patternType]
+          let toRefineOptional: BgpPattern;
+          if (!groupPatternOptional || groupPatternOptional.length === 0) {
+            // If no optionals are present, add a new optional pattern
+            const optionalBgp: BgpPattern = {type: "bgp", triples: []};
+      
+            const optionalBlock: OptionalPattern = {type: "optional", patterns: [optionalBgp]};
+            query.where!.push(optionalBlock);
+
+            toRefineOptional = <BgpPattern> optionalBlock.patterns[pattern.location];
+          }
+          else{
+            toRefineOptional = operatorToBgp[patternType][pattern.location];
+          }
+          if (!toRefineOptional){
+            throw new Error(`BGP Doesn't exist at index ${pattern.location} 
+              for optional operator with ${operatorToBgp[patternType]} BGPs`);
+          }
+          this.addTargetToBgp(
+            toRefineOptional, pattern.target, query, variableMapping
+          );
+          break;
+
+        case "union":
+          let groupPatternUnion = operatorToBgp[patternType]
+          let toRefineUnion: BgpPattern;
+          if (!groupPatternUnion || groupPatternUnion.length === 0) {
+            // If no optionals are present, add a new optional pattern
+            const leftUnion: BgpPattern = {type: "bgp", triples: []};
+            const rightUnion: BgpPattern = {type: "bgp", triples: []};
+
+            const unionBlock: UnionPattern = {type: "union", patterns: [leftUnion, rightUnion]};
+            query.where!.push(unionBlock);
+
+            toRefineUnion = <BgpPattern> unionBlock.patterns[pattern.location];
+          }
+          else{
+            toRefineUnion = operatorToBgp[patternType][pattern.location];
+          }
+          if (!toRefineUnion){
+            throw new Error(`BGP Doesn't exist at index ${pattern.location} 
+              for union operator with ${operatorToBgp[patternType]} BGPs`);
+          }
+
+          this.addTargetToBgp(
+            toRefineUnion, pattern.target, query, variableMapping
+          );
+          break;
+
+        case "filter":  
+          const filters: FilterPattern[] = query.where!.filter(x => x.type === "filter");
+          break;
+
+        case "query": {
+          const bgpToRefine = operatorToBgp[patternType][pattern.location];
+
+          if (!bgpToRefine){
+            throw new Error(`BGP Doesn't exist at index ${pattern.location} 
+              for query bgp operator with ${operatorToBgp[patternType]} BGPs`);
+          }
+
+          let targetTriples: (ITargetTriplePattern | Triple)[] = pattern.target;
+          // Add back a triple when no target is specified
+          if (pattern.target.length === 0){
+            targetTriples = [this.sampleRandom(previouslyRemovedTriplePatterns)]
+          }
+
+          this.addTargetToBgp(
+            bgpToRefine, targetTriples, query, variableMapping
+          );
+          break;
+        }
+      }
+    }
+
+    else if (pattern.operation === "removal"){
+      switch (patternType) {
+        case "optional":
+          const optionals = query.where!.filter(x => x.type === "optional");
+          if (optionals.length > 0) {
+            // TODO: Remove the optional pattern from the query  
+          }
+        case "filter":  
+          const filters = query.where!.filter(x => x.type === "filter");
+          if (filters.length > 0) {
+            // TODO: Remove the filters pattern from the query  
+          }
+
+        case "union":
+          const unions = query.where!.filter(x => x.type === "union");
+          if (unions.length > 0) {
+            // TODO: Remove the union pattern from the query  
+          }
+        case "query": {
+          const bgpToRefine = operatorToBgp[patternType][pattern.location];
+          
+          if (!bgpToRefine){
+            throw new Error(`BGP Doesn't exist at index ${pattern.location} 
+              for query bgp operator with ${operatorToBgp[patternType]} BGPs`);
+          }
+
+          for (const target of pattern.target) {
+            // Check if the target triple pattern is already added
+            const triple = this.targetToTriple(target);
+            if (this.hasTriple(bgpToRefine, triple)) {
+              // If it is, remove the triple from the BGP
+              bgpToRefine.triples = bgpToRefine.triples.filter(t =>
+                !this.tripleEquals(t, triple)
+              );
+              removedTriplePatterns.push(triple);
+            }
+          }
+        }
+      }
+    }
+    else {
+      throw new Error(`Unknown operation type '${pattern.operation}' in refinement pattern ${pattern.description}`);
+    }
+    return { query, removedTriplePatterns}
+  }
+
+  /**
+   * Key method that determines whether a given set of refinement patterns can be applied to
+   * @param operatorTriplePatternsFlattened Record mapping operator names (lowercase) to the triple patterns 
+   * belonging to them
+   * @param refinementPatterns The refinement patterns to be evaluated
+   * @param addedPatterns The triple patterns added by previous pattern applications
+   * @param removedTriplePatterns Triple patterns that have previously been removed
+   * @returns An array of all valid refinement patterns
+   */
+  public findValidRefinementPatterns(
+    operatorTriplePatterns: Record<string, Triple[][]>,
+    refinementPatterns: IQueryRefinementPattern[],
+    addedPatterns: ITargetTriplePattern[],
+    removedTriplePatterns: Triple[],
+  ): IQueryRefinementPattern[] {
+    // We don't need a per BGP distinction of triple patterns for this function, so flatten
+    const operatorTriplePatternsFlattened = 
+      Object.fromEntries(Object.entries(operatorTriplePatterns).map(([k, v]) => [k, v.flat()]));
+    const totalTriples = Object.values(operatorTriplePatternsFlattened)
+      .reduce((sum, triples) => sum + triples.length, 0);
+    
+    // this.countTriplePatternsPerOperator(query.where!, triplesPerOperator, "query");
+    return refinementPatterns.filter(pattern => {
+      // No repeat addition of triple patterns. 
+      // Check for length of targets array to ensure this is not falsly set to true when
+      // empty array is passed
+      const patternInQuery = pattern.target.length > 0 ?
+        pattern.target.every(tpTarget => addedPatterns.some(addedPattern => 
+          this.tripleEquals(this.targetToTriple(addedPattern), this.targetToTriple(tpTarget)))) 
+        : false;
+      
+      if (patternInQuery && pattern.operation === "addition") {
+        return false;
+      }
+
+      const patternType = pattern.type.toLowerCase();
+      // If we want to remove any triple from the BGP in query, we need only 
+      // the length to be larger than 1, as to not make an empty query
+      if (pattern.operation === 'removal' && pattern.target.length === 0 && 
+        operatorTriplePatternsFlattened['query'] && operatorTriplePatternsFlattened['query'].length > 1
+        && patternType === 'query'
+      ){
+        return true;
+      }
+
+      if (pattern.operation === 'removal'){
+        // We can't make an empty query, atleast one triple pattern should be left
+        // In case there is a empty target, one random triple pattern will be removed,
+        // so we use max here
+        if (totalTriples - Math.max(pattern.target.length, 1) <= 0){
+          return false;
+        }
+        // If the operator is not in the query, we can't apply removal
+        if (operatorTriplePatternsFlattened[patternType]){
+          // For removal patterns, all targets must be in the present in the operator
+          if (pattern.target.every(t => operatorTriplePatternsFlattened[patternType].some(tp => 
+                this.tripleEquals(this.targetToTriple(t), tp)))
+          ){
+            return true;
+          }
+        }
+        return false;
+      }
+
+      // If not duplicate you can always add, except when it concerns the original query.
+      // You can add regardless of operator, as if it doesn't exist a new operator block 
+      // is made
+      if (patternType !== 'query'){
+        return true;
+      }
+
+      // Adding specified triple pattern to bgp of query is always possible. Given that
+      // duplicate targets would've already been filtered
+      if (pattern.target.length > 0){
+        return true;
+      }
+
+      // Check if there are removed triple patterns for the empty target pattern to 
+      // add back to the query
+      if (removedTriplePatterns.length > 0){
+        return true;
+      }
+      return false
+    });
+  }
+
+  public extractTriplePatternsPerOperator(
+    patterns: Pattern[],
+  ): Record<string, Triple[][]> {
+    const bgpsPerOperator: Record<string, BgpPattern[]> = {};
+    this.extractBgpPerOperator(patterns, bgpsPerOperator, "query");
+
+    const triplesPerOperator: Record<string, Triple[][]> = {};
+    for (const operator in bgpsPerOperator) {
+        triplesPerOperator[operator] = bgpsPerOperator[operator].map(bgp => bgp.triples);
+    }
+    return triplesPerOperator
+  }
+
+  public extractBgpPerOperator(
+    patterns: Pattern[],
+    bgpsPerOperator: Record<string, BgpPattern[]>,
+    previousOperator: "query" | "union" | "optional"
+  ){
+    for (const pattern of patterns) {
+      switch (pattern.type) {
+        case 'group':
+          this.extractBgpPerOperator(pattern.patterns, bgpsPerOperator, previousOperator);
+          break;
+
+        case 'query':
+          if (pattern.where) {
+            this.extractBgpPerOperator(pattern.where, bgpsPerOperator, "query");
+          }
+          break;
+
+        case 'bgp':
+          if (!bgpsPerOperator[previousOperator]) {
+            bgpsPerOperator[previousOperator] = [];
+          }
+          bgpsPerOperator[previousOperator].push(pattern);
+          break;
+
+        case 'union':
+          if (!bgpsPerOperator['union']) {
+            bgpsPerOperator['union'] = [];
+          }
+          this.extractBgpPerOperator(pattern.patterns, bgpsPerOperator, "union");
+          break;
+
+        case 'optional':
+          if (!bgpsPerOperator['optional']) {
+            bgpsPerOperator['optional'] = [];
+          }
+          this.extractBgpPerOperator(pattern.patterns, bgpsPerOperator, "optional");
+          break;
+
+        case 'filter':
+          break;
+
+        default:
+          break;
+      }
+    }
+  }
+
+  public targetToTriple(target: ITargetTriplePattern | Triple): Triple {
+    if (this.isRdfJsTriple(target)) return target;
+    return {
+      subject: this.toTerm(target.subject),
+      predicate: this.toTerm(target.predicate),
+      object: this.toTerm(target.object),
+    };
+  }
+
+  // Helper type guard
+  private isRdfJsTriple(obj: any): obj is Triple {
+    return obj
+      && typeof obj === 'object'
+      && obj.subject?.termType !== undefined
+      && obj.predicate?.termType !== undefined
+      && obj.object?.termType !== undefined;
+  }
+
+  private hasVariable(variables: Variable[] | [Wildcard], variable: VariableTerm): boolean {
+    return variables.some(bgpVariable => { 'termType' in bgpVariable &&
+      bgpVariable.termType === 'Variable' && variable.value === bgpVariable.value;
+    });    
+  }
+
+  private updateVariablesQuery(query: SelectQuery, instantiatedTriple: Triple): Variable[] | [Wildcard] {
+    // If a wildcard is in the variables, we don't need to add the new variables to the triple,
+    // as it will select all variables in the query.
+    if (query.variables.some(term => term instanceof Wildcard)){
+      return query.variables
+    }
+    
+    const variablesInTriple = Object.values(instantiatedTriple).filter(
+      (term: RDF.Term) => term.termType === 'Variable'
+    );
+
+    // In our case query variables will always be an array of RDF.Variable
+    const vars = <RDF.Variable[]>query.variables;
+    for (const variable of variablesInTriple) {
+      if (!this.hasVariable(query.variables, variable)) {
+        vars.push(variable);
+      }
+    } 
+    return vars;
+  }
+
+  private addTargetToBgp(
+    bgp: BgpPattern, targets: (ITargetTriplePattern | Triple)[] , 
+    query: SelectQuery, variableMapping: Record<string, RDF.Term>
+  ): void {
+    for (const target of targets) {
+      const targetTriple = this.targetToTriple(target);
+      if (!this.hasTriple(bgp, targetTriple)) {
+        const instantiatedTriple = this.instantiateTriple(
+          targetTriple,
+          variableMapping
+        );
+        bgp.triples.push(instantiatedTriple);
+        query.variables = this.updateVariablesQuery(query, instantiatedTriple);
+      }
+    }
+  }
+
+  private extractBgpsFromPatterns(patterns: Pattern[]): BgpPattern[] {
+    const bgps: BgpPattern[] = [];
+
+    for (const pattern of patterns) {
+      switch (pattern.type) {
+        case 'bgp':
+          bgps.push(pattern);
+          break;
+
+        case 'optional':
+        case 'union':
+        case 'group':
+        case 'graph':
+        case 'minus':
+        case 'service':
+          // These contain a .patterns field: recurse
+          bgps.push(...this.extractBgpsFromPatterns((pattern as BlockPattern).patterns));
+          break;
+
+        case 'query':
+          // Nested subquery (e.g., SELECT inside a VALUES or GROUP)
+          if (pattern.queryType === 'SELECT' && pattern.where) {
+            bgps.push(...this.extractBgpsFromPatterns(pattern.where));
+          }
+          break;
+
+        case 'filter':
+        case 'bind':
+        case 'values':
+          // These do not contain patterns, so we ignore them
+          break;
+
+        default:
+          // You may log or throw for unknown pattern types
+          console.warn(`Unknown pattern type: ${(pattern as any).type}`);
+      }
+    }
+    return bgps;
+  }
+
+  private toTerm(value: string): RDF.Variable | RDF.NamedNode  {
+    if (value.startsWith('?')) {
+      return this.DF.variable(value.slice(1));
+    }
+    return this.DF.namedNode(value);
+  }
+
+  private tripleEquals(a: Triple, b: Triple): boolean {
+    return a.subject.value === b.subject.value &&
+      JSON.stringify(a.predicate) === JSON.stringify(b.predicate) &&
+      a.object.value === b.object.value;
+  } 
+
+  private hasTriple(bgp: BgpPattern, triple: Triple): boolean {
+    if (bgp.type !== 'bgp'){
+      throw new Error(`Expected a BGP pattern, but got ${bgp.type}`);
+    }
+    return bgp.triples.some(t => this.tripleEquals(t, triple))
+  }
+
+  public sampleVariableTerm(variable: string, user: string): RDF.Term {
+    const probabilities = this.variableProbabilities[variable];
+    if (!probabilities) {
+      throw new Error(`No probabilities found for variable '${variable}'`);
+    }
+    const logits = probabilities[user];
+    if (!logits) {
+      throw new Error(`No logits found for user '${user}' for variable '${variable}'`);
+    }
+    return this.DF.namedNode(this.sampleTerm(logits));
+  }
+
+  public sampleTerm(logits: IEntityLogits[]): string {
+    if (!this.rng){
+      throw new Error("RNG is not defined. Cannot sample term.");
+    }
+    const r = this.rng(); // Random number between 0 and 1
+    let cumulative = 0;
+
+    for (const item of logits) {
+      cumulative += item.similarity;
+      if (r < cumulative) {
+        return item.entity;
+      }
+    }
+    throw new Error("Failed sampling, likely due to probabilities not summing to 1.");
+  }
+
+  public sampleRandom<A>(array: A[]): A{
+    return array[Math.floor(this.rng!() * array.length)];
+  }
+
+  public updateCounter(user: string, variable: string, value: string): void {
+    if (!this.instantiationCounts[user]) {
+      this.instantiationCounts[user] = {};
+    }
+    if (!this.instantiationCounts[user][variable]) {
+      this.instantiationCounts[user][variable] = {};
+    }
+    if (!this.instantiationCounts[user][variable][value]) {
+      this.instantiationCounts[user][variable][value] = 0;
+    }
+    this.instantiationCounts[user][variable][value]++;
+  }
+  
+  public getInstantiationCounts(): Record<string, Record<string, Record<string, number>>> {
+    return this.instantiationCounts;
+  }
+
+  public getVariableProbabilities(): Record<string, Record<string, IEntityLogits[]>> {
+    return this.variableProbabilities;
+  }
+}
+
+export interface IRefinementOutput{
+  query: SelectQuery,
+  removedTriplePatterns: Triple[]
 }

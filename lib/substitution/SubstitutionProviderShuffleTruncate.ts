@@ -1,32 +1,32 @@
-import * as fs from 'node:fs';
-import { SubstitutionProviderCsv } from './SubstitutionProviderCsv';
 import seedrandom = require('seedrandom');
-const csvParser = require('csv-parser');
+import { RawTerm } from '../variable/IVariableTemplate';
+import { ISubstitutionProvider } from './ISubstitutionProvider';
 /**
- * A subsitution provider for CSV files that randomly selects elements. 
+ * A subsitution provider that wraps another provider and provides a random sample of the possible.
+ * substitution values .
  * Used for generating sequences with a given set of possible entities, as the sequence
  * template provider will repeatedly loop over all possible substitutions to generate values for
  * template variables.
  */
-export class SubstitutionProviderCsvTruncated extends SubstitutionProviderCsv {
+export class SubstitutionProviderShuffleTruncate implements ISubstitutionProvider {
   private readonly maxEntities: number;
+  private readonly seed: number;
   private readonly rng: seedrandom.PRNG;
+  private readonly substitutionProvider: ISubstitutionProvider;
 
-  public constructor(csvFilePath: string, columnName: string, 
-    maxEntities: number, seed: number, separator = ',',
+  public constructor(substitutionProvider: ISubstitutionProvider, 
+    seed: number, maxEntities: number
   ) {
-    super(csvFilePath, columnName, separator);
+    this.substitutionProvider = substitutionProvider;
     this.maxEntities = maxEntities;
-    this.rng = seedrandom(String(seed));
+    this.seed = seed
+    this.rng = seedrandom(String(this.seed));
   }
 
-  public getValues(): Promise<string[]> {
-    return new Promise<string[]>((resolve, reject) => {
-        super.getValues().then(results => {
-            return this.getRandomSample(results, this.maxEntities);
-        })
-    })
+  public async getValues(): Promise<RawTerm[]> {
+    return this.getRandomSample(await this.substitutionProvider.getValues(), this.maxEntities);
   }
+
   public getRandomSample<T>(array: T[], n: number): T[] {
     if (n > array.length){
         return array;

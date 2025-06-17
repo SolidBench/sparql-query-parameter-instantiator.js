@@ -7,17 +7,20 @@ const csvParser = require('csv-parser');
 export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubstitutionProviderProbabilities {
   private readonly csvFilePath: string | undefined;
   private readonly columnName: string;
+  private readonly columnNameSimilaritySubject: string;
 
   private readonly csvFilePathSimilarities: string;
   private readonly columnNameSimilarities: string = "similarities";
   private readonly separator: string;
 
   public constructor(csvFilePath: string | undefined, columnName: string, 
+    columnNameSimilaritySubject: string,
     csvFilePathSimilarities: string,  separator = ','
   ) {
     this.csvFilePath = csvFilePath;
     this.csvFilePathSimilarities = csvFilePathSimilarities;
     this.columnName = columnName;
+    this.columnNameSimilaritySubject = columnNameSimilaritySubject
 
     this.separator = separator;
   }
@@ -53,13 +56,17 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
         .pipe(csvParser({ separator: this.separator }))
         .on('error', reject)
         .on('data', (data: any) => {
-          if (!(this.columnName in data || !(this.columnNameSimilarities in data))) {
+          if (!(this.columnNameSimilaritySubject in data || !(this.columnNameSimilarities in data))) {
             reject(new Error(`The column ${this.columnName} or ${this.columnNameSimilarities} 
-                was not set in the CSV file ${this.csvFilePath}`));
+                was not set in the CSV file ${this.csvFilePathSimilarities}`));
           }
-          const similarities = JSON.parse(data[this.columnNameSimilarities]);
-          console.log(similarities);
-          results[<string>data[this.columnName]] = JSON.parse(data[this.columnNameSimilarities]);
+          try{
+            const similarities = JSON.parse(data[this.columnNameSimilarities]);
+            results[<string>data[this.columnNameSimilaritySubject]] = similarities;
+          }
+          catch{
+            throw new Error("Failed")
+          }
         })
         .on('end', () => resolve(results));
     });

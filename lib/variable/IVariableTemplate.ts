@@ -9,11 +9,5 @@ export interface IVariableTemplate {
   getSubstitutionProvider: () => ISubstitutionProvider | ISubstitutionProviderProbabilities | undefined;
   createTerm: (value: RawTerm) => RDF.Term;
 }
-// /**
-//  * A template for instantiating RDF terms from similarity values.
-//  */
-// export interface IVariableTemplateSimilarity extends IVariableTemplate {
-//   getSubstitutionProvider: () => ISubstitutionProviderProbabilities | undefined;
-// }
 
 export type RawTerm = string | number | RawTerm[];

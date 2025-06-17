@@ -5,7 +5,7 @@ import type { ISubstitutionProvider } from './ISubstitutionProvider';
  * A substitution provider that takes the union over the values of the given substitution provider.
  */
 export class SubstitutionProviderUnion implements ISubstitutionProvider {
-  private readonly substitutionProviders: ISubstitutionProvider[];
+  protected readonly substitutionProviders: ISubstitutionProvider[];
 
   /**
    * @param substitutionProviders The substitution provider to union over.
