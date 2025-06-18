@@ -1,5 +1,5 @@
 import type { RawTerm } from '../variable/IVariableTemplate';
-import type { ISubstitutionProvider, ISubstitutionProviderProbabilities } from './ISubstitutionProvider';
+import type { ISubstitutionProviderProbabilities } from './ISubstitutionProvider';
 import { SubstitutionProviderUnion } from './SubstitutionProviderUnion';
 
 /**
@@ -23,13 +23,13 @@ export class SubstitutionProviderUnionProbabilities extends SubstitutionProvider
   public async getValuesProbabilities(): Promise<Record<string, Record<string, number>[]>> {
     const results: Record<string, Record<string, number>[]> = {};
     for (const substitutionProvider of this.substitutionProviders) {
-        const probabilities = await substitutionProvider.getValuesProbabilities();
-        for (const [user, similarities] of Object.entries(probabilities)) {
-          if (!(user in results)) {
-            results[user] = [];
-          }
-          results[user].push(...similarities);
+      const probabilities = await substitutionProvider.getValuesProbabilities();
+      for (const [ user, similarities ] of Object.entries(probabilities)) {
+        if (!(user in results)) {
+          results[user] = [];
         }
+        results[user].push(...similarities);
+      }
     }
     for (const user of Object.keys(results)) {
       results[user].sort((a, b) => b.similarity - a.similarity);

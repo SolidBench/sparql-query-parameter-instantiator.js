@@ -1,6 +1,7 @@
 import seedrandom = require('seedrandom');
-import { RawTerm } from '../variable/IVariableTemplate';
-import { ISubstitutionProvider } from './ISubstitutionProvider';
+import type { RawTerm } from '../variable/IVariableTemplate';
+import type { ISubstitutionProvider } from './ISubstitutionProvider';
+
 /**
  * A subsitution provider that wraps another provider and provides a random sample of the possible.
  * substitution values .
@@ -14,12 +15,10 @@ export class SubstitutionProviderShuffleTruncate implements ISubstitutionProvide
   private readonly rng: seedrandom.PRNG;
   private readonly substitutionProvider: ISubstitutionProvider;
 
-  public constructor(substitutionProvider: ISubstitutionProvider, 
-    seed: number, maxEntities: number
-  ) {
+  public constructor(substitutionProvider: ISubstitutionProvider, seed: number, maxEntities: number) {
     this.substitutionProvider = substitutionProvider;
     this.maxEntities = maxEntities;
-    this.seed = seed
+    this.seed = seed;
     this.rng = seedrandom(String(this.seed));
   }
 
@@ -28,18 +27,18 @@ export class SubstitutionProviderShuffleTruncate implements ISubstitutionProvide
   }
 
   public getRandomSample<T>(array: T[], n: number): T[] {
-    if (n > array.length){
-        return array;
+    if (n > array.length) {
+      return array;
     }
-    const copy = [...array];
+    const copy = [ ...array ];
     const result: T[] = [];
 
     // Fisher-Yates Shuffle up to n items
     for (let i = copy.length - 1; i > copy.length - 1 - n; i--) {
-        const j = Math.floor(this.rng() * (i + 1));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
-        result.push(copy[i]);
+      const j = Math.floor(this.rng() * (i + 1));
+      [ copy[i], copy[j] ] = [ copy[j], copy[i] ];
+      result.push(copy[i]);
     }
     return result;
-    }
+  }
 }

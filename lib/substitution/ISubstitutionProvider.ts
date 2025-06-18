@@ -11,12 +11,12 @@ export interface ISubstitutionProvider {
 }
 
 /**
- * 
+ *
  */
 
-export interface ISubstitutionProviderProbabilities extends ISubstitutionProvider{
-    /**
+export interface ISubstitutionProviderProbabilities extends ISubstitutionProvider {
+  /**
    * Provide a record mapping values to logits of selected the value.
    */
-  getValuesProbabilities: () => Promise<Record<string , any>>;
+  getValuesProbabilities: () => Promise<Record<string, any>>;
 }

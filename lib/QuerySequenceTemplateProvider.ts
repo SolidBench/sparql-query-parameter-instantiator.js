@@ -1,4 +1,4 @@
-// IN this class we use the query template provider method. But instead of accepting any variable, 
+// IN this class we use the query template provider method. But instead of accepting any variable,
 // we accept own class definition of variable that can deal with sequences.
 // One version of variable is equal probability. Other is one where you have x acceptable substitutions and it cycles through and other is the cool one
 // choosing according to probability (with or without repeats).
@@ -7,13 +7,11 @@
 
 import * as fs from 'node:fs';
 import type * as RDF from '@rdfjs/types';
+import seedrandom = require('seedrandom');
 import type { SparqlParser } from 'sparqljs';
 import { Parser } from 'sparqljs';
-import { QueryTemplate } from './QueryTemplate';
-import type { IVariableTemplate } from './variable/IVariableTemplate';
 import { QuerySequenceTemplate } from './QuerySequenceTemplate';
-import { ISubstitutionProviderProbabilities } from './substitution/ISubstitutionProvider';
-import seedrandom = require('seedrandom');
+import type { IVariableTemplate } from './variable/IVariableTemplate';
 
 /**
  * Constructs query templates based on a given template file, variables, and substitution parameters.
@@ -40,12 +38,12 @@ export class QuerySequenceTemplateProvider {
     name: string,
     queryTask: string,
     nextTemplateFilePath: string[],
-    refinementPatternsFilePath?: string
+    refinementPatternsFilePath?: string,
   ) {
     this.templateFilePath = templateFilePath;
     this.destinationFilePath = destinationFilePath;
     this.variables = variables;
-    this.name = name
+    this.name = name;
     this.queryTask = queryTask;
     this.nextTemplateNames = new Set(nextTemplateFilePath);
     this.refinementPatterns = this.parseRefinementFile(refinementPatternsFilePath);
@@ -71,53 +69,54 @@ export class QuerySequenceTemplateProvider {
         .map(value => variableTemplate.createTerm(value));
       if ('getValuesProbabilities' in substitutionProvider &&
         typeof substitutionProvider.getValuesProbabilities === 'function') {
-          const logits = await substitutionProvider.getValuesProbabilities();
-          // Apply the variable template to the entities in the logits
-          for (const [user, similarities] of Object.entries(logits)) {
-            for (const similarityObject of similarities) {
-              similarityObject.entity = variableTemplate.createTerm(similarityObject.entity).value;
-            }
+        const logits = await substitutionProvider.getValuesProbabilities();
+        // Apply the variable template to the entities in the logits
+        for (const [ user, similarities ] of Object.entries(logits)) {
+          for (const similarityObject of similarities) {
+            similarityObject.entity = variableTemplate.createTerm(similarityObject.entity).value;
           }
-          variableProbabilityMappings[variableName] = this.softMaxLogits(logits, temperature);
         }
+        variableProbabilityMappings[variableName] = this.softMaxLogits(logits, temperature);
       }
+    }
     return new QuerySequenceTemplate(syntaxTree, variableMappings, variableProbabilityMappings, this.refinementPatterns, rng);
   }
 
   public parseRefinementFile(file: string | undefined) {
-    if (!file){
-      return undefined
+    if (!file) {
+      return;
     }
     const raw = fs.readFileSync(file, 'utf8');
     const json: IQueryRefinementPattern[] = JSON.parse(raw);
     return json;
   }
+
   /**
    * Ensures all nextTemplates are actual templates passed to the benchmark instantiator
    * @param providers all query template providers
    * @returns false if not all providers required by this template are present true else
    */
-  public validateNextTemplateFilePaths(providers: QuerySequenceTemplateProvider[]){
+  public validateNextTemplateFilePaths(providers: QuerySequenceTemplateProvider[]) {
     const allTemplates = new Set(providers.map(provider => provider.templateFilePath));
-    for (const nextTemplate of this.nextTemplateNames){
-      if (!allTemplates.has(nextTemplate)){
-        return false
+    for (const nextTemplate of this.nextTemplateNames) {
+      if (!allTemplates.has(nextTemplate)) {
+        return false;
       }
     }
-    return true
+    return true;
   }
 
-  public softMaxLogits(logits: Record<string, IEntityLogits[]>, temperature: number = 1){
+  public softMaxLogits(logits: Record<string, IEntityLogits[]>, temperature = 1) {
     const softMaxedLogits: Record<string, IEntityLogits[]> = {};
-    for (const [user, logitsUser] of Object.entries(logits)){
-      const logitEntities = logitsUser.map(x=>x.entity);
-      const logitValues = logitsUser.map(x=>x.similarity);
+    for (const [ user, logitsUser ] of Object.entries(logits)) {
+      const logitEntities = logitsUser.map(x => x.entity);
+      const logitValues = logitsUser.map(x => x.similarity);
       const probabilities = this.softmax(logitValues, temperature);
       const userProbabilities: IEntityLogits[] = [];
-      for (let i = 0; i < probabilities.length; i++){
+      for (const [ i, probability ] of probabilities.entries()) {
         userProbabilities.push({
           entity: logitEntities[i],
-          similarity: probabilities[i]
+          similarity: probability,
         });
       }
       softMaxedLogits[user] = userProbabilities;
@@ -125,28 +124,28 @@ export class QuerySequenceTemplateProvider {
     return softMaxedLogits;
   }
 
-  public softmax(values: number[], temperature: number = 1): number[] {
+  public softmax(values: number[], temperature = 1): number[] {
     if (temperature <= 0) {
-      throw new Error("Temperature must be greater than 0.");
+      throw new Error('Temperature must be greater than 0.');
     }
 
     const scaled = values.map(v => v / temperature);
-    const max = Math.max(...scaled); // for numerical stability
+    const max = Math.max(...scaled); // For numerical stability
     const exps = scaled.map(v => Math.exp(v - max));
     const sum = exps.reduce((a, b) => a + b, 0);
     return exps.map(v => v / sum);
   }
 
-  public getNextTemplateName(){
+  public getNextTemplateName() {
     return this.nextTemplateNames;
   }
 
-  public getTemplateName(){
+  public getTemplateName() {
     return this.name;
   }
 }
 
-export interface IEntityLogits{
+export interface IEntityLogits {
   entity: string;
   similarity: number;
 }
@@ -155,11 +154,11 @@ export interface IQueryRefinementPattern {
   /**
    * Operation type of the refinement pattern.
    */
-  type: "OPTIONAL" | "FILTER" | "UNION" | "QUERY";
+  type: 'OPTIONAL' | 'FILTER' | 'UNION' | 'QUERY';
   /**
    * Operation to be performed, such as addition or removal of triple pattern in a block.
    */
-  operation: "addition" | "removal";
+  operation: 'addition' | 'removal';
   /**
    * Description of the refinement pattern.
    */
