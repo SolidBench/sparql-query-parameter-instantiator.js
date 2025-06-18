@@ -356,41 +356,21 @@ export class QuerySequenceTemplate {
 
     else if (pattern.operation === "removal"){
       switch (patternType) {
+        case "filter": 
+          break; 
         case "optional":
-          const optionals = query.where!.filter(x => x.type === "optional");
-          if (optionals.length > 0) {
-            // TODO: Remove the optional pattern from the query  
-          }
-        case "filter":  
-          const filters = query.where!.filter(x => x.type === "filter");
-          if (filters.length > 0) {
-            // TODO: Remove the filters pattern from the query  
-          }
-
         case "union":
-          const unions = query.where!.filter(x => x.type === "union");
-          if (unions.length > 0) {
-            // TODO: Remove the union pattern from the query  
-          }
         case "query": {
           const bgpToRefine = operatorToBgp[patternType][pattern.location];
-          
           if (!bgpToRefine){
             throw new Error(`BGP Doesn't exist at index ${pattern.location} 
               for query bgp operator with ${operatorToBgp[patternType]} BGPs`);
           }
-
-          for (const target of pattern.target) {
-            // Check if the target triple pattern is already added
-            const triple = this.targetToTriple(target);
-            if (this.hasTriple(bgpToRefine, triple)) {
-              // If it is, remove the triple from the BGP
-              bgpToRefine.triples = bgpToRefine.triples.filter(t =>
-                !this.tripleEquals(t, triple)
-              );
-              removedTriplePatterns.push(triple);
-            }
+          let triplesToRemove = pattern.target.map(x => this.targetToTriple(x));
+          if (triplesToRemove.length === 0){
+            triplesToRemove = [this.sampleRandom(bgpToRefine.triples)];
           }
+          this.removeTargetFromBgp(bgpToRefine, triplesToRemove, variableMapping)
         }
       }
     }
@@ -608,44 +588,25 @@ export class QuerySequenceTemplate {
     }
   }
 
-  private extractBgpsFromPatterns(patterns: Pattern[]): BgpPattern[] {
-    const bgps: BgpPattern[] = [];
-
-    for (const pattern of patterns) {
-      switch (pattern.type) {
-        case 'bgp':
-          bgps.push(pattern);
-          break;
-
-        case 'optional':
-        case 'union':
-        case 'group':
-        case 'graph':
-        case 'minus':
-        case 'service':
-          // These contain a .patterns field: recurse
-          bgps.push(...this.extractBgpsFromPatterns((pattern as BlockPattern).patterns));
-          break;
-
-        case 'query':
-          // Nested subquery (e.g., SELECT inside a VALUES or GROUP)
-          if (pattern.queryType === 'SELECT' && pattern.where) {
-            bgps.push(...this.extractBgpsFromPatterns(pattern.where));
-          }
-          break;
-
-        case 'filter':
-        case 'bind':
-        case 'values':
-          // These do not contain patterns, so we ignore them
-          break;
-
-        default:
-          // You may log or throw for unknown pattern types
-          console.warn(`Unknown pattern type: ${(pattern as any).type}`);
+  private removeTargetFromBgp(
+    bgp: BgpPattern, targets: Triple[],
+    variableMapping: Record<string, RDF.Term>
+  ){
+    const removedTriplePatterns: Triple[] = [];
+    
+    for (const target of targets) {
+      // Instantiate the triple to map variables to terms (as is also done in the query)
+      const instantiatedTriple = this.instantiateTriple(target, variableMapping);
+      // Check if the target triple pattern is already added
+      if (this.hasTriple(bgp, instantiatedTriple)) {
+        // If it is, remove the triple from the BGP
+        bgp.triples = bgp.triples.filter(t =>
+          !this.tripleEquals(t, instantiatedTriple)
+        );
+        removedTriplePatterns.push(instantiatedTriple);
       }
     }
-    return bgps;
+    return removedTriplePatterns;
   }
 
   private toTerm(value: string): RDF.Variable | RDF.NamedNode  {

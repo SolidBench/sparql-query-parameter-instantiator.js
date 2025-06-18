@@ -966,11 +966,356 @@ describe('QueryTemplate', () => {
 }`
             )
         });
-        it('should remove triple from simple bgp', () => {
+        it('should remove random triple from simple bgp when target is not set', () => {
+            const queryString = ` SELECT * WHERE {
+                ?s ?p ?o.
+                ?x ?o ?b
+            }`
+            const operatorTriplePatterns: Record<string, Triple[][]> = {
+                query: [[
+                    {
+                        subject: DF.namedNode('ex:s1'),
+                        predicate: DF.variable('p'),
+                        object: DF.variable('o'),
+                    },
+                ]]
+            }
+            const refinementPattern: IQueryRefinementPattern =   {
+                "type": "QUERY",
+                "operation": "removal",
+                "description": "Remove random triple",
+                "location": 0,
+                "target": [ ]
+            }
 
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+            
+            (<any> input.template).rng = jest.fn().mockReturnValue(0.99);
+
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, operatorTriplePatterns, input.variableMapping, []
+            );
+            expect(new Generator().stringify(transformed.query)).toEqual(
+                `SELECT * WHERE { <ex:s1> ?p ?o. }`
+            )
         });
         it('should remove any triple from simple bgp', () => {
+            const queryString = ` SELECT * WHERE {
+                ?s ?p ?o.
+                ?x ?o ?b
+            }`
+            const operatorTriplePatterns: Record<string, Triple[][]> = {
+                query: [[
+                    {
+                        subject: DF.namedNode('ex:s1'),
+                        predicate: DF.variable('p'),
+                        object: DF.variable('o'),
+                    },
+                ]]
+            }
+            const refinementPattern: IQueryRefinementPattern =   {
+                "type": "QUERY",
+                "operation": "removal",
+                "description": "Remove random triple",
+                "location": 0,
+                "target": [ 
+                    {
+                        "subject": "?s",
+                        "predicate": "?p",
+                        "object": "?o"
+                    }
+                ]
+            }
 
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, operatorTriplePatterns, input.variableMapping, []
+            );
+            expect(new Generator().stringify(transformed.query)).toEqual(
+                `SELECT * WHERE { ?x ?o ?b. }`
+            )
+        });
+        it('should remove correct random triple in nested query when target is not set', () => {
+            const queryString = `
+            SELECT * WHERE {
+                {
+                SELECT * WHERE {
+                    ?s ?p ?o.
+                }
+                }
+                ?x ?y ?z.
+            }
+            `
+            const operatorTriplePatterns: Record<string, Triple[][]> = {
+                query: [[
+                    {
+                        subject: DF.namedNode('ex:s1'),
+                        predicate: DF.variable('p'),
+                        object: DF.variable('o'),
+                    },
+                ]]
+            }
+            const refinementPattern: IQueryRefinementPattern =   {
+                "type": "QUERY",
+                "operation": "removal",
+                "description": "Remove random triple",
+                "location": 1,
+                "target": [ 
+                ]
+            }
+
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+            (<any> input.template).rng = jest.fn().mockReturnValue(0.99);
+
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, operatorTriplePatterns, input.variableMapping, []
+            );
+            console.log(new Generator().stringify(transformed.query))
+            expect(new Generator().stringify(transformed.query)).toEqual(
+`SELECT * WHERE {
+  { SELECT * WHERE { <ex:s1> ?p ?o. } }
+  
+}`
+            )
+        });
+        it('should remove correct triple in nested query', () => {
+            const queryString = `
+            SELECT * WHERE {
+                {
+                SELECT * WHERE {
+                    ?s ?p ?o.
+                }
+                }
+                ?x ?y ?z.
+            }
+            `
+            const operatorTriplePatterns: Record<string, Triple[][]> = {
+                query: [[
+                    {
+                        subject: DF.namedNode('ex:s1'),
+                        predicate: DF.variable('p'),
+                        object: DF.variable('o'),
+                    },
+                ]]
+            }
+            const refinementPattern: IQueryRefinementPattern =   {
+                "type": "QUERY",
+                "operation": "removal",
+                "description": "Remove random triple",
+                "location": 0,
+                "target": [ 
+                    {
+                        "subject": "?s",
+                        "predicate": "?p",
+                        "object": "?o"
+                    }
+                ]
+            }
+
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, operatorTriplePatterns, input.variableMapping, []
+            );
+            expect(new Generator().stringify(transformed.query)).toEqual(        
+`SELECT * WHERE {
+  { SELECT * WHERE {  } }
+  ?x ?y ?z.
+}`
+            )
+        });
+        it('should remove correct union (left-side)', () => {
+            const queryString = `
+                SELECT * WHERE {
+                { ?s ?p ?o } UNION { ?x ?y ?z }
+                }`;
+
+            const operatorTriplePatterns = {
+                union: [[
+                {
+                    subject: DF.namedNode('ex:s1'),
+                    predicate: DF.variable('p'),
+                    object: DF.variable('o'),
+                }
+                ]]
+            };
+
+            const refinementPattern: IQueryRefinementPattern = {
+                type: "UNION",
+                operation: "removal",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "subject": "?s",
+                        "predicate": "?p",
+                        "object": "?o"
+                    }
+                ]
+            };
+
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, operatorTriplePatterns, input.variableMapping, []
+            );
+
+            expect(new Generator().stringify(transformed.query)).toEqual(
+            `SELECT * WHERE {
+  {  }
+  UNION
+  { ?x ?y ?z. }
+}`
+            );
+        });
+        // USE CHATGPT OUTPUT FOR THIS! ALSO CHECK IF WE CAN JUST REUSE REMOVAL CODE FOR ALL OPERATORS
+        it('should remove correct union (right-side)', () => {
+            const queryString = `
+                SELECT * WHERE {
+                { ?s ?p ?o } UNION { ?x ?y ?z }
+                }`;
+
+            const operatorTriplePatterns = {
+                union: [[
+                {
+                    subject: DF.variable('x'),
+                    predicate: DF.variable('y'),
+                    object: DF.variable('z'),
+                }
+                ]]
+            };
+
+            const refinementPattern: IQueryRefinementPattern = {
+                type: "UNION",
+                operation: "removal",
+                description: "",
+                location: 1,
+                target: [
+                    {
+                        "subject": "?x",
+                        "predicate": "?y",
+                        "object": "?z"
+                    }
+                ]
+            };
+
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, operatorTriplePatterns, input.variableMapping, []
+            );
+
+            expect(new Generator().stringify(transformed.query)).toEqual(
+            `SELECT * WHERE {
+  { <ex:s1> ?p ?o. }
+  UNION
+  {  }
+}`
+            );
+        });
+        it('should remove correct nested union', () => {
+            const queryString = `
+                SELECT * WHERE {
+                {
+                    { ?s ?p ?o. } UNION { 
+                     { ?x ?y ?z. } UNION {
+                        ?z ?k ?o.
+                        ?s ?p ?o.
+                      }
+                     }
+                }
+                ?a ?b ?c.
+                }`;
+            const operatorTriplePatterns = {
+                union: [[
+                {
+                    subject: DF.variable('x'),
+                    predicate: DF.variable('y'),
+                    object: DF.variable('z'),
+                }
+                ]]
+            };
+
+            const refinementPattern: IQueryRefinementPattern = {
+                type: "UNION",
+                operation: "removal",
+                description: "",
+                location: 2,
+                target: [
+                    {
+                        "subject": "?z",
+                        "predicate": "?k",
+                        "object": "?o"
+                    }
+                ]
+            };
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, operatorTriplePatterns, input.variableMapping, []
+            );
+
+            expect(new Generator().stringify(transformed.query)).toEqual(
+            `SELECT * WHERE {
+  {
+    { <ex:s1> ?p ?o. }
+    UNION
+    {
+      { ?x ?y ?z. }
+      UNION
+      { <ex:s1> ?p ?o. }
+    }
+  }
+  ?a ?b ?c.
+}`
+            );
+
+        });
+        it('should leave empty union operator if all triple patterns are removed', () => {
+            const queryString = `
+                SELECT * WHERE {
+                { } UNION { ?x ?y ?z }
+                }`;
+            const operatorTriplePatterns = {
+                union: [[
+                {
+                    subject: DF.variable('x'),
+                    predicate: DF.variable('y'),
+                    object: DF.variable('z'),
+                }
+                ]]
+            };
+
+            const refinementPattern: IQueryRefinementPattern = {
+                type: "UNION",
+                operation: "removal",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        subject: "?s",
+                        predicate: "?p",
+                        object: "?o"
+                    },
+                    {
+                        subject: "?x",
+                        predicate: "?y",
+                        object: "?z"
+                    }
+                ]
+            };
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, operatorTriplePatterns, input.variableMapping, []
+            );
+
+            expect(new Generator().stringify(transformed.query)).toEqual(
+            `SELECT * WHERE {
+  {  }
+  UNION
+  {  }
+}`
+            )
         });
     })
 })
