@@ -77,8 +77,8 @@ export class QuerySequenceInstantiator {
     let currentSession = this.startNewSession(taskToTemplate, queryTasks, sequenceSessions.length);
     sequenceSessions.push(currentSession);
 
-    const startQuery = currentSession.templates.at(-1);
-    const querySequence = [ startQuery.template.instantiate(templateCounts[startQuery.name], false, user) ];
+    const startQuery = currentSession.templates.at(-1)!;
+    const querySequence = [ ...startQuery.template.instantiate(templateCounts[startQuery.name], false, user) ];
 
     for (let i = 0; i < sequenceLength - 1; i++) {
       console.log(currentSession);
@@ -107,7 +107,7 @@ export class QuerySequenceInstantiator {
       }
 
       // Determine the possible next templates from current sequence tail
-      const nextTemplateFilePaths = currentSession.templates.at(-1).nextFilePaths;
+      const nextTemplateFilePaths = currentSession.templates.at(-1)!.nextFilePaths;
       // Terminal query, no next templates defined
       if (nextTemplateFilePaths.size === 0) {
         currentSession.ended = true;
@@ -130,7 +130,7 @@ export class QuerySequenceInstantiator {
       const nextTemplates = templates.filter(x => nextTemplateFilePaths.has(x.name));
       if (nextTemplates.length === 0) {
         throw new Error(`No valid next templates found for current template: ${
-          currentSession.templates.at(-1).name}`);
+          currentSession.templates.at(-1)!.name}`);
       }
       const nextQuery = this.sampleRandom(nextTemplates);
       console.log(nextQuery);
@@ -190,7 +190,7 @@ export class QuerySequenceInstantiator {
   ): IQuerySequenceElementTemplate {
     // Add template to session
     const instantiation = query.template.instantiate(templateCounts[query.name], true, user);
-    sequence.push(instantiation);
+    sequence.push(...instantiation);
     session.templates.push(query);
     // Update template counts
     templateCounts[query.name] += 1;
@@ -208,7 +208,7 @@ export class QuerySequenceInstantiator {
       nOpenSessions: sequenceSessions.filter(x => !x.ended).length,
     });
     // Return the last template in the session
-    return session.templates.at(-1);
+    return session.templates.at(-1)!;
   }
 
   public async getPeople(): Promise<RawTerm[]> {

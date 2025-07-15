@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import type * as RDF from '@rdfjs/types';
 import seedrandom = require('seedrandom');
-import type { SparqlParser } from 'sparqljs';
+import type { Expression, SparqlParser } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QuerySequenceTemplate } from './QuerySequenceTemplate';
 import type { IVariableTemplate } from './variable/IVariableTemplate';
@@ -79,7 +79,7 @@ export class QuerySequenceTemplateProvider {
         variableProbabilityMappings[variableName] = this.softMaxLogits(logits, temperature);
       }
     }
-    return new QuerySequenceTemplate(syntaxTree, variableMappings, variableProbabilityMappings, this.refinementPatterns, rng);
+    return new QuerySequenceTemplate(syntaxTree, variableMappings, variableProbabilityMappings, rng, this.refinementPatterns);
   }
 
   public parseRefinementFile(file: string | undefined) {
@@ -150,28 +150,56 @@ export interface IEntityLogits {
   similarity: number;
 }
 
-export interface IQueryRefinementPattern {
-  /**
-   * Operation type of the refinement pattern.
-   */
-  type: 'OPTIONAL' | 'FILTER' | 'UNION' | 'QUERY';
-  /**
-   * Operation to be performed, such as addition or removal of triple pattern in a block.
-   */
+// export interface IQueryRefinementPattern {
+//   /**
+//    * Operation type of the refinement pattern.
+//    */
+//   type: 'OPTIONAL' | 'FILTER' | 'UNION' | 'QUERY';
+//   /**
+//    * Operation to be performed, such as addition or removal of triple pattern in a block.
+//    */
+//   operation: 'addition' | 'removal';
+//   /**
+//    * Description of the refinement pattern.
+//    */
+//   description: string;
+//   /**
+//    * Target triple pattern(s) of the refinement pattern
+//    */
+//   target: ITargetTriplePattern[] | Expression[];
+//   /**
+//    * Optional index where the triple pattern should be added or removed.
+//    */
+//   location?: number;
+// }
+
+export interface ITargetTriplePattern {
+  subject: string;
+  predicate: string;
+  object: string;
+}
+
+interface BaseRefinementPattern {
   operation: 'addition' | 'removal';
-  /**
-   * Description of the refinement pattern.
-   */
   description: string;
-  /**
-   * Target triple pattern(s) of the refinement pattern
-   */
-  target: ITargetTriplePattern[];
-  /**
-   * Optional index where the triple pattern should be added or removed.
-   */
   location?: number;
 }
+
+// FILTER: uses Expression[]
+export interface FilterRefinementPattern extends BaseRefinementPattern {
+  type: 'FILTER';
+  target: Expression[];
+}
+
+// All other types: use ITargetTriplePattern[]
+export interface OtherRefinementPattern extends BaseRefinementPattern {
+  type: 'OPTIONAL' | 'UNION' | 'QUERY';
+  target: ITargetTriplePattern[];
+}
+
+export type IQueryRefinementPattern =
+  | FilterRefinementPattern
+  | OtherRefinementPattern;
 
 export interface ITargetTriplePattern {
   subject: string;
