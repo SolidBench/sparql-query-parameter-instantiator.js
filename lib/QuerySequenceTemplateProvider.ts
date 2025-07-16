@@ -8,7 +8,7 @@
 import * as fs from 'node:fs';
 import type * as RDF from '@rdfjs/types';
 import seedrandom = require('seedrandom');
-import type { Expression, SparqlParser } from 'sparqljs';
+import type { Expression, SparqlParser, Triple } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QuerySequenceTemplate } from './QuerySequenceTemplate';
 import type { IVariableTemplate } from './variable/IVariableTemplate';
@@ -191,15 +191,15 @@ export interface FilterRefinementPattern extends BaseRefinementPattern {
   target: Expression[];
 }
 
-// All other types: use ITargetTriplePattern[]
 export interface OtherRefinementPattern extends BaseRefinementPattern {
   type: 'OPTIONAL' | 'UNION' | 'QUERY';
-  target: ITargetTriplePattern[];
+  target: (Triple | ITargetTriplePattern)[];
 }
 
 export type IQueryRefinementPattern =
   | FilterRefinementPattern
   | OtherRefinementPattern;
+
 
 export interface ITargetTriplePattern {
   subject: string;

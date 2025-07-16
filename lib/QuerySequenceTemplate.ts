@@ -32,7 +32,7 @@ export class QuerySequenceTemplate {
   private readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
   private readonly rng: seedrandom.PRNG;
   private readonly DF: DataFactory = new DataFactory();
-  private readonly refinementPatterns?: IQueryRefinementPattern[];
+  private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
   public readonly instantiationCounts: Record<string, Record<string, Record<string, number>>> = {};
 
   public constructor(
@@ -45,8 +45,14 @@ export class QuerySequenceTemplate {
     this.syntaxTree = syntaxTree;
     this.variableMappings = variableMappings;
     this.variableProbabilities = variableProbabilities;
-    this.refinementPatterns = refinementPatterns;
     this.rng = rng;
+    
+    this.refinementPatterns = refinementPatterns?.map(pattern => {
+      if (pattern.type !== 'FILTER'){
+        pattern.target = pattern.target.map(triple => this.targetToTriple(triple))
+      }
+      return pattern
+    })
   }
 
   /**
@@ -252,6 +258,7 @@ export class QuerySequenceTemplate {
         operatorExpressions,
         refinementPatterns,
         refinementState,
+        variableMapping
       );
       const patternToApply = this.sampleRandom(validPatterns);
       const refinedQuery = this.applyRefinementPattern(
@@ -282,6 +289,7 @@ export class QuerySequenceTemplate {
     const operatorToExpression: Record<string, Expression[]> = {};
     this.extractBgpPerOperator(query.where!, operatorToBgp, 'query');
     this.extractExpressionPerOperator(query.where!, operatorToExpression, 'filter');
+    const state = refinementState[typeToKeyMap[patternType]];
 
     if (pattern.operation === 'addition') {
       switch (patternType) {
@@ -307,7 +315,8 @@ export class QuerySequenceTemplate {
             toRefineOptional,
             pattern.target,
             query,
-            variableMapping
+            variableMapping,
+            state
           );
           break;
 
@@ -335,7 +344,8 @@ export class QuerySequenceTemplate {
             toRefineUnion,
             pattern.target,
             query,
-            variableMapping
+            variableMapping,
+            state
           );
           break;
 
@@ -344,7 +354,7 @@ export class QuerySequenceTemplate {
           let targetFilters: Expression[] = pattern.target;
 
           // Add back a triple when no target is specified
-          const state = refinementState[typeToKeyMap[patternType]];
+          // const state = refinementState[typeToKeyMap[patternType]];
           if (targetFilters.length === 0) {
             targetFilters = [ this.sampleRandom(state.removedExp) ];
           }
@@ -385,13 +395,13 @@ export class QuerySequenceTemplate {
             bgpToRefine,
             targetTriples,
             query,
-            variableMapping
+            variableMapping,
+            state
           );
           break;
         }
       }
     } else if (pattern.operation === 'removal') {
-      const state = refinementState[typeToKeyMap[patternType]];
       switch (patternType) {
         case 'FILTER':
           let filtersToRemove = pattern.target;
@@ -420,10 +430,10 @@ export class QuerySequenceTemplate {
           if (triplesToRemove.length === 0) {
             triplesToRemove = [ this.sampleRandom(bgpToRefine.triples) ];
           }
-          this.removeTargetFromBgp(bgpToRefine, triplesToRemove, variableMapping);
+          const removed = this.removeTargetFromBgp(bgpToRefine, triplesToRemove, variableMapping);
 
           // Update state of refinement sequence
-          state.removedTps.push(...triplesToRemove);
+          state.removedTps.push(...removed);
         }
       }
     } else {
@@ -445,7 +455,8 @@ export class QuerySequenceTemplate {
     operatorTriplePatterns: Record<string, Triple[][]>,
     operatorExpressions: Record<string, Expression[][]>,
     refinementPatterns: IQueryRefinementPattern[],
-    refinementState: IRefinementState
+    refinementState: IRefinementState,
+    variableMapping: Record<string, RDF.Term>,
   ): IQueryRefinementPattern[] {
     // We don't need a per BGP distinction of triple patterns for this function, so flatten
     const operatorTriplePatternsFlattened =
@@ -464,107 +475,106 @@ export class QuerySequenceTemplate {
 
     const variablesInQuery = this.getAllVariables(queryTriples);
 
-    // This.countTriplePatternsPerOperator(query.where!, triplesPerOperator, "query");
     return refinementPatterns.filter((pattern) => {
-      // No repeat expressions or triples, no matter if they are in the same operator or not
-      let patternInQuery: boolean;
-      if (pattern.type === 'FILTER') {
-        patternInQuery = pattern.target.length > 0 &&
-          pattern.target.every(tExp => queryExpressions.some(pExp =>
+      const patternType = pattern.type.toLowerCase();
+      // let patternTargetsInstantiated: Expression[] | Triple[] = [];
+      if (pattern.type === "FILTER"){
+        const patternTargetsInstantiated: Expression[] = pattern.target.map(
+          x => this.instantiateExpression(x, variableMapping)
+        );
+        const patternInQuery = patternTargetsInstantiated.length > 0 &&
+          patternTargetsInstantiated.every(tExp => queryExpressions.some(pExp =>
             this.expressionEquals(tExp, pExp)
           ));
-      } else {
-        patternInQuery = pattern.target.length > 0 &&
-          pattern.target.every(tpTarget =>
-            queryTriples.some(addedPattern =>
-              this.tripleEquals(
-                this.targetToTriple(addedPattern),
-                this.targetToTriple(tpTarget)
-              )
-            )
-          );
-      }
-      
-      if (patternInQuery && pattern.operation === 'addition') {
-        return false;
-      }
-      
-      const patternType = pattern.type.toLowerCase();
-
-      // If we want to add a FILTER to a query, the variables in the filter must
-      // be present in the query somewhere
-      if (pattern.operation === 'addition' && pattern.type === 'FILTER'){
-        const variablesInExpressions = pattern.target.map(
-          expr => this.getVariablesInExpression(expr)
-        );
-        if (variablesInExpressions.some(
-          variables => Array.from(variables.values()).some(
-            variable => !variablesInQuery.has(variable))
-          )
-        ){
+        if (patternInQuery && pattern.operation === 'addition') 
           return false;
+
+        // If we want to add a FILTER to a query, the variables in the filter must
+        // be present in the query somewhere
+        if (pattern.operation === 'addition' && pattern.type === 'FILTER'){
+          const variablesInExpressions = patternTargetsInstantiated.map(
+            expr => this.getVariablesInExpression(expr)
+          );
+          if (variablesInExpressions.some(
+            variables => Array.from(variables.values()).some(
+              variable => !variablesInQuery.has(variable))
+            )
+          ){
+            return false;
+          }
         }
-      }
-
-      // If we want to remove any triple from the BGP in query, we need only
-      // the length to be larger than 1, as to not make an empty query
-      if (pattern.operation === 'removal' && pattern.target.length === 0 &&
-        operatorTriplePatternsFlattened.query && operatorTriplePatternsFlattened.query.length > 1 &&
-        patternType === 'query'
-      ) {
-        return true;
-      }
-
-      if (pattern.operation === 'removal') {
-        if (pattern.type === 'FILTER') {
-          if (totalExpressions - Math.max(pattern.target.length, 1) <= 0) {
+        if (pattern.operation === 'removal') {
+          if (totalExpressions - Math.max(patternTargetsInstantiated.length, 1) <= 0) {
             return false;
           }
           // If the operator is not in the query, we can't apply removal
           if (operatorExpressionsFlattened[patternType] && 
-            pattern.target
+            patternTargetsInstantiated
             .every(t => operatorExpressionsFlattened[patternType]
               .some(exp => this.expressionEquals(t, exp)))) 
             {
             return true;
           }
           return false;
-        }        
-        else {
+        }
+        // If we have a target and no duplicate we can add
+        if (patternTargetsInstantiated.length > 0) {
+          return true;
+        }
+
+        // Without target we can only add if something was previously removed
+        if (refinementState[typeToKeyMap[pattern.type]].removedExp.length > 0) {
+          return true;
+        }
+      }
+      else{
+        const patternTargetsInstantiated: Triple[] = pattern.target.map(
+          x=>this.instantiateTriple(this.targetToTriple(x), variableMapping)
+        );
+        const patternInQuery = patternTargetsInstantiated.length > 0 &&
+          patternTargetsInstantiated.every(tpTarget =>
+            queryTriples.some(addedPattern =>
+              this.tripleEquals(
+                addedPattern,
+                tpTarget
+              )
+            )
+          );
+        if (patternInQuery && pattern.operation === 'addition') 
+          return false;
+      
+        if (pattern.operation === 'removal' 
+          && patternTargetsInstantiated.length === 0 
+          && operatorTriplePatternsFlattened[pattern.type.toLowerCase()] 
+          && operatorTriplePatternsFlattened[pattern.type.toLowerCase()].length > 1
+        ) {
+          return true;
+        }
+        if (pattern.operation === 'removal') {
           // We can't make an empty query, atleast one triple pattern should be left
           // In case there is a empty target, one random triple pattern will be removed,
           // so we use max here
-          if (totalTriples - Math.max(pattern.target.length, 1) <= 0) {
+          if (totalTriples - Math.max(patternTargetsInstantiated.length, 1) <= 0) {
             return false;
           }
           // If the operator is not in the query, we can't apply removal
           if (operatorTriplePatternsFlattened[patternType] && // For removal patterns, all targets must be in the present in the operator
-            pattern.target.every(t => operatorTriplePatternsFlattened[patternType].some(tp =>
+            patternTargetsInstantiated.every(t => operatorTriplePatternsFlattened[patternType].some(tp =>
               this.tripleEquals(this.targetToTriple(t), tp)))
           ) {
             return true;
           }
           return false;
         }
-      }
+        // If we have a target and no duplicate we can add
+        if (patternTargetsInstantiated.length > 0) {
+          return true;
+        }
 
-      // If not duplicate you can always add, except when it concerns the original query.
-      // You can add regardless of operator, as if it doesn't exist a new operator block
-      // is made
-      if (patternType !== 'query') {
-        return true;
-      }
-
-      // Adding specified triple pattern to bgp of query is always possible. Given that
-      // duplicate targets would've already been filtered
-      if (pattern.target.length > 0) {
-        return true;
-      }
-
-      // Check if there are removed triple patterns for the empty target pattern to
-      // add back to the query
-      if (refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0) {
-        return true;
+        // Without target we can only add if something was previously removed
+        if (refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0) {
+          return true;
+        }
       }
       return false;
     });
@@ -760,7 +770,7 @@ export class QuerySequenceTemplate {
     return variables;
   }  
 
-  public targetToTriple(target: ITargetTriplePattern | Triple): Triple {
+  private targetToTriple(target: ITargetTriplePattern | Triple): Triple {
     if (this.isRdfJsTriple(target))
       return target;
     return {
@@ -835,6 +845,7 @@ export class QuerySequenceTemplate {
     targets: (ITargetTriplePattern | Triple)[],
     query: SelectQuery,
     variableMapping: Record<string, RDF.Term>,
+    state: IOperatorState
   ): void {
     for (const target of targets) {
       const targetTriple = this.targetToTriple(target);
@@ -845,6 +856,7 @@ export class QuerySequenceTemplate {
         );
         bgp.triples.push(instantiatedTriple);
         query.variables = this.updateVariablesQuery(query, instantiatedTriple);
+        state.addedTps.push(instantiatedTriple);
       }
     }
   }
@@ -870,11 +882,7 @@ export class QuerySequenceTemplate {
     return removedTriplePatterns;
   }
 
-  private addExpressionToQuery(
-    targets: Expression[]
-  ){
 
-  }
 
   private toTerm(value: string): RDF.Variable | RDF.NamedNode {
     if (value.startsWith('?')) {
@@ -973,7 +981,7 @@ export interface IRefinementState {
 }
 
 export interface IOperatorState {
-  addedTps: ITargetTriplePattern[];
+  addedTps: Triple[];
   removedTps: Triple[];
   addedExp: Expression[];
   removedExp: Expression[]
