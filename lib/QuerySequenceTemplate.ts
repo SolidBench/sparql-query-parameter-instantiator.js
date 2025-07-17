@@ -1,5 +1,5 @@
 import type * as RDF from '@rdfjs/types';
-import { DataFactory } from 'rdf-data-factory';
+import { DataFactory, NamedNode } from 'rdf-data-factory';
 import seedrandom = require('seedrandom');
 import type {
   BlankTerm,
@@ -21,7 +21,7 @@ import type {
 import {
   Wildcard,
  Generator } from 'sparqljs';
-import type { IEntityLogits, IQueryRefinementPattern, ITargetTriplePattern } from './QuerySequenceTemplateProvider';
+import type { IEntityLogits, IQueryRefinementPattern, ITargetTriplePattern, ITargetTriplePatternTerm } from './QuerySequenceTemplateProvider';
 import { cloneDeep }  from 'lodash';
 /**
  * Data object for a query template.
@@ -350,8 +350,10 @@ export class QuerySequenceTemplate {
           break;
 
         case 'FILTER':
-          // Filters can not be modified, they are simply appended to the query
-          let targetFilters: Expression[] = pattern.target;
+          // Targets are instantiated and then evaluated
+          let targetFilters: Expression[] = pattern.target.map(
+            t => this.instantiateExpression(t, variableMapping)
+          );
 
           // Add back a triple when no target is specified
           // const state = refinementState[typeToKeyMap[patternType]];
@@ -404,7 +406,8 @@ export class QuerySequenceTemplate {
     } else if (pattern.operation === 'removal') {
       switch (patternType) {
         case 'FILTER':
-          let filtersToRemove = pattern.target;
+          // filters to remove are instantiated versions of target
+          let filtersToRemove = pattern.target.map(t => this.instantiateExpression(t, variableMapping));
           if (filtersToRemove.length === 0){
             // Randomly select a filter to remove
             filtersToRemove = [ this.sampleRandom(
@@ -412,7 +415,7 @@ export class QuerySequenceTemplate {
             ).expression];
 
           }
-          state.removedExp.push(...pattern.target);
+          state.removedExp.push(...filtersToRemove);
           query.where = query.where!.filter((queryPattern: Pattern) => {
             return queryPattern.type !== 'filter' || 
             !filtersToRemove.some(t => this.expressionEquals(queryPattern.expression, t))
@@ -490,14 +493,18 @@ export class QuerySequenceTemplate {
           return false;
 
         // If we want to add a FILTER to a query, the variables in the filter must
-        // be present in the query somewhere
-        if (pattern.operation === 'addition' && pattern.type === 'FILTER'){
+        // be present in the query somewhere. It is not sufficient to have overlapping
+        // variables that are instantiated, as a filter on an instantiated value makes 
+        // little sense (correct me if I'm wrong)
+        if (pattern.operation === 'addition'){
           const variablesInExpressions = patternTargetsInstantiated.map(
             expr => this.getVariablesInExpression(expr)
           );
+          // No variables or no overlapping variables after instantiation means filter 
+          // cannot be applied
           if (variablesInExpressions.some(
             variables => Array.from(variables.values()).some(
-              variable => !variablesInQuery.has(variable))
+              variable => !variablesInQuery.has(variable)) || variables.size === 0
             )
           ){
             return false;
@@ -773,15 +780,22 @@ export class QuerySequenceTemplate {
   private targetToTriple(target: ITargetTriplePattern | Triple): Triple {
     if (this.isRdfJsTriple(target))
       return target;
+    if (target.subject.termType === 'literal'){
+      throw new Error("Literal subject is invalid")
+    }
+    if (target.predicate.termType === 'literal'){
+      throw new Error("Literal predicate is invalid");
+    }
     return {
-      subject: this.toTerm(target.subject),
-      predicate: this.toTerm(target.predicate),
+      subject: this.toTermNoLiteral(target.subject),
+      predicate: this.toTermNoLiteral(target.predicate),
       object: this.toTerm(target.object),
     };
   }
 
   private isRDFTerm(term: any): term is Term {
-    return term && typeof term.termType === 'string' && typeof term.value === 'string';
+    return term && typeof term.termType === 'string' && typeof term.value === 'string' 
+    && 'equals' in term;
   }
 
   private isVariable(term: any): term is Variable {
@@ -808,8 +822,11 @@ export class QuerySequenceTemplate {
     return obj &&
       typeof obj === 'object' &&
       obj.subject?.termType !== undefined &&
+      obj.subject?.equals !== undefined &&
       obj.predicate?.termType !== undefined &&
-      obj.object?.termType !== undefined;
+      obj.predicate?.equals !== undefined &&
+      obj.object?.termType !== undefined &&
+      obj.object?.equals !== undefined;
   }
 
   private hasVariable(variables: Variable[] | [Wildcard], variable: VariableTerm): boolean {
@@ -882,19 +899,66 @@ export class QuerySequenceTemplate {
     return removedTriplePatterns;
   }
 
-
-
-  private toTerm(value: string): RDF.Variable | RDF.NamedNode {
-    if (value.startsWith('?')) {
-      return this.DF.variable(value.slice(1));
+  private toTerm(value: ITargetTriplePatternTerm): RDF.Variable | RDF.NamedNode | RDF.Literal {
+    if (value.termType === 'variable') {
+      return this.DF.variable(value.value);
     }
-    return this.DF.namedNode(value);
+    if (value.termType === 'namedNode'){
+      return this.DF.namedNode(value.value);
+    }
+    return this.DF.literal(value.value);
+  }
+
+  private toTermNoLiteral(value: ITargetTriplePatternTerm): RDF.Variable | RDF.NamedNode {
+    if (value.termType === 'variable') {
+      return this.DF.variable(value.value);
+    }
+    return this.DF.namedNode(value.value);
   }
 
   private tripleEquals(a: Triple, b: Triple): boolean {
-    return a.subject.value === b.subject.value &&
-      JSON.stringify(a.predicate) === JSON.stringify(b.predicate) &&
-      a.object.value === b.object.value;
+    return this.rdfTermEquals(a.subject, b.subject) &&
+           this.rdfTermEquals(a.predicate, b.predicate) &&
+           this.rdfTermEquals(a.object, b.object)
+  }
+
+  // PropertyPath equality function (from previous example)
+  private propertyPathEquals(a: PropertyPath, b: PropertyPath): boolean {
+    if (a.type !== b.type) return false;
+    if (a.pathType !== b.pathType) return false;
+    if (a.items.length !== b.items.length) return false;
+
+    return a.items.every((item, index) => {
+      const otherItem = b.items[index];
+      const hasEqualsI = this.hasEquals(item);
+      const hasEqualsOI = this.hasEquals(otherItem);
+      if (hasEqualsI && hasEqualsOI) {
+        return item.equals(otherItem);
+      }
+      if (!hasEqualsI && !hasEqualsOI){
+        return this.propertyPathEquals(item, otherItem);
+      }
+      return false;
+    });
+  }
+
+  // Main equality function for the union type
+  private rdfTermEquals(a: Term | PropertyPath, 
+    b: Term | PropertyPath): boolean {
+
+    // Both are Terms and can be compared
+    if (this.hasEquals(a) && this.hasEquals(b)){
+      return a.equals(b);
+    }
+    if (!this.hasEquals(a) && !this.hasEquals(b)){
+      return this.propertyPathEquals(a, b);
+    }  
+    // Different types are never equal
+    return false;
+  }
+
+  private hasEquals(item: any): item is Term{
+    return 'equals' in item;
   }
 
   private expressionEquals(a: Expression, b: Expression): boolean {

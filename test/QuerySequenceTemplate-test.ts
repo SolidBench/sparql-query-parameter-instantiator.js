@@ -275,26 +275,6 @@ describe('QueryTemplate', () => {
                 }
             );
         });
-
-        // it('ignores filters', () => {
-        //     const parsedQuery = new Parser().parse(`
-        //     SELECT * WHERE {
-        //         ?s ?p ?o.
-        //         FILTER(?o > 5)
-        //     }
-        //     `) 
-        //     const template = new QuerySequenceTemplate(
-        //         parsedQuery,
-        //         { s: [DF.namedNode('ex:s1')] },
-        //         {},
-        //     );
-
-        //     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-        //     template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!, operatorTriples, 'query')
-
-        //     expect(operatorTriples).toEqual({ query: 1 });
-        // });
-
         it('handles deeply nested blocks', () => {
             const parsedQuery = new Parser().parse(`
             SELECT * WHERE {
@@ -372,8 +352,6 @@ describe('QueryTemplate', () => {
         let allPatterns: IQueryRefinementPattern[]
 
         let queryString: string;
-        let variableMapping: Record<string, RDF.Term[]>;
-        let singleVariableMapping: Record<string, RDF.Term>;
 
         beforeEach(() => {
             queryString = ` SELECT * WHERE {
@@ -385,8 +363,6 @@ describe('QueryTemplate', () => {
                 {},
                 rng
             );
-            variableMapping = { s: [ DF.namedNode('ex:s1') ]};
-            singleVariableMapping = { s: DF.namedNode('ex:s1') }
 
             additionPattern1 =   {
                 "type": "QUERY",
@@ -394,11 +370,11 @@ describe('QueryTemplate', () => {
                 "description": "",
                 "location": 0,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "snvoc:isModeratorOf", termType: "namedNode" },
+                        "object": { value: "forum", termType: "variable" }
+                    }
                 ]
             }
             additionPattern2 = {
@@ -414,11 +390,11 @@ describe('QueryTemplate', () => {
                 "description": "",
                 "location": 0,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "snvoc:isModeratorOf", termType: "namedNode" },
+                        "object": { value: "forum", termType: "variable" }
+                    }
                 ]
             }
             additionPattern4 = {
@@ -444,11 +420,11 @@ describe('QueryTemplate', () => {
                 "description": "",
                 "location": 0,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "snvoc:isModeratorOf", termType: "namedNode" },
+                        "object": { value: "forum", termType: "variable" }
+                    }
                 ]
             }
             removalPattern2 = {
@@ -464,11 +440,11 @@ describe('QueryTemplate', () => {
                 "description": "",
                 "location": 0,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "snvoc:isModeratorOf", termType: "namedNode" },
+                        "object": { value: "forum", termType: "variable" }
+                    }
                 ]
             }
             removalPattern4 = {
@@ -553,6 +529,9 @@ describe('QueryTemplate', () => {
                 ]]
             }
             const opExpressions: Record<string, Expression[][]> = {};
+            console.log(template.findValidRefinementPatterns(
+                operatorTriplePatterns, opExpressions, allPatterns, refinementState, {}))
+
             expect(template.findValidRefinementPatterns(
                 operatorTriplePatterns, opExpressions, allPatterns, refinementState, {})
             ).toEqual([additionPattern4, removalPattern2, removalPattern3]);
@@ -765,6 +744,11 @@ describe('QueryTemplate', () => {
                         predicate: DF.variable('p'),
                         object: DF.variable('o'),
                     },
+                    {
+                        subject: DF.variable('s'),
+                        predicate: DF.namedNode('p1'),
+                        object: DF.variable('o'),
+                    }
                 ]]
             }
             const opExpressions: Record<string, Expression[][]> = {
@@ -773,7 +757,7 @@ describe('QueryTemplate', () => {
                     "type": "operation",
                     "operator": ">",
                     "args": [
-                        DF.variable("s1"),
+                        DF.variable("s"),
                         DF.literal('18')
                     ]
                     },
@@ -784,7 +768,7 @@ describe('QueryTemplate', () => {
                 "operator": ">",
                 "args": [
                     DF.variable("s"),
-                    DF.literal('18')
+                    DF.literal('56')
                 ]
             });
             // Pattern that adds back a random removed expression
@@ -799,7 +783,7 @@ describe('QueryTemplate', () => {
  
             expect(template.findValidRefinementPatterns(
                 operatorTriplePatterns, opExpressions, [...allPatterns, additionPattern5], refinementState, {})
-            ).toEqual([additionPattern1, additionPattern3, additionPattern5])
+            ).toEqual([additionPattern1, additionPattern3, removalPattern2, additionPattern5])
         });
 
     });
@@ -821,15 +805,6 @@ describe('QueryTemplate', () => {
             const queryString = ` SELECT * WHERE {
                 ?s ?p ?o
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "QUERY",
                 "operation": "addition",
@@ -837,9 +812,9 @@ describe('QueryTemplate', () => {
                 "location": 0,
                 "target": [
                 {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
+                    "subject": {value: "s", termType: "variable"},
+                    "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                    "object": {value: "forum", termType: "variable"}
                 }
                 ]
             }
@@ -866,22 +841,12 @@ describe('QueryTemplate', () => {
                 "location": 0,
                 "target": [
                 {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
+                    "subject": {value: "s", termType: "variable"},
+                    "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                    "object": {value: "forum", termType: "variable"}
                 }
                 ]
             }
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
-
             const input = createRefinementInput(queryString, variableMappings, refinementPattern)
             const transformed = input.template.applyRefinementPattern(
                 refinementPattern, input.query, input.variableMapping, refinementState
@@ -890,6 +855,34 @@ describe('QueryTemplate', () => {
                 `SELECT ?o ?forum WHERE {
   <ex:s1> ?p ?o;
     <snvoc:isModeratorOf> ?forum.
+}`
+            )
+        });
+        it('should add triple with literal to simple bgp ', () => {
+            const queryString = ` SELECT ?o WHERE {
+                ?s ?p ?o
+            }`
+            const refinementPattern: IQueryRefinementPattern =   {
+                "type": "QUERY",
+                "operation": "addition",
+                "description": "Add triple for the person being a moderator of a forum",
+                "location": 0,
+                "target": [
+                    {
+                        "subject": {value: "s", termType: "variable"},
+                        "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                        "object": {value: "literal", termType: "literal"}
+                    }
+                ]
+            }
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern)
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, input.variableMapping, refinementState
+            );
+            expect(new Generator().stringify(transformed)).toEqual(
+                `SELECT ?o WHERE {
+  <ex:s1> ?p ?o;
+    <snvoc:isModeratorOf> "literal".
 }`
             )
         });
@@ -902,36 +895,17 @@ describe('QueryTemplate', () => {
                     }
                 }
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [
-                    [
-                        {
-                            subject: DF.namedNode('ex:s1'),
-                            predicate: DF.variable('p'),
-                            object: DF.variable('o'),
-                        },
-                    ],
-                    [
-                        {
-                            subject: DF.namedNode('ex:s1'),
-                            predicate: DF.variable('p'),
-                            object: DF.namedNode('ex:o1'),
-                        },
-                    ]
-                ]
-            }
-
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "QUERY",
                 "operation": "addition",
                 "description": "Add triple for the person being a moderator of a forum",
                 "location": 1,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": {value: "s", termType: "variable"},
+                        "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                        "object": {value: "forum", termType: "variable"}
+                    }
                 ]
             }
             const input = createRefinementInput(queryString, variableMappings, refinementPattern)
@@ -954,26 +928,17 @@ describe('QueryTemplate', () => {
             const queryString = ` SELECT * WHERE {
                 ?s ?p ?o
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "UNION",
                 "operation": "addition",
                 "description": "Add union triple for the person being a moderator of a forum",
                 "location": 0,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": {value: "s", termType: "variable"},
+                        "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                        "object": {value: "forum", termType: "variable"}
+                    }
                 ]
             }
 
@@ -995,26 +960,17 @@ describe('QueryTemplate', () => {
             const queryString = ` SELECT * WHERE {
                 ?s ?p ?o
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "UNION",
                 "operation": "addition",
                 "description": "Add union triple for the person being a moderator of a forum",
                 "location": 1,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": {value: "s", termType: "variable"},
+                        "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                        "object": {value: "forum", termType: "variable"}
+                    }
                 ]
             }
 
@@ -1042,26 +998,17 @@ describe('QueryTemplate', () => {
                  UNION 
                 { ?x ?p ?o. }
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "UNION",
                 "operation": "addition",
                 "description": "Add union triple for the person being a moderator of a forum",
                 "location": 2,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": {value: "s", termType: "variable"},
+                        "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                        "object": {value: "forum", termType: "variable"}
+                    }
                 ]
             }
 
@@ -1089,26 +1036,17 @@ describe('QueryTemplate', () => {
             const queryString = ` SELECT * WHERE {
                 ?s ?p ?o
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "OPTIONAL",
                 "operation": "addition",
                 "description": "Add optional triple for the person being a moderator of a forum",
                 "location": 0,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": {value: "s", termType: "variable"},
+                        "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                        "object": {value: "forum", termType: "variable"}
+                    }
                 ]
             }
 
@@ -1129,26 +1067,17 @@ describe('QueryTemplate', () => {
                 OPTIONAL { ?a ?b ?c }
                 OPTIONAL { ?s ?y ?x }
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "OPTIONAL",
                 "operation": "addition",
                 "description": "Add optional triple for the person being a moderator of a forum",
                 "location": 1,
                 "target": [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": {value: "s", termType: "variable"},
+                        "predicate": {value: "snvoc:isModeratorOf", termType: "namedNode"},
+                        "object": {value: "forum", termType: "variable"}
+                    }
                 ]
             }
 
@@ -1172,15 +1101,6 @@ describe('QueryTemplate', () => {
                 ?s ?p ?o.
                 ?x ?o ?b
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "QUERY",
                 "operation": "removal",
@@ -1205,15 +1125,6 @@ describe('QueryTemplate', () => {
                 ?s ?p ?o.
                 ?x ?o ?b
             }`
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "QUERY",
                 "operation": "removal",
@@ -1221,9 +1132,9 @@ describe('QueryTemplate', () => {
                 "location": 0,
                 "target": [ 
                     {
-                        "subject": "?s",
-                        "predicate": "?p",
-                        "object": "?o"
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "p", termType: "variable" },
+                        "object": { value: "o", termType: "variable" }
                     }
                 ]
             }
@@ -1248,15 +1159,6 @@ describe('QueryTemplate', () => {
                 ?x ?y ?z.
             }
             `
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "QUERY",
                 "operation": "removal",
@@ -1291,15 +1193,6 @@ describe('QueryTemplate', () => {
                 ?x ?y ?z.
             }
             `
-            const operatorTriplePatterns: Record<string, Triple[][]> = {
-                query: [[
-                    {
-                        subject: DF.namedNode('ex:s1'),
-                        predicate: DF.variable('p'),
-                        object: DF.variable('o'),
-                    },
-                ]]
-            }
             const refinementPattern: IQueryRefinementPattern =   {
                 "type": "QUERY",
                 "operation": "removal",
@@ -1307,9 +1200,9 @@ describe('QueryTemplate', () => {
                 "location": 0,
                 "target": [ 
                     {
-                        "subject": "?s",
-                        "predicate": "?p",
-                        "object": "?o"
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "p", termType: "variable" },
+                        "object": { value: "o", termType: "variable" }
                     }
                 ]
             }
@@ -1331,17 +1224,6 @@ describe('QueryTemplate', () => {
                 SELECT * WHERE {
                 { ?s ?p ?o } UNION { ?x ?y ?z }
                 }`;
-
-            const operatorTriplePatterns = {
-                union: [[
-                {
-                    subject: DF.namedNode('ex:s1'),
-                    predicate: DF.variable('p'),
-                    object: DF.variable('o'),
-                }
-                ]]
-            };
-
             const refinementPattern: IQueryRefinementPattern = {
                 type: "UNION",
                 operation: "removal",
@@ -1349,9 +1231,9 @@ describe('QueryTemplate', () => {
                 location: 0,
                 target: [
                     {
-                        "subject": "?s",
-                        "predicate": "?p",
-                        "object": "?o"
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "p", termType: "variable" },
+                        "object": { value: "o", termType: "variable" }
                     }
                 ]
             };
@@ -1375,17 +1257,6 @@ describe('QueryTemplate', () => {
                 SELECT * WHERE {
                 { ?s ?p ?o } UNION { ?x ?y ?z }
                 }`;
-
-            const operatorTriplePatterns = {
-                union: [[
-                {
-                    subject: DF.variable('x'),
-                    predicate: DF.variable('y'),
-                    object: DF.variable('z'),
-                }
-                ]]
-            };
-
             const refinementPattern: IQueryRefinementPattern = {
                 type: "UNION",
                 operation: "removal",
@@ -1393,9 +1264,9 @@ describe('QueryTemplate', () => {
                 location: 1,
                 target: [
                     {
-                        "subject": "?x",
-                        "predicate": "?y",
-                        "object": "?z"
+                        "subject": { value: "x", termType: "variable" },
+                        "predicate": { value: "y", termType: "variable" },
+                        "object": { value: "z", termType: "variable" }
                     }
                 ]
             };
@@ -1427,16 +1298,6 @@ describe('QueryTemplate', () => {
                 }
                 ?a ?b ?c.
                 }`;
-            const operatorTriplePatterns = {
-                union: [[
-                {
-                    subject: DF.variable('x'),
-                    predicate: DF.variable('y'),
-                    object: DF.variable('z'),
-                }
-                ]]
-            };
-
             const refinementPattern: IQueryRefinementPattern = {
                 type: "UNION",
                 operation: "removal",
@@ -1444,9 +1305,9 @@ describe('QueryTemplate', () => {
                 location: 2,
                 target: [
                     {
-                        "subject": "?z",
-                        "predicate": "?k",
-                        "object": "?o"
+                        "subject": { value: "z", termType: "variable" },
+                        "predicate": { value: "k", termType: "variable" },
+                        "object": { value: "o", termType: "variable" }
                     }
                 ]
             };
@@ -1476,15 +1337,6 @@ describe('QueryTemplate', () => {
                 SELECT * WHERE {
                 { } UNION { ?x ?y ?z }
                 }`;
-            const operatorTriplePatterns = {
-                union: [[
-                {
-                    subject: DF.variable('x'),
-                    predicate: DF.variable('y'),
-                    object: DF.variable('z'),
-                }
-                ]]
-            };
 
             const refinementPattern: IQueryRefinementPattern = {
                 type: "UNION",
@@ -1493,14 +1345,14 @@ describe('QueryTemplate', () => {
                 location: 0,
                 target: [
                     {
-                        subject: "?s",
-                        predicate: "?p",
-                        object: "?o"
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "p", termType: "variable" },
+                        "object": { value: "o", termType: "variable" }
                     },
                     {
-                        subject: "?x",
-                        predicate: "?y",
-                        object: "?z"
+                        "subject": { value: "x", termType: "variable" },
+                        "predicate": { value: "y", termType: "variable" },
+                        "object": { value: "z", termType: "variable" }
                     }
                 ]
             };
@@ -1508,7 +1360,6 @@ describe('QueryTemplate', () => {
             const transformed = input.template.applyRefinementPattern(
                 refinementPattern, input.query, input.variableMapping, refinementState
             );
-
             expect(new Generator().stringify(transformed)).toEqual(
             `SELECT * WHERE {
   {  }
@@ -1717,11 +1568,11 @@ describe('QueryTemplate', () => {
                 description: "",
                 location: 0,
                 target: [
-                {
-                    "subject": "?s",
-                    "predicate": "snvoc:isModeratorOf",
-                    "object": "?forum"
-                }
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "snvoc:isModeratorOf", termType: "namedNode" },
+                        "object": { value: "forum", termType: "variable" }
+                    }
                 ]
             }
             const additionPattern2: IQueryRefinementPattern = {
@@ -1773,9 +1624,9 @@ describe('QueryTemplate', () => {
                 location: 0,
                 target: [
                     {
-                        "subject": "?s",
-                        "predicate": "snvoc:isModeratorOf",
-                        "object": "?forum"
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "snvoc:isModeratorOf", termType: "namedNode" },
+                        "object": { value: "forum", termType: "variable" }
                     }
                 ]
             }
@@ -1786,9 +1637,9 @@ describe('QueryTemplate', () => {
                 location: 1,
                 target: [ 
                     {
-                        "subject": "?s",
-                        "predicate": "snvoc:isPartOf",
-                        "object": "?forum"
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "snvoc:isPartOf", termType: "namedNode" },
+                        "object": { value: "forum", termType: "variable" }
                     }
                 ]
             }
@@ -1799,9 +1650,9 @@ describe('QueryTemplate', () => {
                 location: 1,
                 target: [
                     {
-                        "subject": "?s",
-                        "predicate": "snvoc:isPartOf",
-                        "object": "?forum"
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "snvoc:isPartOf", termType: "namedNode" },
+                        "object": { value: "forum", termType: "variable" }
                     }
                 ]
             }
@@ -1842,18 +1693,330 @@ describe('QueryTemplate', () => {
             );
         });
         it('should correctly create sequence for filter', () => {
-            
+            const queryString = `SELECT * WHERE {
+                ?s ?p ?o .
+                ?s1 ?p1 ?o1 .
+            }`;
+            const additionPattern1: IQueryRefinementPattern =   {
+                type: "FILTER",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                    "type": "operation",
+                    "operator": "<",
+                    "args": [
+                        DF.variable("s1"),
+                        DF.literal('60')
+                    ]
+                    }                
+                ]
+            }
+            const additionPattern2: IQueryRefinementPattern = {
+                type: "FILTER",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [ 
+                    {
+                    "type": "operation",
+                    "operator": ">",
+                    "args": [
+                        DF.variable("s1"),
+                        DF.literal('18')
+                    ]
+                    }                
+                ]
+            }
+            const additionPatternInvalid: IQueryRefinementPattern =   {
+                type: "FILTER",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                    "type": "operation",
+                    "operator": "<",
+                    "args": [
+                        DF.variable("s"),
+                        DF.literal('80')
+                    ]
+                    }                
+                ]
+            }
+
+            const removalPattern1: IQueryRefinementPattern = {
+                type: "FILTER",
+                operation: "removal",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                    "type": "operation",
+                    "operator": ">",
+                    "args": [
+                        DF.variable("s1"),
+                        DF.literal('18')
+                    ]
+                    }                
+                ]
+            }
+            const removalPattern2: IQueryRefinementPattern = {
+                type: "FILTER",
+                operation: "removal",
+                description: "",
+                location: 0,
+                target: [
+                ]
+            }
+            const mockRng = jest.fn()
+                .mockReturnValueOnce(0.9)
+                .mockReturnValueOnce(.1)
+                .mockReturnValueOnce(.6)
+                .mockReturnValueOnce(.1)
+
+            const input = createRefinementInput(queryString, {"s": [DF.namedNode('foaf:person')]}, additionPattern1, mockRng);
+            const refinedSequence = input.template.createRefinementSequence(
+                [additionPattern1, additionPattern2, additionPatternInvalid, removalPattern1, removalPattern2], 
+                input.query, 3, input.variableMapping
+            );
+            const patternToQuery = refinedSequence.map(transformed => new Generator().stringify(transformed));
+            expect(patternToQuery).toEqual(
+                [
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  FILTER(?s1 > "18")
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  FILTER(?s1 > "18")
+  FILTER(?s1 < "60")
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  FILTER(?s1 < "60")
+}`]
+            );            
         });
         it('should correctly create sequence for optional', () => {
-            
-        })
+            const queryString = `SELECT * WHERE {
+                ?s ?p ?o .
+                ?s1 ?p1 ?o1 .
+            }`;
+            const additionPattern1: IQueryRefinementPattern = {
+                type: "OPTIONAL",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "foaf:name", termType: "namedNode" },
+                        "object": { value: "name", termType: "variable" }
+                    }
+                ]
+            }
+            const additionPattern2: IQueryRefinementPattern = {
+                type: "OPTIONAL",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "foaf:email", termType: "namedNode" },
+                        "object": { value: "email", termType: "variable" }
+                    }
+                ]
+            }
+            const removalPattern: IQueryRefinementPattern = {
+                type: "OPTIONAL",
+                operation: "removal",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "foaf:name", termType: "namedNode" },
+                        "object": { value: "name", termType: "variable" }
+                    }
+                ]
+            }
+            const mockRng = jest.fn()
+                .mockReturnValueOnce(0.7)
+                .mockReturnValueOnce(.2)
+                .mockReturnValue(.4)
+
+
+            const input = createRefinementInput(queryString, {"s": [DF.namedNode('foaf:person')]}, additionPattern1, mockRng);
+            const refinedSequence = input.template.createRefinementSequence(
+                [additionPattern1, additionPattern2, removalPattern], 
+                input.query, 3, input.variableMapping
+            );
+            const patternToQuery = refinedSequence.map(transformed => new Generator().stringify(transformed));
+            expect(patternToQuery).toEqual(
+                [
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  OPTIONAL { <foaf:person> <foaf:email> ?email. }
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  OPTIONAL {
+    <foaf:person> <foaf:email> ?email;
+      <foaf:name> ?name.
+  }
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  OPTIONAL { <foaf:person> <foaf:email> ?email. }
+}`
+                ]
+            );
+        });
         it('should correctly create sequence for mixed refinements', () => {
-            
-        })
+            const queryString = `SELECT * WHERE {
+                ?s ?p ?o .
+                ?s1 ?p1 ?o1 .
+            }`;
+            const bgpAddition: IQueryRefinementPattern = {
+                type: "QUERY",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "rdf:type", termType: "namedNode" },
+                        "object": { value: "foaf:Person", termType: "namedNode" }
+                    }
+                ]
+            }
+            const filterAddition: IQueryRefinementPattern = {
+                type: "FILTER",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "type": "operation",
+                        "operator": ">",
+                        "args": [
+                            DF.variable("s1"),
+                            DF.literal('18')
+                        ]
+                    }
+                ]
+            }
+            const optionalAddition: IQueryRefinementPattern = {
+                type: "OPTIONAL",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "foaf:name", termType: "namedNode" },
+                        "object": { value: "name", termType: "variable" }
+                    }
+                ]
+            }
+            const unionAddition: IQueryRefinementPattern = {
+                type: "UNION",
+                operation: "addition",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "rdf:type", termType: "namedNode" },
+                        "object": { value: "foaf:Person", termType: "namedNode" }
+                    }
+                ]
+            }
+            const removalPattern: IQueryRefinementPattern = {
+                type: "QUERY",
+                operation: "removal",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "rdf:type", termType: "namedNode" },
+                        "object": { value: "foaf:Person", termType: "namedNode" }
+                    }
+                ]
+            }
+            const mockRng = jest.fn()
+                .mockReturnValueOnce(0)
+                .mockReturnValueOnce(.5)
+                .mockReturnValueOnce(.99)
+                .mockReturnValueOnce(.99)
+                .mockReturnValueOnce(0)
 
-
-
-
+            const input = createRefinementInput(queryString, {"s": [DF.namedNode('foaf:person')]}, bgpAddition, mockRng);
+            const refinedSequence = input.template.createRefinementSequence(
+                [bgpAddition, filterAddition, optionalAddition, unionAddition, removalPattern], 
+                input.query, 5, input.variableMapping
+            );
+            const patternToQuery = refinedSequence.map(transformed => new Generator().stringify(transformed));
+            expect(patternToQuery).toEqual(
+                [
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  <foaf:person> <rdf:type> <foaf:Person>.
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  <foaf:person> <rdf:type> <foaf:Person>.
+  OPTIONAL { <foaf:person> <foaf:name> ?name. }
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  OPTIONAL { <foaf:person> <foaf:name> ?name. }
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  OPTIONAL { <foaf:person> <foaf:name> ?name. }
+  { <foaf:person> <rdf:type> <foaf:Person>. }
+  UNION
+  {  }
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  ?s1 ?p1 ?o1.
+  OPTIONAL { <foaf:person> <foaf:name> ?name. }
+  { <foaf:person> <rdf:type> <foaf:Person>. }
+  UNION
+  {  }
+  FILTER(?s1 > "18")
+}`
+                ]
+            );
+        });
     })
 })
 

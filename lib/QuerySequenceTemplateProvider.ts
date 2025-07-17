@@ -173,11 +173,6 @@ export interface IEntityLogits {
 //   location?: number;
 // }
 
-export interface ITargetTriplePattern {
-  subject: string;
-  predicate: string;
-  object: string;
-}
 
 interface BaseRefinementPattern {
   operation: 'addition' | 'removal';
@@ -202,7 +197,12 @@ export type IQueryRefinementPattern =
 
 
 export interface ITargetTriplePattern {
-  subject: string;
-  predicate: string;
-  object: string;
+  subject: ITargetTriplePatternTerm;
+  predicate: ITargetTriplePatternTerm;
+  object: ITargetTriplePatternTerm;
+}
+
+export interface ITargetTriplePatternTerm {
+  value: string;
+  termType: "variable" | "literal" | "namedNode"
 }
