@@ -21,7 +21,7 @@ import type {
 import {
   Wildcard,
  Generator } from 'sparqljs';
-import type { IEntityLogits, IQueryRefinementPattern, ITargetTriplePattern, ITargetTriplePatternTerm } from './QuerySequenceTemplateProvider';
+import type { FilterRefinementPattern, IEntityLogits, IQueryRefinementPattern, ITargetTriplePattern, ITargetTriplePatternTerm, OtherRefinementPattern } from './QuerySequenceTemplateProvider';
 import { cloneDeep }  from 'lodash';
 /**
  * Data object for a query template.
@@ -445,15 +445,6 @@ export class QuerySequenceTemplate {
     return query;
   }
 
-  /**
-   * Key method that determines whether a given set of refinement patterns can be applied to
-   * @param operatorTriplePatternsFlattened Record mapping operator names (lowercase) to the triple patterns
-   * belonging to them
-   * @param refinementPatterns The refinement patterns to be evaluated
-   * @param addedPatterns The triple patterns added by previous pattern applications
-   * @param removedTriplePatterns Triple patterns that have previously been removed
-   * @returns An array of all valid refinement patterns
-   */
   public findValidRefinementPatterns(
     operatorTriplePatterns: Record<string, Triple[][]>,
     operatorExpressions: Record<string, Expression[][]>,
@@ -461,130 +452,132 @@ export class QuerySequenceTemplate {
     refinementState: IRefinementState,
     variableMapping: Record<string, RDF.Term>,
   ): IQueryRefinementPattern[] {
-    // We don't need a per BGP distinction of triple patterns for this function, so flatten
-    const operatorTriplePatternsFlattened =
-      Object.fromEntries(Object.entries(operatorTriplePatterns).map(([ k, v ]) => [ k, v.flat() ]));
-    const totalTriples = Object.values(operatorTriplePatternsFlattened)
-      .reduce((sum, triples) => sum + triples.length, 0);
+    const operatorTriplePatternsFlattened = this.flattenOperators(operatorTriplePatterns);
+    // const totalTriples = this.countFlattened(operatorTriplePatternsFlattened);
 
-    const operatorExpressionsFlattened =
-      Object.fromEntries(Object.entries(operatorExpressions).map(([ k, v ]) => [ k, v.flat() ]));
-    const totalExpressions = Object.values(operatorExpressionsFlattened)
-      .reduce((sum, expressions) => sum + expressions.length, 0);
+    const operatorExpressionsFlattened = this.flattenOperators(operatorExpressions);
+    const totalExpressions = this.countFlattened(operatorExpressionsFlattened);
 
-    // All operators added in previous refinements, we don't want repeat triples
-    const queryTriples = Object.values(operatorTriplePatterns).map(x=> x.flat()).flat();
-    const queryExpressions = Object.values(operatorExpressions).map(x=> x.flat()).flat();
-
+    const queryTriples = Object.values(operatorTriplePatterns).flat(2);
+    const queryExpressions = Object.values(operatorExpressions).flat(2);
     const variablesInQuery = this.getAllVariables(queryTriples);
 
-    return refinementPatterns.filter((pattern) => {
-      const patternType = pattern.type.toLowerCase();
-      // let patternTargetsInstantiated: Expression[] | Triple[] = [];
-      if (pattern.type === "FILTER"){
-        const patternTargetsInstantiated: Expression[] = pattern.target.map(
-          x => this.instantiateExpression(x, variableMapping)
-        );
-        const patternInQuery = patternTargetsInstantiated.length > 0 &&
-          patternTargetsInstantiated.every(tExp => queryExpressions.some(pExp =>
-            this.expressionEquals(tExp, pExp)
-          ));
-        if (patternInQuery && pattern.operation === 'addition') 
-          return false;
-
-        // If we want to add a FILTER to a query, the variables in the filter must
-        // be present in the query somewhere. It is not sufficient to have overlapping
-        // variables that are instantiated, as a filter on an instantiated value makes 
-        // little sense (correct me if I'm wrong)
-        if (pattern.operation === 'addition'){
-          const variablesInExpressions = patternTargetsInstantiated.map(
-            expr => this.getVariablesInExpression(expr)
-          );
-          // No variables or no overlapping variables after instantiation means filter 
-          // cannot be applied
-          if (variablesInExpressions.some(
-            variables => Array.from(variables.values()).some(
-              variable => !variablesInQuery.has(variable)) || variables.size === 0
-            )
-          ){
-            return false;
-          }
-        }
-        if (pattern.operation === 'removal') {
-          if (totalExpressions - Math.max(patternTargetsInstantiated.length, 1) <= 0) {
-            return false;
-          }
-          // If the operator is not in the query, we can't apply removal
-          if (operatorExpressionsFlattened[patternType] && 
-            patternTargetsInstantiated
-            .every(t => operatorExpressionsFlattened[patternType]
-              .some(exp => this.expressionEquals(t, exp)))) 
-            {
-            return true;
-          }
-          return false;
-        }
-        // If we have a target and no duplicate we can add
-        if (patternTargetsInstantiated.length > 0) {
-          return true;
-        }
-
-        // Without target we can only add if something was previously removed
-        if (refinementState[typeToKeyMap[pattern.type]].removedExp.length > 0) {
-          return true;
-        }
+    return refinementPatterns.filter(pattern => {
+      if (pattern.type === "FILTER") {
+        return this.isValidFilterPattern(pattern, {
+          queryExpressions,
+          operatorExpressionsFlattened,
+          refinementState,
+          totalExpressions,
+          variableMapping,
+          variablesInQuery
+        });
+      } else {
+        return this.isValidTriplePattern(pattern, {
+          queryTriples,
+          operatorTriplePatternsFlattened,
+          refinementState,
+          variableMapping
+        });
       }
-      else{
-        const patternTargetsInstantiated: Triple[] = pattern.target.map(
-          x=>this.instantiateTriple(this.targetToTriple(x), variableMapping)
-        );
-        const patternInQuery = patternTargetsInstantiated.length > 0 &&
-          patternTargetsInstantiated.every(tpTarget =>
-            queryTriples.some(addedPattern =>
-              this.tripleEquals(
-                addedPattern,
-                tpTarget
-              )
-            )
-          );
-        if (patternInQuery && pattern.operation === 'addition') 
-          return false;
-      
-        if (pattern.operation === 'removal' 
-          && patternTargetsInstantiated.length === 0 
-          && operatorTriplePatternsFlattened[pattern.type.toLowerCase()] 
-          && operatorTriplePatternsFlattened[pattern.type.toLowerCase()].length > 1
-        ) {
-          return true;
-        }
-        if (pattern.operation === 'removal') {
-          // We can't make an empty query, atleast one triple pattern should be left
-          // In case there is a empty target, one random triple pattern will be removed,
-          // so we use max here
-          if (totalTriples - Math.max(patternTargetsInstantiated.length, 1) <= 0) {
-            return false;
-          }
-          // If the operator is not in the query, we can't apply removal
-          if (operatorTriplePatternsFlattened[patternType] && // For removal patterns, all targets must be in the present in the operator
-            patternTargetsInstantiated.every(t => operatorTriplePatternsFlattened[patternType].some(tp =>
-              this.tripleEquals(this.targetToTriple(t), tp)))
-          ) {
-            return true;
-          }
-          return false;
-        }
-        // If we have a target and no duplicate we can add
-        if (patternTargetsInstantiated.length > 0) {
-          return true;
-        }
-
-        // Without target we can only add if something was previously removed
-        if (refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0) {
-          return true;
-        }
-      }
-      return false;
     });
+  }
+
+  private flattenOperators<T>(ops: Record<string, T[][]>): Record<string, T[]> {
+    return Object.fromEntries(Object.entries(ops).map(([k, v]) => [k, v.flat()]));
+  }
+
+  private countFlattened<T>(ops: Record<string, T[]>): number {
+    return Object.values(ops).reduce((sum, items) => sum + items.length, 0);
+  }
+
+  private isValidFilterPattern(
+    pattern: FilterRefinementPattern,
+    context: {
+      queryExpressions: Expression[],
+      operatorExpressionsFlattened: Record<string, Expression[]>,
+      refinementState: IRefinementState,
+      totalExpressions: number,
+      variableMapping: Record<string, RDF.Term>,
+      variablesInQuery: Set<string>
+    }
+  ): boolean {
+    const patternType = pattern.type.toLowerCase();
+    const targets = pattern.target.map(x => this.instantiateExpression(x, context.variableMapping));
+
+    const alreadyPresent = targets.length > 0 && targets.every(t =>
+      context.queryExpressions.some(q => this.expressionEquals(t, q))
+    );
+
+    // Duplicate expressions cannot be added
+    if (alreadyPresent && pattern.operation === 'addition') return false;
+
+    // Filter requires all variables in the filter to also be in the query body
+    if (pattern.operation === 'addition') {
+      const allVarsPresent = targets.every(expr => {
+        const vars = this.getVariablesInExpression(expr);
+        return vars.size > 0 && [...vars].every(v => context.variablesInQuery.has(v));
+      });
+      return allVarsPresent;
+    }
+
+    if (pattern.operation === 'removal') {
+      if (targets.length === 0) {
+        return context.operatorExpressionsFlattened[patternType]?.length > 1;
+      }
+      // if (context.totalExpressions - Math.max(targets.length, 1) <= 0) 
+      //   return false;
+      // Require all expressions in target to be present in query
+      const opExps = context.operatorExpressionsFlattened[patternType];
+      return opExps && targets.every(t => opExps.some(e => this.expressionEquals(t, e)));
+    }
+    // If not already present and we have a target we can always add the filter
+    if (targets.length > 0) 
+      return true;
+    return context.refinementState[typeToKeyMap[pattern.type]].removedExp.length > 0;
+  }
+
+  private isValidTriplePattern(
+    pattern: OtherRefinementPattern,
+    context: {
+      queryTriples: Triple[],
+      operatorTriplePatternsFlattened: Record<string, Triple[]>,
+      refinementState: IRefinementState,
+      variableMapping: Record<string, RDF.Term>
+    }
+  ): boolean {
+    const patternType = pattern.type.toLowerCase();
+    const targets = pattern.target.map(t =>
+      this.instantiateTriple(this.targetToTriple(t), context.variableMapping)
+    );
+
+    const alreadyPresent = targets.length > 0 && targets.every(t =>
+      context.queryTriples.some(q => this.tripleEquals(q, t))
+    );
+
+    if (alreadyPresent && pattern.operation === 'addition') 
+      return false;
+
+    if (pattern.operation === 'removal') {
+      // If we have no target the operator should have atleast 2 entries
+      if (targets.length === 0) {
+        return context.operatorTriplePatternsFlattened[patternType]?.length > 1;
+      }
+
+      // If we want to remove a triple pattern from the query it shouldn't leave an empty one
+      if (patternType === 'query' 
+        && context.operatorTriplePatternsFlattened[patternType].length - targets.length <= 0){
+        return false;
+      }
+    
+      const opTriples = context.operatorTriplePatternsFlattened[patternType];
+      return opTriples && targets.every(t =>
+        opTriples.some(tp => this.tripleEquals(this.targetToTriple(t), tp))
+      );
+    }
+
+    if (targets.length > 0) return true;
+    return context.refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0;
   }
 
   public extractTriplePatternsPerOperator(

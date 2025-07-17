@@ -397,6 +397,7 @@ describe('QueryTemplate', () => {
                     }
                 ]
             }
+
             additionPattern4 = {
                 type: "FILTER",
                 operation: "addition",
@@ -511,7 +512,6 @@ describe('QueryTemplate', () => {
             ).toEqual([additionPattern1, additionPattern3, removalPattern2])
         });
         it('should correctly filter for 2 triple pattern query with tp in union', () => {
-            console.log("Start failing test")
             const operatorTriplePatterns: Record<string, Triple[][]> = {
                 query: [[
                     {
@@ -529,12 +529,10 @@ describe('QueryTemplate', () => {
                 ]]
             }
             const opExpressions: Record<string, Expression[][]> = {};
-            console.log(template.findValidRefinementPatterns(
-                operatorTriplePatterns, opExpressions, allPatterns, refinementState, {}))
 
             expect(template.findValidRefinementPatterns(
                 operatorTriplePatterns, opExpressions, allPatterns, refinementState, {})
-            ).toEqual([additionPattern4, removalPattern2, removalPattern3]);
+            ).toEqual([additionPattern4, removalPattern3]);
         });
         it('should correctly filter for 2 triple pattern query with tp not in union', () => {
             const operatorTriplePatterns: Record<string, Triple[][]> = {
@@ -556,7 +554,7 @@ describe('QueryTemplate', () => {
             const opExpressions: Record<string, Expression[][]> = {};
             expect(template.findValidRefinementPatterns(
                 operatorTriplePatterns, opExpressions, allPatterns, refinementState, {})
-            ).toEqual([additionPattern1, additionPattern3, additionPattern4, removalPattern2])
+            ).toEqual([additionPattern1, additionPattern3, additionPattern4])
         });
         it('should correctly filter for 2 triple pattern query with removal in query', () => {
             const operatorTriplePatterns: Record<string, Triple[][]> = {
@@ -636,7 +634,7 @@ describe('QueryTemplate', () => {
             expect(template.findValidRefinementPatterns(
                 operatorTriplePatterns, opExpressions, allPatterns, 
                 refinementState, {"?s": DF.namedNode("ex:s1")}
-            )).toEqual([additionPattern4, removalPattern2, removalPattern3])
+            )).toEqual([additionPattern4, removalPattern3])
         });
 
         it('should correctly filter for query with removed triples with instantiation', () => {
@@ -771,6 +769,7 @@ describe('QueryTemplate', () => {
                     DF.literal('56')
                 ]
             });
+
             // Pattern that adds back a random removed expression
             const additionPattern5: IQueryRefinementPattern = {
                 type: "FILTER",
@@ -783,7 +782,7 @@ describe('QueryTemplate', () => {
  
             expect(template.findValidRefinementPatterns(
                 operatorTriplePatterns, opExpressions, [...allPatterns, additionPattern5], refinementState, {})
-            ).toEqual([additionPattern1, additionPattern3, removalPattern2, additionPattern5])
+            ).toEqual([additionPattern1, additionPattern3, removalPattern2, removalPattern4, additionPattern5])
         });
 
     });
@@ -1555,6 +1554,36 @@ describe('QueryTemplate', () => {
 }`          
             )        
         });
+        it('should remove the filter expression when no filters are left', () => {
+            const queryString = `SELECT * WHERE {
+                        ?salary ?p ?o .
+                        FILTER(?o > "5")
+                    }` ;
+            const refinementPattern: IQueryRefinementPattern = {
+                type: "FILTER",
+                operation: "removal",
+                description: "",
+                location: 0,
+                target: [
+                    {
+                    "type": "operation",
+                    "operator": ">",
+                    "args": [
+                        DF.variable("o"),
+                        DF.literal('5')
+                    ]
+                    }                
+                ]
+            }
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, input.variableMapping, refinementState
+            );
+            expect(new Generator().stringify(transformed)).toEqual(
+            `SELECT * WHERE { ?salary ?p ?o. }`          
+            );        
+        });
+
     });
 
     describe('createRefinementSequence', () => {
