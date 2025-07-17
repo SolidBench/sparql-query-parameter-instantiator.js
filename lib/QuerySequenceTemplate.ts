@@ -23,6 +23,7 @@ import {
  Generator } from 'sparqljs';
 import type { FilterRefinementPattern, IEntityLogits, IQueryRefinementPattern, ITargetTriplePattern, ITargetTriplePatternTerm, OtherRefinementPattern } from './QuerySequenceTemplateProvider';
 import { cloneDeep }  from 'lodash';
+import { extractBgpPerOperator, extractExpressionPerOperator, extractTriplePatternsPerOperator, getVariablesInExpression } from './utils/refinementSequenceUtils';
 /**
  * Data object for a query template.
  */
@@ -247,11 +248,11 @@ export class QuerySequenceTemplate {
     const refinementSequence: SelectQuery[] = [query];
     for (let i = 0; i < nSteps; i++) {
       query = cloneDeep(query);
-      const operatorTriples: Record<string, Triple[][]> = this.extractTriplePatternsPerOperator(
+      const operatorTriples: Record<string, Triple[][]> = extractTriplePatternsPerOperator(
         query.where!,
       );
       const operatorExpressions: Record<string, Expression[][]> = {};
-      this.extractExpressionPerOperator(query.where!, operatorExpressions, 'filter');
+      extractExpressionPerOperator(query.where!, operatorExpressions, 'filter');
 
       const validPatterns = this.findValidRefinementPatterns(
         operatorTriples,
@@ -287,8 +288,8 @@ export class QuerySequenceTemplate {
     // representation, but we'll have to change some tests (AGAIN).
     const operatorToBgp: Record<string, BgpPattern[]> = {};
     const operatorToExpression: Record<string, Expression[]> = {};
-    this.extractBgpPerOperator(query.where!, operatorToBgp, 'query');
-    this.extractExpressionPerOperator(query.where!, operatorToExpression, 'filter');
+    extractBgpPerOperator(query.where!, operatorToBgp, 'query');
+    extractExpressionPerOperator(query.where!, operatorToExpression, 'filter');
     const state = refinementState[typeToKeyMap[patternType]];
 
     if (pattern.operation === 'addition') {
@@ -515,7 +516,7 @@ export class QuerySequenceTemplate {
     // Filter requires all variables in the filter to also be in the query body
     if (pattern.operation === 'addition') {
       const allVarsPresent = targets.every(expr => {
-        const vars = this.getVariablesInExpression(expr);
+        const vars = getVariablesInExpression(expr);
         return vars.size > 0 && [...vars].every(v => context.variablesInQuery.has(v));
       });
       return allVarsPresent;
@@ -579,196 +580,6 @@ export class QuerySequenceTemplate {
     if (targets.length > 0) return true;
     return context.refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0;
   }
-
-  public extractTriplePatternsPerOperator(
-    patterns: Pattern[],
-  ): Record<string, Triple[][]> {
-    const bgpsPerOperator: Record<string, BgpPattern[]> = {};
-    this.extractBgpPerOperator(patterns, bgpsPerOperator, 'query');
-
-    const triplesPerOperator: Record<string, Triple[][]> = {};
-    for (const operator in bgpsPerOperator) {
-      triplesPerOperator[operator] = bgpsPerOperator[operator].map(bgp => bgp.triples);
-    }
-    return triplesPerOperator;
-  }
-
-  public extractBgpPerOperator(
-    patterns: Pattern[],
-    bgpsPerOperator: Record<string, BgpPattern[]>,
-    previousOperator: 'query' | 'union' | 'optional',
-  ) {
-    for (const pattern of patterns) {
-      switch (pattern.type) {
-        case 'group':
-          this.extractBgpPerOperator(pattern.patterns, bgpsPerOperator, previousOperator);
-          break;
-
-        case 'query':
-          if (pattern.where) {
-            this.extractBgpPerOperator(pattern.where, bgpsPerOperator, 'query');
-          }
-          break;
-
-        case 'bgp':
-          if (!bgpsPerOperator[previousOperator]) {
-            bgpsPerOperator[previousOperator] = [];
-          }
-          bgpsPerOperator[previousOperator].push(pattern);
-          break;
-
-        case 'union':
-          if (!bgpsPerOperator.union) {
-            bgpsPerOperator.union = [];
-          }
-          this.extractBgpPerOperator(pattern.patterns, bgpsPerOperator, 'union');
-          break;
-
-        case 'optional':
-          if (!bgpsPerOperator.optional) {
-            bgpsPerOperator.optional = [];
-          }
-          this.extractBgpPerOperator(pattern.patterns, bgpsPerOperator, 'optional');
-          break;
-
-        case 'filter':
-          break;
-
-        default:
-          break;
-      }
-    }
-  }
-
-  public extractExpressionPerOperator(    
-    patterns: Pattern[],
-    expressionsPerOperator: Record<string, Expression[]>,
-    previousOperator: 'filter',
-  ) {
-    for (const pattern of patterns) {
-      switch (pattern.type) {
-        case 'query':
-          if (pattern.where) {
-            this.extractExpressionPerOperator(pattern.where, expressionsPerOperator, previousOperator);
-          }
-          break;
-
-        case 'group':
-        case 'union':
-        case 'optional':
-        case 'graph':
-        case 'minus':
-        case 'service':
-          this.extractExpressionPerOperator(pattern.patterns, expressionsPerOperator, previousOperator);
-          break;
-
-        case 'filter':
-          if (!expressionsPerOperator[previousOperator]) {
-            expressionsPerOperator[previousOperator] = [];
-          }
-          expressionsPerOperator[previousOperator].push(pattern.expression);
-          break;
-
-        default:
-          break;
-      }
-    }
-  }
-
-  public getVariablesInExpression(expr: Expression): Set<string> {
-    const variables = new Set<string>();
-    
-    function recurse(e: Expression | Term | any): void {
-      if (!e) return;
-      
-      // Handle arrays (like args in operations)
-      if (Array.isArray(e)) {
-        for (const item of e) {
-          recurse(item);
-        }
-        return;
-      }
-      
-      // Handle different expression types
-      switch (e.type) {
-        case 'operation':
-          // Handle operation arguments
-          if (e.args && Array.isArray(e.args)) {
-            for (const arg of e.args) {
-              recurse(arg);
-            }
-          }
-          break;
-          
-        case 'functionCall':
-          // Handle function calls with arguments
-          if (e.args && Array.isArray(e.args)) {
-            for (const arg of e.args) {
-              recurse(arg);
-            }
-          }
-          break;
-          
-        case 'term':
-          // Handle term expressions
-          if (e.term) {
-            recurse(e.term);
-          }
-          break;
-          
-        case 'variable':
-          // Direct variable reference
-          if (e.value) {
-            variables.add(e.value.startsWith('?') ? e.value.substring(1) : e.value);
-          }
-          break;
-          
-        case 'aggregate':
-          // Handle aggregates (COUNT, SUM, etc.)
-          if (e.expression) {
-            recurse(e.expression);
-          }
-          if (e.separator) {
-            recurse(e.separator);
-          }
-          break;
-          
-        case 'namedExpression':
-          // Handle named expressions (AS clauses)
-          if (e.expression) {
-            recurse(e.expression);
-          }
-          break;
-          
-        case 'exists':
-        case 'notexists':
-          // Handle EXISTS and NOT EXISTS
-          if (e.input) {
-            // This would need more complex handling for graph patterns
-            // For now, just try to recurse if it's an expression
-            recurse(e.input);
-          }
-          break;
-          
-        default:
-          // Handle direct Term objects (Variable, Literal, NamedNode, etc.)
-          if (e.termType === 'Variable') {
-            const varName = e.value;
-            variables.add(varName.startsWith('?') ? varName.substring(1) : varName);
-          }
-          
-          // Handle other potential nested structures
-          if (e.left) recurse(e.left);
-          if (e.right) recurse(e.right);
-          if (e.expression) recurse(e.expression);
-          if (e.args) recurse(e.args);
-          break;
-      }
-    }
-    
-    recurse(expr);
-    return variables;
-  }  
 
   private targetToTriple(target: ITargetTriplePattern | Triple): Triple {
     if (this.isRdfJsTriple(target))
