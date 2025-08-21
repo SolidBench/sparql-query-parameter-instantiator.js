@@ -10,333 +10,7 @@ const rng = seedrandomFn("test");
 
 const DF = new DataFactory();
 
-describe('QueryTemplate', () => {
-    describe('countTriplePatternsPerOperator', () => {
-        let singleVariableMapping: Record<string, RDF.Term>;
-
-        beforeEach(() => {
-            singleVariableMapping = { s: DF.namedNode('ex:s1') }
-        });
-        it('counts a flat query with one BGP correctly', () => {
-            const parsedQuery = new Parser().parse(`SELECT * WHERE { ?s ?p ?o. }`)
-
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!))
-                .toEqual({ query: [[{
-                    subject: DF.namedNode('ex:s1'),
-                    predicate: DF.variable('p'),
-                    object: DF.variable('o')
-                }]]}
-            );
-        });
-
-        it('counts a query with OPTIONAL block', () => {
-            const parsedQuery = new Parser().parse(`
-            SELECT * WHERE {
-                ?s ?p ?o.
-                OPTIONAL { ?x ?y ?z. ?a ?b ?c. }
-            }
-            `) 
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!))
-            .toEqual({
-                query: [[
-                    {
-                    subject: DF.namedNode('ex:s1'),
-                    predicate: DF.variable('p'),
-                    object: DF.variable('o')
-                    }
-                ]],
-                optional: [[
-                    {
-                        subject: DF.variable('x'),
-                        predicate: DF.variable('y'),
-                        object: DF.variable('z')
-                    },
-                    {
-                        subject: DF.variable('a'),
-                        predicate: DF.variable('b'),
-                        object: DF.variable('c')
-                    }
-                ]]
-            })
-        });
-        it('counts UNION block correctly', () => {
-            const parsedQuery = new Parser().parse(`
-            SELECT * WHERE {
-                {
-                ?a ?b ?c.
-                } UNION {
-                ?d ?e ?f.
-                ?g ?h ?i.
-                }
-            }
-            `) 
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng,
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!))
-            .toEqual({
-                union: [
-                    [
-                        {
-                            subject: DF.variable('a'),
-                            predicate: DF.variable('b'),
-                            object: DF.variable('c')
-                        },
-                    ],
-                    [
-                        {
-                            subject: DF.variable('d'),
-                            predicate: DF.variable('e'),
-                            object: DF.variable('f')
-                        },
-                        {
-                            subject: DF.variable('g'),
-                            predicate: DF.variable('h'),
-                            object: DF.variable('i')
-                        },
-                    ]
-                ]
-            });
-        });
-
-        it('counts nested UNION inside OPTIONAL', () => {
-            const parsedQuery = new Parser().parse(`
-            SELECT * WHERE {
-                OPTIONAL {
-                {
-                    ?x ?y ?z.
-                } UNION {
-                    ?a ?b ?c.
-                }
-                }
-            }
-            `) 
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng,
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!))
-            .toEqual(
-                { 
-                    optional: [
-
-                    ], 
-                    union: [
-                        [
-                            {
-                                subject: DF.variable('x'),
-                                predicate: DF.variable('y'),
-                                object: DF.variable('z')
-                            }
-                        ],
-                        [                 
-                            {
-                                subject: DF.variable('a'),
-                                predicate: DF.variable('b'),
-                                object: DF.variable('c')
-                            },
-                        ]   
-                    ]
-                }
-            );
-        });
-
-        it('handles nested OPTIONAL inside UNION', () => {
-            const parsedQuery = new Parser().parse(`
-            SELECT * WHERE {
-                {
-                OPTIONAL { ?x ?y ?z. }
-                } UNION {
-                ?a ?b ?c.
-                }
-            }
-            `) 
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!)).toEqual(
-                { 
-                    union: [[
-                        {
-                            subject: DF.variable('a'),
-                            predicate: DF.variable('b'),
-                            object: DF.variable('c')
-                        },
-
-                    ]], 
-                    optional: [[
-                        {
-                            subject: DF.variable('x'),
-                            predicate: DF.variable('y'),
-                            object: DF.variable('z')
-                        },
-                    ]]
-                }
-            );
-        });
-
-        it('handles nested empty OPTIONAL', () => {
-            const parsedQuery = new Parser().parse(`
-            SELECT * WHERE {
-                OPTIONAL {
-                }
-                ?s ?p ?o.
-            }
-            `) 
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!)).toEqual(
-                { 
-                    query: [[
-                        {
-                            subject: DF.namedNode('ex:s1'),
-                            predicate: DF.variable('p'),
-                            object: DF.variable('o')
-                        },
-                    ]], 
-                    optional: [] 
-                }
-            );
-        });
-
-        it('counts subqueries correctly', () => {
-            const parsedQuery = new Parser().parse(`
-            SELECT * WHERE {
-                {
-                SELECT * WHERE {
-                    ?s ?p ?o.
-                }
-                }
-                ?x ?y ?z.
-            }
-            `) 
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!)).toEqual(
-                { 
-                    query: [
-                        [
-                            {
-                                subject: DF.namedNode('ex:s1'),
-                                predicate: DF.variable('p'),
-                                object: DF.variable('o')
-                            },
-                        ],
-                        [
-                            {
-                                subject: DF.variable('x'),
-                                predicate: DF.variable('y'),
-                                object: DF.variable('z')
-                            },
-                        ]
-                    ], 
-                }
-            );
-        });
-        it('handles deeply nested blocks', () => {
-            const parsedQuery = new Parser().parse(`
-            SELECT * WHERE {
-                OPTIONAL {
-                {
-                    {
-                    ?a ?b ?c.
-                    } UNION {
-                    OPTIONAL {
-                        ?x ?y ?z.
-                    }
-                    }
-                }
-                }
-            }
-            `) 
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!))
-            .toEqual(
-                { 
-                    optional: [[
-                        {
-                            subject: DF.variable('x'),
-                            predicate: DF.variable('y'),
-                            object: DF.variable('z')
-                        },
-                    ]], 
-                    union: [[
-                        {
-                            subject: DF.variable('a'),
-                            predicate: DF.variable('b'),
-                            object: DF.variable('c')
-                        },
-                    ]] 
-                }
-            );
-        });
-
-        it('handles empty WHERE clause', () => {
-            const parsedQuery = new Parser().parse(`
-            SELECT * WHERE {
-            }
-            `) 
-            const template = new QuerySequenceTemplate(
-                parsedQuery,
-                { s: [DF.namedNode('ex:s1')] },
-                {},
-                rng
-            );
-
-            const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping)
-            expect(template.extractTriplePatternsPerOperator(syntaxTreeQuery.where!)).toEqual({});
-        });
-    });
-    
+describe('QueryTemplate', () => {    
     describe('findValidRefinementPatterns', () => {
         let template: QuerySequenceTemplate;
         let additionPattern1: IQueryRefinementPattern;
@@ -1173,7 +847,6 @@ describe('QueryTemplate', () => {
             const transformed = input.template.applyRefinementPattern(
                 refinementPattern, input.query, input.variableMapping, refinementState
             );
-            console.log(new Generator().stringify(transformed))
             expect(new Generator().stringify(transformed)).toEqual(
 `SELECT * WHERE {
   { SELECT * WHERE { <ex:s1> ?p ?o. } }
@@ -1583,7 +1256,112 @@ describe('QueryTemplate', () => {
             `SELECT * WHERE { ?salary ?p ?o. }`          
             );        
         });
+        it('should remove the variable form the select if removing the triple pattern removes the variable', () => {
+            const queryString = `
+            SELECT ?x ?s WHERE {
+                {
+                SELECT * WHERE {
+                    ?s ?p ?o.
+                }
+                }
+                ?x ?y ?z.
+            }
+            `
+            const refinementPattern: IQueryRefinementPattern =   {
+                "type": "QUERY",
+                "operation": "removal",
+                "description": "Remove triple",
+                "location": 0,
+                "target": [ 
+                    {
+                        "subject": { value: "s", termType: "variable" },
+                        "predicate": { value: "p", termType: "variable" },
+                        "object": { value: "o", termType: "variable" }
+                    }
+                ]
+            }
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
 
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, input.variableMapping, refinementState
+            );
+            expect(new Generator().stringify(transformed)).toEqual(
+                `SELECT ?x WHERE {
+  { SELECT * WHERE {  } }
+  ?x ?y ?z.
+}`
+            );
+        });
+
+        it('should remove variable expression when variable is removed from query', () => {
+            const queryString = `
+            SELECT (?x AS ?xAlias) ?p WHERE {
+                {
+                SELECT * WHERE {
+                    ?s ?p ?o.
+                }
+                }
+                ?x ?y ?z.
+            }
+            `
+            const refinementPattern: IQueryRefinementPattern = {
+                type: "QUERY",
+                operation: "removal",
+                description: "Remove triple",
+                location: 1,
+                target: [ 
+                    {
+                        subject: { value: "x", termType: "variable" },
+                        predicate: { value: "y", termType: "variable" },
+                        object: { value: "z", termType: "variable" }
+                    }
+                ]
+            }
+
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, input.variableMapping, refinementState
+            );
+
+            console.log(new Generator().stringify(transformed))
+            expect(new Generator().stringify(transformed)).toEqual(
+`SELECT ?p WHERE {
+  { SELECT * WHERE { <ex:s1> ?p ?o. } }
+  
+}`);
+        });
+
+        it('should not remove variable if the variable is used elsewhere', () => {
+            const queryString = `
+            SELECT ?x WHERE {
+                ?x ?y ?z .
+                ?x ?y1 ?z1 .
+            }
+            `
+            const refinementPattern: IQueryRefinementPattern = {
+                type: "QUERY",
+                operation: "removal",
+                description: "Remove triple",
+                location: 0,
+                target: [ 
+                    {
+                        subject: { value: "x", termType: "variable" },
+                        predicate: { value: "y", termType: "variable" },
+                        object: { value: "z", termType: "variable" }
+                    }
+                ]
+            }
+
+            const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+
+            const transformed = input.template.applyRefinementPattern(
+                refinementPattern, input.query, input.variableMapping, refinementState
+            );
+
+            expect(new Generator().stringify(transformed)).toEqual(
+`SELECT ?x WHERE { ?x ?y1 ?z1. }`);
+        });
     });
 
     describe('createRefinementSequence', () => {

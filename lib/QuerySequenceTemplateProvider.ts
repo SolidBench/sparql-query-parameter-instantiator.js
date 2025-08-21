@@ -174,7 +174,7 @@ export interface IEntityLogits {
 // }
 
 
-interface BaseRefinementPattern {
+export interface BaseRefinementPattern {
   operation: 'addition' | 'removal';
   description: string;
   location?: number;
@@ -184,6 +184,7 @@ interface BaseRefinementPattern {
 export interface FilterRefinementPattern extends BaseRefinementPattern {
   type: 'FILTER';
   target: Expression[];
+  useVariableMapping?: boolean;
 }
 
 export interface OtherRefinementPattern extends BaseRefinementPattern {

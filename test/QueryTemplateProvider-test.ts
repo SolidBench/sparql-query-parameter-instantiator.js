@@ -60,8 +60,6 @@ describe('QueryTemplateProvider', () => {
           new SubstitutionProviderStatic([ 'ex:a2', 'ex:b2', 'ex:c2' ]),
         ),
       ],
-      't1',
-      [ 'template2' ],
     );
   });
 
@@ -97,8 +95,6 @@ describe('QueryTemplateProvider', () => {
             undefined,
           ),
         ],
-        't1',
-        [ 'template2' ],
       );
       await expect(provider.createTemplate()).rejects
         .toThrow(`The variable template 'template1' for 'var1' has no substitution provider configured`);
@@ -127,8 +123,6 @@ describe('QueryTemplateProvider', () => {
             new SubstitutionProviderStatic([ 'ex:a2', 'ex:b2', 'ex:c2' ]),
           ),
         ],
-        't2',
-        [ 'template1' ],
       );
     });
     it('should return true when validating for both providers', () => {

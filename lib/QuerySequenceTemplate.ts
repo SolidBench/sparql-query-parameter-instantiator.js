@@ -23,7 +23,7 @@ import {
  Generator } from 'sparqljs';
 import type { FilterRefinementPattern, IEntityLogits, IQueryRefinementPattern, ITargetTriplePattern, ITargetTriplePatternTerm, OtherRefinementPattern } from './QuerySequenceTemplateProvider';
 import { cloneDeep }  from 'lodash';
-import { extractBgpPerOperator, extractExpressionPerOperator, extractTriplePatternsPerOperator, getVariablesInExpression } from './utils/refinementSequenceUtils';
+import { extractBgpPerOperator, extractExpressionPerOperator, extractTriplePatternsPerOperator, getVariablesInExpression } from './utils/RefinementSequenceUtils';
 /**
  * Data object for a query template.
  */
@@ -435,8 +435,23 @@ export class QuerySequenceTemplate {
             triplesToRemove = [ this.sampleRandom(bgpToRefine.triples) ];
           }
           const removed = this.removeTargetFromBgp(bgpToRefine, triplesToRemove, variableMapping);
-
-          // Update state of refinement sequence
+          const triplePatternsLeft = Object.values(operatorToBgp).map(bgps => bgps.map(bgp => bgp.triples)).flat(2)
+          const variablesLeftInQuery = this.getAllVariables(triplePatternsLeft);
+          console.log(query.variables)
+          console.log(this.hasWildCard(query.variables))
+          if (!this.hasWildCard(query.variables)) {
+            query.variables = query.variables.filter(x => {
+            if ("expression" in x){
+              const varsInExpression = getVariablesInExpression(x.expression);
+              for (const v of varsInExpression){
+                if (!variablesLeftInQuery.has(v)){
+                  return false;
+                }
+              }
+            }
+            return true
+            });
+          }
           state.removedTps.push(...removed);
         }
       }
@@ -602,8 +617,12 @@ export class QuerySequenceTemplate {
     && 'equals' in term;
   }
 
-  private isVariable(term: any): term is Variable {
+  private isVariable(term: any): term is VariableTerm {
     return this.isRDFTerm(term) && term.termType === 'Variable';
+  }
+
+  private hasWildCard(variables: Variable[] | [Wildcard]): variables is [Wildcard]{
+    return variables.some(term => term instanceof Wildcard)
   }
 
   private getAllVariables(triples: Triple[]): Set<string> {
