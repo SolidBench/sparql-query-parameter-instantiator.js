@@ -176,6 +176,7 @@ export interface IEntityLogits {
 
 export interface BaseRefinementPattern {
   operation: 'addition' | 'removal';
+  id: number;
   description: string;
   location?: number;
 }

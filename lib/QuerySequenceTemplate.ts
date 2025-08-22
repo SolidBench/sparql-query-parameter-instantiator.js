@@ -21,9 +21,20 @@ import type {
 import {
   Wildcard,
  Generator } from 'sparqljs';
-import type { FilterRefinementPattern, IEntityLogits, IQueryRefinementPattern, ITargetTriplePattern, ITargetTriplePatternTerm, OtherRefinementPattern } from './QuerySequenceTemplateProvider';
+import type { 
+  FilterRefinementPattern,
+  IEntityLogits, 
+  IQueryRefinementPattern, 
+  ITargetTriplePattern, 
+  ITargetTriplePatternTerm, 
+  OtherRefinementPattern 
+} from './QuerySequenceTemplateProvider';
 import { cloneDeep }  from 'lodash';
-import { extractBgpPerOperator, extractExpressionPerOperator, extractTriplePatternsPerOperator, getVariablesInExpression } from './utils/RefinementSequenceUtils';
+import { 
+  extractBgpPerOperator, 
+  extractExpressionPerOperator, 
+  extractTriplePatternsPerOperator, 
+  getVariablesInExpression } from './utils/RefinementSequenceUtils';
 /**
  * Data object for a query template.
  */
@@ -47,7 +58,6 @@ export class QuerySequenceTemplate {
     this.variableMappings = variableMappings;
     this.variableProbabilities = variableProbabilities;
     this.rng = rng;
-    
     this.refinementPatterns = refinementPatterns?.map(pattern => {
       if (pattern.type !== 'FILTER'){
         pattern.target = pattern.target.map(triple => this.targetToTriple(triple))
@@ -61,14 +71,17 @@ export class QuerySequenceTemplate {
    * This counter value is used to determine what variable value should be used.
    * @param counter The current counter value.
    */
-  public instantiate(counter: number, instantiateRefinementPattern: boolean, user?: string): string[] {
+  public instantiate(counter: number, instantiateRefinementPattern: boolean, user?: string): 
+  { queries: string[], 
+    patternMetadata: Record<string, any>[]
+  } {
     // Determine variables to instantiate with
     const variableMapping: Record<string, RDF.Term> = {};
     for (const variable of Object.keys(this.variableMappings)) {
       const values = this.variableMappings[variable];
       // When no probabilities and rng is given, we simply cycle through the provided
       // values to instantiate queries in the sequence.
-      if (Object.keys(this.variableProbabilities).length === 0) {
+      if (!this.variableProbabilities[variable]) {
         const instantiationIndex = counter % values.length;
         variableMapping[variable] = values[instantiationIndex];
       } else if (Object.keys(this.variableProbabilities).length > 0 && user) {
@@ -90,16 +103,19 @@ export class QuerySequenceTemplate {
       if (!this.refinementPatterns) {
         throw new Error(`No refinement patterns available for instantiation`);
       }
-      const instantiatedSyntaxTreesRefinement = this.createRefinementSequence(
+      const {queries, metadata} = this.createRefinementSequence(
         this.refinementPatterns,
         instantiatedSyntaxTree,
         4,
         variableMapping,
       );
-      return instantiatedSyntaxTreesRefinement.map(tree => new Generator().stringify(tree));
+      return {
+        queries: queries.map(query => new Generator().stringify(query)),
+        patternMetadata: metadata
+      };
     }
     // Instantiate syntax tree
-    return [new Generator().stringify(instantiatedSyntaxTree)];
+    return {queries: [new Generator().stringify(instantiatedSyntaxTree)], patternMetadata: [{}]};
   }
 
   public instantiateSyntaxTree(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
@@ -238,7 +254,11 @@ export class QuerySequenceTemplate {
     query: SelectQuery,
     nSteps: number,
     variableMapping: Record<string, RDF.Term>,
-  ): SelectQuery[] {
+  ): {
+    queries: SelectQuery[], 
+    metadata: Record<string, any>[] 
+  } {
+
     const refinementState: IRefinementState = {
       stateFilter: this.initializeEmptyOperatorState(),
       stateQuery: this.initializeEmptyOperatorState(),
@@ -246,6 +266,7 @@ export class QuerySequenceTemplate {
       stateUnion: this.initializeEmptyOperatorState(),
     };
     const refinementSequence: SelectQuery[] = [query];
+    const patternMetadata: Record<string, any>[] = [{}];
     for (let i = 0; i < nSteps; i++) {
       query = cloneDeep(query);
       const operatorTriples: Record<string, Triple[][]> = extractTriplePatternsPerOperator(
@@ -253,25 +274,30 @@ export class QuerySequenceTemplate {
       );
       const operatorExpressions: Record<string, Expression[][]> = {};
       extractExpressionPerOperator(query.where!, operatorExpressions, 'filter');
+      const termsInOperators = this.termsInOperators(operatorTriples);
 
       const validPatterns = this.findValidRefinementPatterns(
         operatorTriples,
         operatorExpressions,
+        termsInOperators,
         refinementPatterns,
         refinementState,
         variableMapping
       );
+
       const patternToApply = this.sampleRandom(validPatterns);
       const refinedQuery = this.applyRefinementPattern(
-          patternToApply,
-          query,
-          variableMapping,
-          refinementState
-        );
+        patternToApply,
+        query,
+        variableMapping,
+        refinementState
+      );
+
       refinementSequence.push(refinedQuery);
+      patternMetadata.push({patternId: patternToApply.id});
       query = refinedQuery;
     }
-    return refinementSequence;
+    return {queries: refinementSequence, metadata: patternMetadata};
   }
 
   public applyRefinementPattern(
@@ -437,8 +463,6 @@ export class QuerySequenceTemplate {
           const removed = this.removeTargetFromBgp(bgpToRefine, triplesToRemove, variableMapping);
           const triplePatternsLeft = Object.values(operatorToBgp).map(bgps => bgps.map(bgp => bgp.triples)).flat(2)
           const variablesLeftInQuery = this.getAllVariables(triplePatternsLeft);
-          console.log(query.variables)
-          console.log(this.hasWildCard(query.variables))
           if (!this.hasWildCard(query.variables)) {
             query.variables = query.variables.filter(x => {
             if ("expression" in x){
@@ -464,6 +488,7 @@ export class QuerySequenceTemplate {
   public findValidRefinementPatterns(
     operatorTriplePatterns: Record<string, Triple[][]>,
     operatorExpressions: Record<string, Expression[][]>,
+    termsInOperators: Set<string>,
     refinementPatterns: IQueryRefinementPattern[],
     refinementState: IRefinementState,
     variableMapping: Record<string, RDF.Term>,
@@ -481,6 +506,7 @@ export class QuerySequenceTemplate {
     return refinementPatterns.filter(pattern => {
       if (pattern.type === "FILTER") {
         return this.isValidFilterPattern(pattern, {
+          termsInOperators,
           queryExpressions,
           operatorExpressionsFlattened,
           refinementState,
@@ -490,6 +516,7 @@ export class QuerySequenceTemplate {
         });
       } else {
         return this.isValidTriplePattern(pattern, {
+          termsInOperators,
           queryTriples,
           operatorTriplePatternsFlattened,
           refinementState,
@@ -510,6 +537,7 @@ export class QuerySequenceTemplate {
   private isValidFilterPattern(
     pattern: FilterRefinementPattern,
     context: {
+      termsInOperators: Set<string>,
       queryExpressions: Expression[],
       operatorExpressionsFlattened: Record<string, Expression[]>,
       refinementState: IRefinementState,
@@ -524,7 +552,6 @@ export class QuerySequenceTemplate {
     const alreadyPresent = targets.length > 0 && targets.every(t =>
       context.queryExpressions.some(q => this.expressionEquals(t, q))
     );
-
     // Duplicate expressions cannot be added
     if (alreadyPresent && pattern.operation === 'addition') return false;
 
@@ -547,6 +574,7 @@ export class QuerySequenceTemplate {
       const opExps = context.operatorExpressionsFlattened[patternType];
       return opExps && targets.every(t => opExps.some(e => this.expressionEquals(t, e)));
     }
+
     // If not already present and we have a target we can always add the filter
     if (targets.length > 0) 
       return true;
@@ -556,6 +584,7 @@ export class QuerySequenceTemplate {
   private isValidTriplePattern(
     pattern: OtherRefinementPattern,
     context: {
+      termsInOperators: Set<string>,
       queryTriples: Triple[],
       operatorTriplePatternsFlattened: Record<string, Triple[]>,
       refinementState: IRefinementState,
@@ -596,9 +625,27 @@ export class QuerySequenceTemplate {
     return context.refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0;
   }
 
+  private termsInOperators(operatorTriples: Record<string, Triple[][]>){
+    const termsInOperatorQuery: Set<string> = new Set()
+      for (const triple of Object.values(operatorTriples).flat(2)){
+        if (!this.isVariable(triple.subject)){
+          termsInOperatorQuery.add(triple.subject.value);
+        }
+        if (!this.isVariable(triple.predicate) && "termType" in triple.predicate){
+          termsInOperatorQuery.add(triple.predicate.value);
+        }
+        if (!this.isVariable(triple.object)){
+          termsInOperatorQuery.add(triple.object.value);
+        }
+      }
+    return termsInOperatorQuery
+  }
+
   private targetToTriple(target: ITargetTriplePattern | Triple): Triple {
-    if (this.isRdfJsTriple(target))
+    if (this.isRdfJsTriple(target)){
       return target;
+    }
+
     if (target.subject.termType === 'literal'){
       throw new Error("Literal subject is invalid")
     }

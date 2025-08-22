@@ -78,10 +78,25 @@ export class QuerySequenceInstantiator {
     sequenceSessions.push(currentSession);
 
     const startQuery = currentSession.templates.at(-1)!;
-    const querySequence = [ ...startQuery.template.instantiate(templateCounts[startQuery.name], false, user) ];
+
+    // For the first query do it manually (not with function). Don't remember why but I don't want to touch it
+    const instantiateOutput = startQuery.template.instantiate(templateCounts[startQuery.name], false, user);
+    const querySequence = [ ...instantiateOutput.queries ];
+    for (const metadata of instantiateOutput.patternMetadata){
+      sequenceMetadata.sequenceElements.push({
+        session: {
+          task: currentSession.task,
+          sessionLength: currentSession.sessionLength,
+          sessionId: currentSession.sessionId,
+        },
+        template: startQuery.name,
+        nOpenSessions: sequenceSessions.filter(x => !x.ended).length,
+        refinementMetadata: metadata
+      });
+    }
+
 
     for (let i = 0; i < sequenceLength - 1; i++) {
-      console.log(currentSession);
       // Sample whether to continue the current session or start a new one
       const switchSession = this.sampleHit(sessionTransitionProbability * 2);
       if (switchSession || currentSession.ended) {
@@ -133,7 +148,6 @@ export class QuerySequenceInstantiator {
           currentSession.templates.at(-1)!.name}`);
       }
       const nextQuery = this.sampleRandom(nextTemplates);
-      console.log(nextQuery);
       this.addTemplateToSequence(
         nextQuery,
         currentSession,
@@ -189,8 +203,8 @@ export class QuerySequenceInstantiator {
     sequenceMetadata: IQuerySequenceMetadata,
   ): IQuerySequenceElementTemplate {
     // Add template to session
-    const instantiation = query.template.instantiate(templateCounts[query.name], true, user);
-    sequence.push(...instantiation);
+    const {queries, patternMetadata} = query.template.instantiate(templateCounts[query.name], true, user);
+    sequence.push(...queries);
     session.templates.push(query);
     // Update template counts
     templateCounts[query.name] += 1;
@@ -198,15 +212,19 @@ export class QuerySequenceInstantiator {
     if (session.templates.length >= session.sessionLength) {
       session.ended = true;
     }
-    sequenceMetadata.sequenceElements.push({
-      session: {
-        task: session.task,
-        sessionLength: session.sessionLength,
-        sessionId: session.sessionId,
-      },
-      template: query.name,
-      nOpenSessions: sequenceSessions.filter(x => !x.ended).length,
-    });
+    for (const metadata of patternMetadata){
+      sequenceMetadata.sequenceElements.push({
+        session: {
+          task: session.task,
+          sessionLength: session.sessionLength,
+          sessionId: session.sessionId,
+        },
+        template: query.name,
+        nOpenSessions: sequenceSessions.filter(x => !x.ended).length,
+        refinementMetadata: metadata
+      });
+
+    }
     // Return the last template in the session
     return session.templates.at(-1)!;
   }
@@ -373,6 +391,7 @@ export interface IQuerySequenceElementMetadata {
   session: IQuerySessionMetadata;
   template: string;
   nOpenSessions: number;
+  refinementMetadata: Record<string, any>
 }
 
 export interface IQuerySequenceMetadata {
