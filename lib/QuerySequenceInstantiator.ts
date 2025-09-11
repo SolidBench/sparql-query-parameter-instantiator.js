@@ -160,7 +160,7 @@ export class QuerySequenceInstantiator {
     }
     const sequenceFile = querySequence.join('\n\n');
     this.saveSequenceToFile(`sequence_${n}.sparql`, sequenceFile);
-    this.saveMetadataToFile(`sequence_${n}_metadata.json`, sequenceMetadata);
+    this.saveMetadataToFile(`sequence_${n}.metadata.json`, sequenceMetadata);
   }
 
   /**
