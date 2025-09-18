@@ -188,5 +188,13 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
   
   recurse(expr);
   return variables;
-}  
+} 
+
+export function replacePrefixes(
+  query: string,
+  baseUrl: string,
+  toReplace: string = "http://localhost:3000/"
+): string {
+  return query.replace(toReplace, baseUrl.endsWith("/") ? baseUrl : baseUrl + "/");
+}
 

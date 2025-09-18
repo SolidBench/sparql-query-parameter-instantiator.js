@@ -9,6 +9,7 @@ import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
  * Instantiates query providers a number of times.
  */
 export class QuerySequenceInstantiator {
+  private readonly baseUrl: string;
   private readonly providers: QuerySequenceTemplateProvider[];
   private readonly personProvider: IVariableTemplate;
   private readonly count: number;
@@ -24,17 +25,33 @@ export class QuerySequenceInstantiator {
   private readonly metadataDestinationFilePath: string;
 
   public constructor(args: IQuerySequenceInstantiatorArgs) {
+    this.baseUrl = args.baseUrl;
     this.providers = args.providers;
     this.personProvider = args.personProvider;
     this.temperature = args.temperature;
     this.count = args.count;
     this.rngSeeded = seedrandom(String(args.seed));
+
+    // The mean and standard deviation of the distribution determining the simulated sequence length 
     this.meanLogSequenceLength = args.meanLogSequenceLength;
     this.stdLogSequenceLength = args.stdLogSequenceLength;
+    console.log(`Expected sequence length: ${
+      this.calculateExpectedMeanLogNormal(this.meanLogSequenceLength, this.stdLogSequenceLength)
+    }`);
+    // The mean and std of the distribution determining the simulated session length within sequences
     this.meanLogSessionLength = args.meanLogSessionLength;
     this.stdLogSessionLength = args.stdLogSessionLength;
+    console.log(`Expected session length: ${
+      this.calculateExpectedMeanLogNormal(this.meanLogSessionLength, this.stdLogSessionLength)
+    }`);
+    // The mean and std of the distribution determining the simulated probability of switching between
+    // sessions within a sequence
     this.meanLogTransitionProbability = args.meanLogTransitionProbability;
     this.stdLogTransitionProbability = args.stdLogTransitionProbability;
+    console.log(`Expected transition probability: ${
+      this.calculateExpectedMeanLogNormal(this.meanLogTransitionProbability, 
+      this.stdLogTransitionProbability)
+    }`);
     this.destinationFilePath = args.destinationFilePath;
     this.metadataDestinationFilePath = args.metadataDestinationFilePath || this.destinationFilePath;
   }
@@ -64,7 +81,7 @@ export class QuerySequenceInstantiator {
         task: provider.queryTask,
         name: provider.getTemplateName(),
         nextFilePaths: provider.getNextTemplateName(),
-        template: await provider.createTemplate(this.rngSeeded, this.temperature),
+        template: await provider.createTemplate(this.baseUrl, this.rngSeeded, this.temperature),
       })),
     );
 
@@ -82,7 +99,7 @@ export class QuerySequenceInstantiator {
     // For the first query do it manually (not with function). Don't remember why but I don't want to touch it
     const instantiateOutput = startQuery.template.instantiate(templateCounts[startQuery.name], false, user);
     const querySequence = [ ...instantiateOutput.queries ];
-    for (const metadata of instantiateOutput.patternMetadata){
+    for (const metadata of instantiateOutput.patternMetadata) {
       sequenceMetadata.sequenceElements.push({
         session: {
           task: currentSession.task,
@@ -246,6 +263,10 @@ export class QuerySequenceInstantiator {
     return Math.exp(z);
   }
 
+  public calculateExpectedMeanLogNormal(mean: number, stdev: number){
+    return Math.exp(mean + 0.5 * stdev^2)
+  }
+
   public gaussianRandom(mean: number, stdev: number) {
     const u = 1 - this.rngSeeded();
     const v = this.rngSeeded();
@@ -295,6 +316,10 @@ export class QuerySequenceInstantiator {
  * Configuration for QuerySequenceInstantiator
  */
 export interface IQuerySequenceInstantiatorArgs {
+  /**
+   * Base url of the server
+   */
+  baseUrl: string;
   /**
    * @param providers - The list of template providers
    */

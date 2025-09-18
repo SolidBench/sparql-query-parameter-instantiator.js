@@ -34,11 +34,13 @@ import {
   extractBgpPerOperator, 
   extractExpressionPerOperator, 
   extractTriplePatternsPerOperator, 
-  getVariablesInExpression } from './utils/RefinementSequenceUtils';
+  getVariablesInExpression, 
+  replacePrefixes} from './utils/RefinementSequenceUtils';
 /**
  * Data object for a query template.
  */
 export class QuerySequenceTemplate {
+  private readonly baseUrl;
   private readonly syntaxTree: SparqlQuery;
   private readonly variableMappings: Record<string, RDF.Term[]>;
   private readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
@@ -48,12 +50,14 @@ export class QuerySequenceTemplate {
   public readonly instantiationCounts: Record<string, Record<string, Record<string, number>>> = {};
 
   public constructor(
+    baseUrl: string,
     syntaxTree: SparqlQuery,
     variableMappings: Record<string, RDF.Term[]>,
     variableProbabilities: Record<string, Record<string, IEntityLogits[]>>,
     rng: seedrandom.PRNG,
     refinementPatterns?: IQueryRefinementPattern[],
   ) {
+    this.baseUrl = baseUrl;
     this.syntaxTree = syntaxTree;
     this.variableMappings = variableMappings;
     this.variableProbabilities = variableProbabilities;
@@ -98,6 +102,9 @@ export class QuerySequenceTemplate {
       }
     }
     const instantiatedSyntaxTree = this.instantiateSyntaxTree(this.syntaxTree, variableMapping);
+    // TODO: Remove replace prefixes and put it in JBR, as solidbench-server is a JBR thing not perse 
+    // a solidbench thing.
+
     // Create an array of SelectQueries that are all slight variations of the same template
     if (instantiateRefinementPattern) {
       if (!this.refinementPatterns) {
@@ -110,12 +117,13 @@ export class QuerySequenceTemplate {
         variableMapping,
       );
       return {
-        queries: queries.map(query => new Generator().stringify(query)),
+        queries: queries.map(query => replacePrefixes(new Generator().stringify(query), this.baseUrl)),
         patternMetadata: metadata
       };
     }
     // Instantiate syntax tree
-    return {queries: [new Generator().stringify(instantiatedSyntaxTree)], patternMetadata: [{}]};
+    return {queries: [replacePrefixes(new Generator().stringify(instantiatedSyntaxTree), this.baseUrl)],
+       patternMetadata: [{}]};
   }
 
   public instantiateSyntaxTree(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
@@ -267,6 +275,8 @@ export class QuerySequenceTemplate {
     };
     const refinementSequence: SelectQuery[] = [query];
     const patternMetadata: Record<string, any>[] = [{}];
+    const appliedPatterns = [];
+
     for (let i = 0; i < nSteps; i++) {
       query = cloneDeep(query);
       const operatorTriples: Record<string, Triple[][]> = extractTriplePatternsPerOperator(
@@ -294,7 +304,9 @@ export class QuerySequenceTemplate {
       );
 
       refinementSequence.push(refinedQuery);
-      patternMetadata.push({patternId: patternToApply.id});
+      appliedPatterns.push(patternToApply.id);
+
+      patternMetadata.push({patternIds: [...appliedPatterns]});
       query = refinedQuery;
     }
     return {queries: refinementSequence, metadata: patternMetadata};
@@ -701,15 +713,19 @@ export class QuerySequenceTemplate {
 
   private hasVariable(variables: Variable[] | [Wildcard], variable: VariableTerm): boolean {
     return variables.some((bgpVariable) => {
-      'termType' in bgpVariable &&
+      return 'termType' in bgpVariable &&
       bgpVariable.termType === 'Variable' && variable.value === bgpVariable.value;
     });
   }
 
   private updateVariablesQuery(query: SelectQuery, instantiatedTriple: Triple): Variable[] | [Wildcard] {
+    if (query.group){
+      return query.variables;
+    }
     // If a wildcard is in the variables, we don't need to add the new variables to the triple,
-    // as it will select all variables in the query.
-    if (query.variables.some(term => term instanceof Wildcard)) {
+    // as it will select all variables in the query. If group by we can only project grouped 
+    // variables, so we don't change them
+    if (query.variables.some(term => term instanceof Wildcard) || query.group) {
       return query.variables;
     }
 

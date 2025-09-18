@@ -54,7 +54,7 @@ export class QuerySequenceTemplateProvider {
   /**
    * Create a new query template data object.
    */
-  public async createTemplate(rng: seedrandom.PRNG, temperature: number): Promise<QuerySequenceTemplate> {
+  public async createTemplate(baseUrl: string, rng: seedrandom.PRNG, temperature: number): Promise<QuerySequenceTemplate> {
     const sparqlString = await fs.promises.readFile(this.templateFilePath, 'utf8');
     const syntaxTree = this.parser.parse(sparqlString);
     const variableMappings: Record<string, RDF.Term[]> = {};
@@ -79,7 +79,8 @@ export class QuerySequenceTemplateProvider {
         variableProbabilityMappings[variableName] = this.softMaxLogits(logits, temperature);
       }
     }
-    return new QuerySequenceTemplate(syntaxTree, variableMappings, variableProbabilityMappings, rng, this.refinementPatterns);
+    return new QuerySequenceTemplate(baseUrl, syntaxTree, variableMappings, variableProbabilityMappings, 
+      rng, this.refinementPatterns);
   }
 
   public parseRefinementFile(file: string | undefined) {
