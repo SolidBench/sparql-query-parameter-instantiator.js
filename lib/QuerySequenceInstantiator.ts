@@ -20,6 +20,7 @@ export class QuerySequenceInstantiator {
   private readonly stdLogSessionLength: number;
   private readonly meanLogTransitionProbability: number;
   private readonly stdLogTransitionProbability: number;
+  private readonly refinementPatternProbability: number;
   private readonly temperature: number;
   private readonly destinationFilePath: string;
   private readonly metadataDestinationFilePath: string;
@@ -32,7 +33,7 @@ export class QuerySequenceInstantiator {
     this.count = args.count;
     this.rngSeeded = seedrandom(String(args.seed));
 
-    // The mean and standard deviation of the distribution determining the simulated sequence length 
+    // The mean and standard deviation of the distribution determining the simulated sequence length
     this.meanLogSequenceLength = args.meanLogSequenceLength;
     this.stdLogSequenceLength = args.stdLogSequenceLength;
     console.log(`Expected sequence length: ${
@@ -49,14 +50,16 @@ export class QuerySequenceInstantiator {
     this.meanLogTransitionProbability = args.meanLogTransitionProbability;
     this.stdLogTransitionProbability = args.stdLogTransitionProbability;
     console.log(`Expected transition probability: ${
-      this.calculateExpectedMeanLogNormal(this.meanLogTransitionProbability, 
-      this.stdLogTransitionProbability)
-    }`);
+      this.calculateExpectedMeanLogNormal(
+        this.meanLogTransitionProbability,
+        this.stdLogTransitionProbability,
+      )}`);
+    this.refinementPatternProbability = args.refinementPatternProbability;
     this.destinationFilePath = args.destinationFilePath;
     this.metadataDestinationFilePath = args.metadataDestinationFilePath || this.destinationFilePath;
   }
 
-  public async instantiateProviderSequence(n: number, user: string) {
+  public async instantiateProviderSequence(n: number, user: string): Promise<void> {
     const sequenceLength = this.logNormalRoundedUp(
       this.meanLogSequenceLength,
       this.stdLogSequenceLength,
@@ -108,10 +111,9 @@ export class QuerySequenceInstantiator {
         },
         template: startQuery.name,
         nOpenSessions: sequenceSessions.filter(x => !x.ended).length,
-        refinementMetadata: metadata
+        refinementMetadata: metadata,
       });
     }
-
 
     for (let i = 0; i < sequenceLength - 1; i++) {
       // Sample whether to continue the current session or start a new one
@@ -176,8 +178,8 @@ export class QuerySequenceInstantiator {
       );
     }
     const sequenceFile = querySequence.join('\n\n');
-    this.saveSequenceToFile(`sequence_${n}.sparql`, sequenceFile);
-    this.saveMetadataToFile(`sequence_${n}.metadata.json`, sequenceMetadata);
+    await this.saveSequenceToFile(`sequence_${n}.sparql`, sequenceFile);
+    await this.saveMetadataToFile(`sequence_${n}.metadata.json`, sequenceMetadata);
   }
 
   /**
@@ -195,7 +197,7 @@ export class QuerySequenceInstantiator {
     taskToTemplate: Record<string, IQuerySequenceElementTemplate[]>,
     queryTasks: string[],
     nSessions: number,
-  ) {
+  ): IQuerySession {
     const startQuery = this.sampleRandom(taskToTemplate[this.sampleRandom(queryTasks)]);
     const newSession = {
       sessionId: nSessions,
@@ -219,8 +221,17 @@ export class QuerySequenceInstantiator {
     templateCounts: Record<string, number>,
     sequenceMetadata: IQuerySequenceMetadata,
   ): IQuerySequenceElementTemplate {
+    let instantiateRefinementPattern = false;
+    if (this.rngSeeded() < this.refinementPatternProbability) {
+      instantiateRefinementPattern = true;
+    }
+
     // Add template to session
-    const {queries, patternMetadata} = query.template.instantiate(templateCounts[query.name], true, user);
+    const { queries, patternMetadata } = query.template.instantiate(
+      templateCounts[query.name],
+      instantiateRefinementPattern,
+      user,
+    );
     sequence.push(...queries);
     session.templates.push(query);
     // Update template counts
@@ -229,7 +240,7 @@ export class QuerySequenceInstantiator {
     if (session.templates.length >= session.sessionLength) {
       session.ended = true;
     }
-    for (const metadata of patternMetadata){
+    for (const metadata of patternMetadata) {
       sequenceMetadata.sequenceElements.push({
         session: {
           task: session.task,
@@ -238,9 +249,8 @@ export class QuerySequenceInstantiator {
         },
         template: query.name,
         nOpenSessions: sequenceSessions.filter(x => !x.ended).length,
-        refinementMetadata: metadata
+        refinementMetadata: metadata,
       });
-
     }
     // Return the last template in the session
     return session.templates.at(-1)!;
@@ -263,23 +273,23 @@ export class QuerySequenceInstantiator {
     return Math.exp(z);
   }
 
-  public calculateExpectedMeanLogNormal(mean: number, stdev: number){
-    return Math.exp(mean + 0.5 * stdev^2)
+  public calculateExpectedMeanLogNormal(mean: number, stdev: number): number {
+    return Math.exp(mean + 0.5 * stdev ^ 2);
   }
 
-  public gaussianRandom(mean: number, stdev: number) {
+  public gaussianRandom(mean: number, stdev: number): number {
     const u = 1 - this.rngSeeded();
     const v = this.rngSeeded();
     const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
     return z * stdev + mean;
   }
 
-  public sampleRandom<A>(array: A[]): A {
+  public sampleRandom<T>(array: T[]): T {
     return array[Math.floor(this.rngSeeded() * array.length)];
   }
 
   public sampleProbability(probabilities: IProbabilities[]): string {
-    const r = this.rngSeeded(); // Random number between 0 and 1
+    const r = this.rngSeeded();
     let cumulative = 0;
 
     for (const item of probabilities) {
@@ -295,7 +305,7 @@ export class QuerySequenceInstantiator {
     return this.rngSeeded() < probabilityHit;
   }
 
-  public async saveSequenceToFile(sequenceFileName: string, queries: string) {
+  public async saveSequenceToFile(sequenceFileName: string, queries: string): Promise<void> {
     await fs.promises.writeFile(
       path.join(this.destinationFilePath, sequenceFileName),
       queries,
@@ -303,7 +313,10 @@ export class QuerySequenceInstantiator {
     );
   }
 
-  public async saveMetadataToFile(sequenceFileName: string, metadata: IQuerySequenceMetadata) {
+  public async saveMetadataToFile(
+    sequenceFileName: string,
+    metadata: IQuerySequenceMetadata,
+  ): Promise<void> {
     await fs.promises.writeFile(
       path.join(this.metadataDestinationFilePath, sequenceFileName),
       JSON.stringify(metadata, null, 2),
@@ -374,6 +387,13 @@ export interface IQuerySequenceInstantiatorArgs {
    */
   stdLogTransitionProbability: number;
   /**
+   * The probability of instantiation a refinement sequence from a given template
+   * @param refinementPatternProbability
+   * @range {float}
+   * @default: .1
+   */
+  refinementPatternProbability: number;
+  /**
    * @param temperature - Softmax temperature
    * @range {float}
    * @default: .5
@@ -416,7 +436,7 @@ export interface IQuerySequenceElementMetadata {
   session: IQuerySessionMetadata;
   template: string;
   nOpenSessions: number;
-  refinementMetadata: Record<string, any>
+  refinementMetadata: Record<string, any>;
 }
 
 export interface IQuerySequenceMetadata {

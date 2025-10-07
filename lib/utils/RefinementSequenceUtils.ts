@@ -1,4 +1,4 @@
-import { BgpPattern, Expression, Pattern, Term, Triple } from "sparqljs";
+import type { BgpPattern, Expression, Pattern, Term, Triple } from 'sparqljs';
 
 export function extractTriplePatternsPerOperator(
   patterns: Pattern[],
@@ -60,7 +60,7 @@ export function extractBgpPerOperator(
   }
 }
 
-export function extractExpressionPerOperator(    
+export function extractExpressionPerOperator(
   patterns: Pattern[],
   expressionsPerOperator: Record<string, Expression[]>,
   previousOperator: 'filter',
@@ -97,10 +97,12 @@ export function extractExpressionPerOperator(
 
 export function getVariablesInExpression(expr: Expression): Set<string> {
   const variables = new Set<string>();
-  
+
   function recurse(e: Expression | Term | any): void {
-    if (!e) return;
-    
+    if (!e) {
+      return;
+    }
+
     // Handle arrays (like args in operations)
     if (Array.isArray(e)) {
       for (const item of e) {
@@ -108,7 +110,7 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
       }
       return;
     }
-    
+
     // Handle different expression types
     switch (e.type) {
       case 'operation':
@@ -119,7 +121,7 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
           }
         }
         break;
-        
+
       case 'functionCall':
         // Handle function calls with arguments
         if (e.args && Array.isArray(e.args)) {
@@ -128,21 +130,21 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
           }
         }
         break;
-        
+
       case 'term':
         // Handle term expressions
         if (e.term) {
           recurse(e.term);
         }
         break;
-        
+
       case 'variable':
         // Direct variable reference
         if (e.value) {
-          variables.add(e.value.startsWith('?') ? e.value.substring(1) : e.value);
+          variables.add(e.value.startsWith('?') ? e.value.slice(1) : e.value);
         }
         break;
-        
+
       case 'aggregate':
         // Handle aggregates (COUNT, SUM, etc.)
         if (e.expression) {
@@ -152,14 +154,14 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
           recurse(e.separator);
         }
         break;
-        
+
       case 'namedExpression':
         // Handle named expressions (AS clauses)
         if (e.expression) {
           recurse(e.expression);
         }
         break;
-        
+
       case 'exists':
       case 'notexists':
         // Handle EXISTS and NOT EXISTS
@@ -169,32 +171,39 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
           recurse(e.input);
         }
         break;
-        
+
       default:
         // Handle direct Term objects (Variable, Literal, NamedNode, etc.)
         if (e.termType === 'Variable') {
           const varName = e.value;
-          variables.add(varName.startsWith('?') ? varName.substring(1) : varName);
+          variables.add(varName.startsWith('?') ? varName.slice(1) : varName);
         }
-        
+
         // Handle other potential nested structures
-        if (e.left) recurse(e.left);
-        if (e.right) recurse(e.right);
-        if (e.expression) recurse(e.expression);
-        if (e.args) recurse(e.args);
+        if (e.left) {
+          recurse(e.left);
+        }
+        if (e.right) {
+          recurse(e.right);
+        }
+        if (e.expression) {
+          recurse(e.expression);
+        }
+        if (e.args) {
+          recurse(e.args);
+        }
         break;
     }
   }
-  
+
   recurse(expr);
   return variables;
-} 
+}
 
 export function replacePrefixes(
   query: string,
   baseUrl: string,
-  toReplace: string = "http://localhost:3000/"
+  toReplace = 'http://localhost:3000/',
 ): string {
-  return query.replace(toReplace, baseUrl.endsWith("/") ? baseUrl : baseUrl + "/");
+  return query.replace(toReplace, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
 }
-

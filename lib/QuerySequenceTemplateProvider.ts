@@ -79,8 +79,7 @@ export class QuerySequenceTemplateProvider {
         variableProbabilityMappings[variableName] = this.softMaxLogits(logits, temperature);
       }
     }
-    return new QuerySequenceTemplate(baseUrl, syntaxTree, variableMappings, variableProbabilityMappings, 
-      rng, this.refinementPatterns);
+    return new QuerySequenceTemplate(baseUrl, syntaxTree, variableMappings, variableProbabilityMappings, rng, this.refinementPatterns);
   }
 
   public parseRefinementFile(file: string | undefined) {
@@ -151,7 +150,7 @@ export interface IEntityLogits {
   similarity: number;
 }
 
-// export interface IQueryRefinementPattern {
+// Export interface IQueryRefinementPattern {
 //   /**
 //    * Operation type of the refinement pattern.
 //    */
@@ -173,7 +172,6 @@ export interface IEntityLogits {
 //    */
 //   location?: number;
 // }
-
 
 export interface BaseRefinementPattern {
   operation: 'addition' | 'removal';
@@ -198,7 +196,6 @@ export type IQueryRefinementPattern =
   | FilterRefinementPattern
   | OtherRefinementPattern;
 
-
 export interface ITargetTriplePattern {
   subject: ITargetTriplePatternTerm;
   predicate: ITargetTriplePatternTerm;
@@ -207,5 +204,5 @@ export interface ITargetTriplePattern {
 
 export interface ITargetTriplePatternTerm {
   value: string;
-  termType: "variable" | "literal" | "namedNode"
+  termType: 'variable' | 'literal' | 'namedNode';
 }
