@@ -4,7 +4,7 @@ export function extractTriplePatternsPerOperator(
   patterns: Pattern[],
 ): Record<string, Triple[][]> {
   const bgpsPerOperator: Record<string, BgpPattern[]> = {};
-  extractBgpPerOperator(patterns, bgpsPerOperator, 'query');
+  extractBgpPerOperator(patterns, bgpsPerOperator, 'bgp');
 
   const triplesPerOperator: Record<string, Triple[][]> = {};
   for (const operator in bgpsPerOperator) {
@@ -16,7 +16,7 @@ export function extractTriplePatternsPerOperator(
 export function extractBgpPerOperator(
   patterns: Pattern[],
   bgpsPerOperator: Record<string, BgpPattern[]>,
-  previousOperator: 'query' | 'union' | 'optional',
+  previousOperator: 'bgp' | 'union' | 'optional',
 ) {
   for (const pattern of patterns) {
     switch (pattern.type) {
@@ -26,7 +26,7 @@ export function extractBgpPerOperator(
 
       case 'query':
         if (pattern.where) {
-          extractBgpPerOperator(pattern.where, bgpsPerOperator, 'query');
+          extractBgpPerOperator(pattern.where, bgpsPerOperator, 'bgp');
         }
         break;
 

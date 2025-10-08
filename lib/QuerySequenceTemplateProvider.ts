@@ -1,17 +1,12 @@
-// IN this class we use the query template provider method. But instead of accepting any variable,
-// we accept own class definition of variable that can deal with sequences.
-// One version of variable is equal probability. Other is one where you have x acceptable substitutions and it cycles through and other is the cool one
-// choosing according to probability (with or without repeats).
-// A variable that allows sequences accepts either similarity subsitutionProvider, or namedNode one depending
-// on the type of variable it is.
-
 import * as fs from 'node:fs';
 import type * as RDF from '@rdfjs/types';
+
+// eslint-disable-next-line ts/no-require-imports
 import seedrandom = require('seedrandom');
 import type { Expression, SparqlParser, Triple } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QuerySequenceTemplate } from './QuerySequenceTemplate';
-import type { IVariableTemplate } from './variable/IVariableTemplate';
+import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
 
 /**
  * Constructs query templates based on a given template file, variables, and substitution parameters.
@@ -54,7 +49,11 @@ export class QuerySequenceTemplateProvider {
   /**
    * Create a new query template data object.
    */
-  public async createTemplate(baseUrl: string, rng: seedrandom.PRNG, temperature: number): Promise<QuerySequenceTemplate> {
+  public async createTemplate(
+    baseUrl: string,
+    rng: seedrandom.PRNG,
+    temperature: number,
+  ): Promise<QuerySequenceTemplate> {
     const sparqlString = await fs.promises.readFile(this.templateFilePath, 'utf8');
     const syntaxTree = this.parser.parse(sparqlString);
     const variableMappings: Record<string, RDF.Term[]> = {};
@@ -73,19 +72,27 @@ export class QuerySequenceTemplateProvider {
         // Apply the variable template to the entities in the logits
         for (const [ user, similarities ] of Object.entries(logits)) {
           for (const similarityObject of similarities) {
-            similarityObject.entity = variableTemplate.createTerm(similarityObject.entity).value;
+            similarityObject.entity = variableTemplate.createTerm(<RawTerm>similarityObject.entity).value;
           }
         }
         variableProbabilityMappings[variableName] = this.softMaxLogits(logits, temperature);
       }
     }
-    return new QuerySequenceTemplate(baseUrl, syntaxTree, variableMappings, variableProbabilityMappings, rng, this.refinementPatterns);
+    return new QuerySequenceTemplate(
+      baseUrl,
+      syntaxTree,
+      variableMappings,
+      variableProbabilityMappings,
+      rng,
+      this.refinementPatterns,
+    );
   }
 
-  public parseRefinementFile(file: string | undefined) {
+  public parseRefinementFile(file: string | undefined): IQueryRefinementPattern[] | undefined {
     if (!file) {
       return;
     }
+    // eslint-disable-next-line no-sync
     const raw = fs.readFileSync(file, 'utf8');
     const json: IQueryRefinementPattern[] = JSON.parse(raw);
     return json;
@@ -96,7 +103,7 @@ export class QuerySequenceTemplateProvider {
    * @param providers all query template providers
    * @returns false if not all providers required by this template are present true else
    */
-  public validateNextTemplateFilePaths(providers: QuerySequenceTemplateProvider[]) {
+  public validateNextTemplateFilePaths(providers: QuerySequenceTemplateProvider[]): boolean {
     const allTemplates = new Set(providers.map(provider => provider.templateFilePath));
     for (const nextTemplate of this.nextTemplateNames) {
       if (!allTemplates.has(nextTemplate)) {
@@ -106,7 +113,7 @@ export class QuerySequenceTemplateProvider {
     return true;
   }
 
-  public softMaxLogits(logits: Record<string, IEntityLogits[]>, temperature = 1) {
+  public softMaxLogits(logits: Record<string, IEntityLogits[]>, temperature = 1): Record<string, IEntityLogits[]> {
     const softMaxedLogits: Record<string, IEntityLogits[]> = {};
     for (const [ user, logitsUser ] of Object.entries(logits)) {
       const logitEntities = logitsUser.map(x => x.entity);
@@ -130,17 +137,17 @@ export class QuerySequenceTemplateProvider {
     }
 
     const scaled = values.map(v => v / temperature);
-    const max = Math.max(...scaled); // For numerical stability
+    const max = Math.max(...scaled);
     const exps = scaled.map(v => Math.exp(v - max));
     const sum = exps.reduce((a, b) => a + b, 0);
     return exps.map(v => v / sum);
   }
 
-  public getNextTemplateName() {
+  public getNextTemplateName(): Set<string> {
     return this.nextTemplateNames;
   }
 
-  public getTemplateName() {
+  public getTemplateName(): string {
     return this.name;
   }
 }
@@ -173,7 +180,7 @@ export interface IEntityLogits {
 //   location?: number;
 // }
 
-export interface BaseRefinementPattern {
+export interface IBaseRefinementPattern {
   operation: 'addition' | 'removal';
   id: number;
   description: string;
@@ -181,20 +188,26 @@ export interface BaseRefinementPattern {
 }
 
 // FILTER: uses Expression[]
-export interface FilterRefinementPattern extends BaseRefinementPattern {
+export interface IFilterRefinementPattern extends IBaseRefinementPattern {
   type: 'FILTER';
   target: Expression[];
   useVariableMapping?: boolean;
 }
 
-export interface OtherRefinementPattern extends BaseRefinementPattern {
-  type: 'OPTIONAL' | 'UNION' | 'QUERY';
+export interface ISubRefinementPatter extends IBaseRefinementPattern {
+  type: 'SUB';
+  target: RDF.Variable;
+}
+
+export interface IOtherRefinementPattern extends IBaseRefinementPattern {
+  type: 'OPTIONAL' | 'UNION' | 'BGP';
   target: (Triple | ITargetTriplePattern)[];
 }
 
 export type IQueryRefinementPattern =
-  | FilterRefinementPattern
-  | OtherRefinementPattern;
+  | ISubRefinementPatter
+  | IFilterRefinementPattern
+  | IOtherRefinementPattern;
 
 export interface ITargetTriplePattern {
   subject: ITargetTriplePatternTerm;

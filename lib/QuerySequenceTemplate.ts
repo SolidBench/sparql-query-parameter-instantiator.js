@@ -1,6 +1,6 @@
 import type * as RDF from '@rdfjs/types';
 import { cloneDeep } from 'lodash';
-import { DataFactory } from 'rdf-data-factory';
+import { DataFactory, NamedNode } from 'rdf-data-factory';
 
 // eslint-disable-next-line ts/no-require-imports
 import seedrandom = require('seedrandom');
@@ -27,12 +27,12 @@ import {
   Generator,
 } from 'sparqljs';
 import type {
-  FilterRefinementPattern,
+  IFilterRefinementPattern,
   IEntityLogits,
   IQueryRefinementPattern,
   ITargetTriplePattern,
   ITargetTriplePatternTerm,
-  OtherRefinementPattern,
+  IOtherRefinementPattern,
 } from './QuerySequenceTemplateProvider';
 import {
   extractBgpPerOperator,
@@ -70,7 +70,7 @@ export class QuerySequenceTemplate {
     this.variableProbabilities = variableProbabilities;
     this.rng = rng;
     this.refinementPatterns = refinementPatterns?.map((pattern) => {
-      if (pattern.type !== 'FILTER') {
+      if (pattern.type !== 'FILTER' && pattern.type !== 'SUB') {
         pattern.target = pattern.target.map(triple => this.targetToTriple(triple));
       }
       return pattern;
@@ -86,6 +86,7 @@ export class QuerySequenceTemplate {
   { queries: string[]; patternMetadata: Record<string, any>[] } {
     // Determine variables to instantiate with
     const variableMapping: Record<string, RDF.Term> = {};
+    const alternativeMapping: Record<string, RDF.Term> = {};
     for (const variable of Object.keys(this.variableMappings)) {
       const values = this.variableMappings[variable];
       // When no probabilities and rng is given, we simply cycle through the provided
@@ -94,11 +95,12 @@ export class QuerySequenceTemplate {
         const instantiationIndex = counter % values.length;
         variableMapping[variable] = values[instantiationIndex];
       } else if (Object.keys(this.variableProbabilities).length > 0 && user) {
-        const sampledValue: RDF.Term = this.sampleVariableTerm(variable, user);
-        variableMapping[variable] = sampledValue;
+        const sampledValues: RDF.Term[] = this.sampleVariableTerm(variable, user, 2);
+        variableMapping[variable] = sampledValues[0];
+        alternativeMapping[variable] = sampledValues[1];
 
         // Track instantiation counts for the variable and user
-        this.updateCounter(user, variable, sampledValue.value);
+        this.updateCounter(user, variable, sampledValues[0].value);
       } else {
         throw new Error(
           `Either probabilities (${Object.keys(this.variableProbabilities).length > 0 ? 'defined' : 'undefined'}), ` +
@@ -107,8 +109,6 @@ export class QuerySequenceTemplate {
       }
     }
     const instantiatedSyntaxTree = this.instantiateSyntaxTree(this.syntaxTree, variableMapping);
-    // TODO: Remove replace prefixes and put it in JBR, as solidbench-server is a JBR thing not perse
-    // a solidbench thing.
 
     // Create an array of SelectQueries that are all slight variations of the same template
     if (instantiateRefinementPattern) {
@@ -120,6 +120,7 @@ export class QuerySequenceTemplate {
         instantiatedSyntaxTree,
         4,
         variableMapping,
+        alternativeMapping,
       );
       return {
         queries: queries.map(query => replacePrefixes(new Generator().stringify(query), this.baseUrl)),
@@ -269,15 +270,27 @@ export class QuerySequenceTemplate {
     query: SelectQuery,
     nSteps: number,
     variableMapping: Record<string, RDF.Term>,
+    alternativeMapping: Record<string, RDF.Term>,
   ): {
       queries: SelectQuery[];
       metadata: Record<string, any>[];
     } {
+    // Substitution state denoting which variables can be substituted and how many times
+    // a given variable has already been changed.
+    const stateSubstitution: Record<string, IOperatorStateSub> = {};
+    for (const [ variable, term ] of Object.entries(variableMapping)) {
+      stateSubstitution[variable] = {
+        original: term,
+        nCalls: 0,
+        active: false,
+      };
+    }
     const refinementState: IRefinementState = {
       stateFilter: this.initializeEmptyOperatorState(),
       stateQuery: this.initializeEmptyOperatorState(),
       stateOptional: this.initializeEmptyOperatorState(),
       stateUnion: this.initializeEmptyOperatorState(),
+      stateSubstitution,
     };
     const refinementSequence: SelectQuery[] = [ query ];
     const patternMetadata: Record<string, any>[] = [{}];
@@ -306,6 +319,7 @@ export class QuerySequenceTemplate {
         patternToApply,
         query,
         variableMapping,
+        alternativeMapping,
         refinementState,
       );
 
@@ -322,6 +336,7 @@ export class QuerySequenceTemplate {
     pattern: IQueryRefinementPattern,
     query: SelectQuery,
     variableMapping: Record<string, RDF.Term>,
+    alternativeMapping: Record<string, RDF.Term>,
     refinementState: IRefinementState,
   ): SelectQuery {
     if (pattern.location === undefined) {
@@ -332,10 +347,9 @@ export class QuerySequenceTemplate {
     // representation, but we'll have to change some tests (AGAIN).
     const operatorToBgp: Record<string, BgpPattern[]> = {};
     const operatorToExpression: Record<string, Expression[]> = {};
-    extractBgpPerOperator(query.where!, operatorToBgp, 'query');
+    extractBgpPerOperator(query.where!, operatorToBgp, 'bgp');
     extractExpressionPerOperator(query.where!, operatorToExpression, 'filter');
     const state = refinementState[typeToKeyMap[patternType]];
-
     if (pattern.operation === 'addition') {
       const groupPattern = operatorToBgp[patternType.toLowerCase()];
       switch (patternType) {
@@ -361,7 +375,7 @@ export class QuerySequenceTemplate {
             pattern.target,
             query,
             variableMapping,
-            state,
+            (<IOperatorState> state),
           );
           break;
         }
@@ -389,7 +403,7 @@ export class QuerySequenceTemplate {
             pattern.target,
             query,
             variableMapping,
-            state,
+            (<IOperatorState> state),
           );
           break;
         }
@@ -402,22 +416,22 @@ export class QuerySequenceTemplate {
           // Add back a triple when no target is specified
           // const state = refinementState[typeToKeyMap[patternType]];
           if (targetFilters.length === 0) {
-            targetFilters = [ this.sampleRandom(state.removedExp) ];
+            targetFilters = [ this.sampleRandom((<IOperatorState>state).removedExp) ];
           }
 
           // The triple pattern is no longer a 'removed' pattern
-          state.removedExp = state.removedExp.filter(
+          (<IOperatorState>state).removedExp = (<IOperatorState>state).removedExp.filter(
             exp => targetFilters.some(x => !this.expressionEquals(exp, x)),
           );
 
           // Add added filter to state and query
           for (const filterExpr of targetFilters) {
             query.where!.push({ type: 'filter', expression: filterExpr });
-            state.addedExp.push(filterExpr);
+            (<IOperatorState>state).addedExp.push(filterExpr);
           }
           break;
         }
-        case 'QUERY': {
+        case 'BGP': {
           const bgpToRefine = operatorToBgp[patternType.toLowerCase()][pattern.location];
           if (!bgpToRefine) {
             throw new Error(`BGP Doesn't exist at index ${pattern.location} 
@@ -446,9 +460,27 @@ export class QuerySequenceTemplate {
           );
           break;
         }
+        case 'SUB': {
+          const toReplace: string = variableMapping[pattern.target.value].value;
+          const toReplaceWith: string = alternativeMapping[pattern.target.value].value;
+          query.where = this.substitutePatterns(query.where!, toReplace, toReplaceWith);
+          const subStateTarget = (<Record<string, IOperatorStateSub>> state)[pattern.target.value];
+          subStateTarget.active = true;
+          subStateTarget.nCalls++;
+          break;
+        }
       }
     } else if (pattern.operation === 'removal') {
       switch (patternType) {
+        case 'SUB': {
+          const toReplaceWith: string = variableMapping[pattern.target.value].value;
+          const toReplace: string = alternativeMapping[pattern.target.value].value;
+          query.where = this.substitutePatterns(query.where!, toReplace, toReplaceWith);
+          const subStateTarget = (<Record<string, IOperatorStateSub>> state)[pattern.target.value];
+          subStateTarget.active = false;
+          subStateTarget.nCalls++;
+          break;
+        }
         case 'FILTER': {
           // Filters to remove are instantiated versions of target
           let filtersToRemove = pattern.target.map(t => this.instantiateExpression(t, variableMapping));
@@ -458,14 +490,14 @@ export class QuerySequenceTemplate {
               query.where!.filter(queryPattern => queryPattern.type === 'filter'),
             ).expression ];
           }
-          state.removedExp.push(...filtersToRemove);
+          (<IOperatorState>state).removedExp.push(...filtersToRemove);
           query.where = query.where!.filter((queryPattern: Pattern) => queryPattern.type !== 'filter' ||
             !filtersToRemove.some(t => this.expressionEquals(queryPattern.expression, t)));
           break;
         }
         case 'OPTIONAL':
         case 'UNION':
-        case 'QUERY': {
+        case 'BGP': {
           const bgpToRefine = operatorToBgp[patternType.toLowerCase()][pattern.location];
           if (!bgpToRefine) {
             throw new Error(`BGP Doesn't exist at index ${pattern.location} 
@@ -491,7 +523,7 @@ export class QuerySequenceTemplate {
               return true;
             });
           }
-          state.removedTps.push(...removed);
+          (<IOperatorState>state).removedTps.push(...removed);
         }
       }
     } else {
@@ -530,6 +562,20 @@ export class QuerySequenceTemplate {
           variablesInQuery,
         });
       }
+      if (pattern.type === 'SUB') {
+        const subState = refinementState[typeToKeyMap[pattern.type]];
+        const stateTargetVariable = subState[pattern.target.value];
+        if (!stateTargetVariable) {
+          throw new Error('Passed substitution pattern with target variable that can not be substituted');
+        }
+        if (stateTargetVariable.nCalls > 0 && pattern.operation === 'addition') {
+          return false;
+        }
+        if (!stateTargetVariable.active && pattern.operation === 'removal') {
+          return false;
+        }
+        return true;
+      }
       return this.isValidTriplePattern(pattern, {
         termsInOperators,
         queryTriples,
@@ -549,7 +595,7 @@ export class QuerySequenceTemplate {
   }
 
   private isValidFilterPattern(
-    pattern: FilterRefinementPattern,
+    pattern: IFilterRefinementPattern,
     context: {
       termsInOperators: Set<string>;
       queryExpressions: Expression[];
@@ -598,7 +644,7 @@ export class QuerySequenceTemplate {
   }
 
   private isValidTriplePattern(
-    pattern: OtherRefinementPattern,
+    pattern: IOtherRefinementPattern,
     context: {
       termsInOperators: Set<string>;
       queryTriples: Triple[];
@@ -639,6 +685,101 @@ export class QuerySequenceTemplate {
       return true;
     }
     return context.refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0;
+  }
+
+  public substitutePatterns(patterns: Pattern[], oldValue: string, newValue: string): Pattern[] {
+    // eslint-disable-next-line array-callback-return
+    return patterns.map((pattern) => {
+      pattern = { ...pattern };
+      switch (pattern.type) {
+        case 'query':
+          pattern.where = this.substitutePatterns(pattern.where!, oldValue, newValue);
+          return pattern;
+        case 'bgp':
+        case 'graph':
+          if ('triples' in pattern) {
+            return {
+              type: 'bgp',
+              triples: pattern.triples.map(triple => this.substituteTriple(triple, oldValue, newValue)),
+            };
+          }
+          return {
+            type: 'graph',
+            name: pattern.name,
+            patterns: this.substitutePatterns(pattern.patterns, oldValue, newValue),
+          };
+        case 'union':
+        case 'group':
+        case 'optional':
+        case 'minus':
+        case 'service':
+          return {
+            ...pattern,
+            patterns: this.substitutePatterns(pattern.patterns, oldValue, newValue),
+          };
+        case 'filter':
+        case 'bind':
+          return {
+            ...pattern,
+            expression: this.substituteExpression(pattern.expression, oldValue, newValue),
+          };
+        case 'values':
+          return pattern;
+      }
+    });
+  }
+
+  public substituteExpression(expression: Expression, oldValue: string, newValue: string): Expression {
+    if ('type' in expression) {
+      switch (expression.type) {
+        case 'group':
+        case 'graph':
+          return <Expression> {
+            ...expression,
+            patterns: this.substitutePatterns(expression.patterns, oldValue, newValue),
+          };
+        case 'bgp':
+          return <Expression> {
+            ...expression,
+            triples: expression.triples.map(triple => this.substituteTriple(triple, oldValue, newValue)),
+          };
+        case 'operation':
+        case 'functionCall':
+          return {
+            ...expression,
+            args: expression.args.map(arg => this.substituteExpression(arg, oldValue, newValue)),
+          };
+        case 'aggregate':
+          return {
+            ...expression,
+            expression: this.substituteExpression(expression.expression, oldValue, newValue),
+          };
+      }
+    } else {
+      return <Expression> this.substituteTerm(<Term> expression, oldValue, newValue);
+    }
+  }
+
+  public substituteTriple(triple: Triple, oldValue: string, newValue: string): Triple {
+    return {
+      subject: <any> this.substituteTerm(triple.subject, oldValue, newValue),
+      predicate: <any> this.substituteTerm(triple.predicate, oldValue, newValue),
+      object: <any> this.substituteTerm(triple.object, oldValue, newValue),
+    };
+  }
+
+  public substituteTerm<T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
+    term: T,
+    oldValue: string,
+    newValue: string,
+  ): T | RDF.Term {
+    if ('termType' in term && (<RDF.Term> term).termType === 'NamedNode') {
+      const termValue = (<VariableTerm> term).value;
+      if (termValue === oldValue) {
+        term.value = newValue;
+      }
+    }
+    return term;
   }
 
   private termsInOperators(operatorTriples: Record<string, Triple[][]>): Set<string> {
@@ -875,7 +1016,10 @@ export class QuerySequenceTemplate {
     };
   }
 
-  public sampleVariableTerm(variable: string, user: string): RDF.Term {
+  public sampleVariableTerm(variable: string, user: string, nSamples: number): RDF.Term[] {
+    if (Object.keys(this.variableProbabilities[variable]).length <= nSamples) {
+      throw new Error('Trying to sample more values than there are elements');
+    }
     const probabilities = this.variableProbabilities[variable];
     if (!probabilities) {
       throw new Error(`No probabilities found for variable '${variable}'`);
@@ -884,7 +1028,14 @@ export class QuerySequenceTemplate {
     if (!logits) {
       throw new Error(`No logits found for user '${user}' for variable '${variable}'`);
     }
-    return this.DF.namedNode(this.sampleTerm(logits));
+    const sampled: string[] = [];
+    while (sampled.length < nSamples) {
+      const newSample = this.sampleTerm(logits);
+      if (!sampled.includes(newSample)) {
+        sampled.push(newSample);
+      }
+    }
+    return sampled.map(sample => this.DF.namedNode(sample));
   }
 
   public sampleTerm(logits: IEntityLogits[]): string {
@@ -936,6 +1087,7 @@ export interface IRefinementState {
   stateFilter: IOperatorState;
   stateOptional: IOperatorState;
   stateUnion: IOperatorState;
+  stateSubstitution: Record<string, IOperatorStateSub>;
 }
 
 export interface IOperatorState {
@@ -945,13 +1097,21 @@ export interface IOperatorState {
   removedExp: Expression[];
 }
 
+export interface IOperatorStateSub {
+  original: RDF.Term;
+  nCalls: number;
+  active: boolean;
+}
+
 const typeToKeyMap = <const> {
   // eslint-disable-next-line ts/naming-convention
-  QUERY: 'stateQuery',
+  BGP: 'stateQuery',
   // eslint-disable-next-line ts/naming-convention
   FILTER: 'stateFilter',
   // eslint-disable-next-line ts/naming-convention
   OPTIONAL: 'stateOptional',
   // eslint-disable-next-line ts/naming-convention
   UNION: 'stateUnion',
+  // eslint-disable-next-line ts/naming-convention
+  SUB: 'stateSubstitution',
 };
