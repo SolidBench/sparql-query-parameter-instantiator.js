@@ -4,7 +4,7 @@ import type { Expression, SelectQuery, Triple } from 'sparqljs';
 import { Generator, Parser } from 'sparqljs';
 import type { IOperatorState, IRefinementState } from '../lib/QuerySequenceTemplate';
 import { QuerySequenceTemplate } from '../lib/QuerySequenceTemplate';
-import type { IQueryRefinementPattern } from '../lib/QuerySequenceTemplateProvider';
+import type { IQueryRefinementPattern, ISubRefinementPattern } from '../lib/QuerySequenceTemplateProvider';
 
 const seedrandomFn = require('seedrandom');
 
@@ -23,6 +23,8 @@ describe('QueryTemplate', () => {
     let removalPattern2: IQueryRefinementPattern;
     let removalPattern3: IQueryRefinementPattern;
     let removalPattern4: IQueryRefinementPattern;
+    let subPattern1: ISubRefinementPattern;
+    let subPattern2: ISubRefinementPattern;
     let refinementState: IRefinementState;
 
     let allPatterns: IQueryRefinementPattern[];
@@ -41,23 +43,25 @@ describe('QueryTemplate', () => {
       );
 
       additionPattern1 = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
             object: { value: 'forum', termType: 'variable' },
-          }
+          },
         ],
       };
       additionPattern2 = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: '',
         location: 0,
+        id: 1,
         target: [ ],
       };
       additionPattern3 = {
@@ -65,12 +69,13 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 2,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
             object: { value: 'forum', termType: 'variable' },
-          }
+          },
         ],
       };
 
@@ -79,6 +84,7 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 3,
         target: [
           {
             type: 'operation',
@@ -86,29 +92,31 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s'),
               DF.literal('18'),
-            ]
+            ],
           },
-        ]
+        ],
       };
 
       removalPattern1 = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: '',
         location: 0,
+        id: 4,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
             object: { value: 'forum', termType: 'variable' },
-          }
+          },
         ],
       };
       removalPattern2 = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: '',
         location: 0,
+        id: 5,
         target: [ ],
       };
       removalPattern3 = {
@@ -116,12 +124,13 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 6,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
             object: { value: 'forum', termType: 'variable' },
-          }
+          },
         ],
       };
       removalPattern4 = {
@@ -129,6 +138,7 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 7,
         target: [
           {
             type: 'operation',
@@ -136,26 +146,61 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s'),
               DF.literal('18'),
-            ]
+            ],
           },
-        ]
+        ],
       };
-      allPatterns = [ additionPattern1, additionPattern2, additionPattern3, additionPattern4, removalPattern1, removalPattern2, removalPattern3, removalPattern4            ];
+      subPattern1 = {
+        type: 'SUB',
+        id: 8,
+        operation: 'addition',
+        description: 'Substitute the person parameter in query',
+        location: 0,
+        target: { value: 'person', termType: 'Variable', equals: () => true },
+      };
+      subPattern2 = {
+        type: 'SUB',
+        id: 9,
+        operation: 'removal',
+        description: 'Substitute the person parameter in query',
+        location: 0,
+        target: { value: 'person', termType: 'Variable', equals: () => true },
+      };
+
+      allPatterns = [
+        additionPattern1,
+        additionPattern2,
+        additionPattern3,
+        additionPattern4,
+        removalPattern1,
+        removalPattern2,
+        removalPattern3,
+        removalPattern4,
+        subPattern1,
+        subPattern2,
+      ];
       refinementState = {
         stateQuery: createOperatorState(),
         stateFilter: createOperatorState(),
         stateUnion: createOperatorState(),
         stateOptional: createOperatorState(),
+        stateSubstitution: {
+          person: {
+            original: DF.namedNode('ex:s1'),
+            nCalls: 0,
+            active: false,
+          },
+        },
       };
     });
     it('should correctly filter for 1 triple pattern query', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
             object: DF.variable('o'),
-          }
+          },
         ]],
       };
       const opExpressions: Record<string, Expression[][]> = {};
@@ -165,11 +210,11 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         {},
-)).toEqual([ additionPattern1, additionPattern3 ]);
+      )).toEqual([ additionPattern1, additionPattern3, subPattern1 ]);
     });
     it('should correctly filter for 2 triple pattern query', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -190,11 +235,11 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         {},
-)).toEqual([ additionPattern1, additionPattern3, removalPattern2 ]);
+      )).toEqual([ additionPattern1, additionPattern3, removalPattern2, subPattern1 ]);
     });
     it('should correctly filter for 2 triple pattern query with tp in union', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -217,11 +262,11 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         {},
-)).toEqual([ additionPattern4, removalPattern3 ]);
+      )).toEqual([ additionPattern4, removalPattern3, subPattern1 ]);
     });
     it('should correctly filter for 2 triple pattern query with tp not in union', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -243,11 +288,11 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         {},
-)).toEqual([ additionPattern1, additionPattern3, additionPattern4 ]);
+      )).toEqual([ additionPattern1, additionPattern3, additionPattern4, subPattern1 ]);
     });
     it('should correctly filter for 2 triple pattern query with removal in query', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -268,16 +313,17 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         {},
-)).toEqual([
+      )).toEqual([
         additionPattern4,
         removalPattern1,
-        removalPattern2
+        removalPattern2,
+        subPattern1,
       ]);
     });
 
     it('should correctly filter already applied pattern in query', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -302,12 +348,12 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         {},
-)).toEqual([ additionPattern4, removalPattern1, removalPattern2 ]);
+      )).toEqual([ additionPattern4, removalPattern1, removalPattern2, subPattern1 ]);
     });
 
     it('should correctly filter already applied pattern in union with instantiation', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -335,12 +381,12 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         { '?s': DF.namedNode('ex:s1') },
-      )).toEqual([ additionPattern4, removalPattern3 ]);
+      )).toEqual([ additionPattern4, removalPattern3, subPattern1 ]);
     });
 
     it('should correctly filter for query with removed triples with instantiation', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -361,13 +407,13 @@ describe('QueryTemplate', () => {
         opExpressions,
         allPatterns,
         refinementState,
-{ '?s': DF.namedNode('ex:s1') },
-      )).toEqual([ additionPattern1, additionPattern2, additionPattern3 ]);
+        { '?s': DF.namedNode('ex:s1') },
+      )).toEqual([ additionPattern1, additionPattern2, additionPattern3, subPattern1 ]);
     });
 
     it('should correctly filter already added filter expression', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -383,7 +429,7 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s1'),
               DF.literal('18'),
-            ]
+            ],
           },
           {
             type: 'operation',
@@ -391,7 +437,7 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s'),
               DF.literal('18'),
-            ]
+            ],
           },
         ]],
       };
@@ -402,12 +448,12 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         {},
-)).toEqual([ additionPattern1, additionPattern3, removalPattern4 ]);
+      )).toEqual([ additionPattern1, additionPattern3, removalPattern4, subPattern1 ]);
     });
 
     it('should correctly filter already added filter expression with instantiation', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -423,7 +469,7 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s1'),
               DF.literal('18'),
-            ]
+            ],
           },
           {
             type: 'operation',
@@ -431,7 +477,7 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s'),
               DF.literal('18'),
-            ]
+            ],
           },
         ]],
       };
@@ -442,12 +488,12 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         { '?s1': DF.namedNode('ex:s2') },
-)).toEqual([ additionPattern1, additionPattern3, removalPattern4 ]);
+      )).toEqual([ additionPattern1, additionPattern3, removalPattern4, subPattern1 ]);
     });
 
     it('should correctly filter for query with removed filter expressions', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
-        query: [[
+        bgp: [[
           {
             subject: DF.namedNode('ex:s1'),
             predicate: DF.variable('p'),
@@ -468,7 +514,7 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s'),
               DF.literal('18'),
-            ]
+            ],
           },
         ]],
       };
@@ -478,7 +524,7 @@ describe('QueryTemplate', () => {
         args: [
           DF.variable('s'),
           DF.literal('56'),
-        ]
+        ],
       });
 
       // Pattern that adds back a random removed expression
@@ -487,6 +533,7 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
         ],
       };
@@ -497,20 +544,124 @@ describe('QueryTemplate', () => {
         [ ...allPatterns, additionPattern5 ],
         refinementState,
         {},
-)).toEqual([ additionPattern1, additionPattern3, removalPattern2, removalPattern4, additionPattern5 ]);
+      )).toEqual(
+        [ additionPattern1, additionPattern3, removalPattern2, removalPattern4, subPattern1, additionPattern5 ],
+      );
+    });
+
+    it('should correctly filter for query with already applied substitution', () => {
+      const operatorTriplePatterns: Record<string, Triple[][]> = {
+        bgp: [[
+          {
+            subject: DF.namedNode('ex:s1'),
+            predicate: DF.variable('p'),
+            object: DF.variable('o'),
+          },
+          {
+            subject: DF.variable('s'),
+            predicate: DF.namedNode('p1'),
+            object: DF.variable('o'),
+          },
+        ]],
+      };
+      const opExpressions: Record<string, Expression[][]> = {};
+      refinementState.stateSubstitution = {
+        person: {
+          original: DF.namedNode('ex:s1'),
+          nCalls: 1,
+          active: true,
+        },
+      };
+      expect(template.findValidRefinementPatterns(
+        operatorTriplePatterns,
+        opExpressions,
+        allPatterns,
+        refinementState,
+        {},
+      )).toEqual(
+        [ additionPattern1, additionPattern3, additionPattern4, removalPattern2, subPattern2 ],
+      );
+    });
+    it('should correctly filter for query with already applied and removed substitution', () => {
+      const operatorTriplePatterns: Record<string, Triple[][]> = {
+        bgp: [[
+          {
+            subject: DF.namedNode('ex:s1'),
+            predicate: DF.variable('p'),
+            object: DF.variable('o'),
+          },
+          {
+            subject: DF.variable('s'),
+            predicate: DF.namedNode('p1'),
+            object: DF.variable('o'),
+          },
+        ]],
+      };
+      const opExpressions: Record<string, Expression[][]> = {};
+      refinementState.stateSubstitution = {
+        person: {
+          original: DF.namedNode('ex:s1'),
+          nCalls: 2,
+          active: false,
+        },
+      };
+      expect(template.findValidRefinementPatterns(
+        operatorTriplePatterns,
+        opExpressions,
+        allPatterns,
+        refinementState,
+        {},
+      )).toEqual(
+        [ additionPattern1, additionPattern3, additionPattern4, removalPattern2 ],
+      );
+    });
+    it('should correctly error for query with substitution state not containing the variable to substitute', () => {
+      const operatorTriplePatterns: Record<string, Triple[][]> = {
+        bgp: [[
+          {
+            subject: DF.namedNode('ex:s1'),
+            predicate: DF.variable('p'),
+            object: DF.variable('o'),
+          },
+          {
+            subject: DF.variable('s'),
+            predicate: DF.namedNode('p1'),
+            object: DF.variable('o'),
+          },
+        ]],
+      };
+      const opExpressions: Record<string, Expression[][]> = {};
+      refinementState.stateSubstitution = {
+        variable: {
+          original: DF.namedNode('ex:s1'),
+          nCalls: 2,
+          active: false,
+        },
+      };
+      expect(() => template.findValidRefinementPatterns(
+        operatorTriplePatterns,
+        opExpressions,
+        allPatterns,
+        refinementState,
+        {},
+      )).toThrow('Passed substitution pattern with target variable that can not be substituted');
     });
   });
 
   describe('applyRefinementPattern', () => {
     let variableMappings: Record<string, RDF.Term[]>;
+    let variableMappingsAlternative: Record<string, RDF.Term[]>;
+
     let refinementState: IRefinementState;
     beforeEach(() => {
       variableMappings = { s: [ DF.namedNode('ex:s1') ]};
+      variableMappingsAlternative = { s: [ DF.namedNode('ex:s2') ]};
       refinementState = {
         stateQuery: createOperatorState(),
         stateFilter: createOperatorState(),
         stateUnion: createOperatorState(),
         stateOptional: createOperatorState(),
+        stateSubstitution: {},
       };
     });
     it('should add triple to simple bgp with wildcard', () => {
@@ -518,25 +669,32 @@ describe('QueryTemplate', () => {
                 ?s ?p ?o
             }`;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: 'Add triple for the person being a moderator of a forum',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' }
+            object: { value: 'forum', termType: 'variable' },
           },
-        ]
+        ],
       };
 
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT * WHERE {
@@ -550,24 +708,31 @@ describe('QueryTemplate', () => {
                 ?s ?p ?o
             }`;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: 'Add triple for the person being a moderator of a forum',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' }
+            object: { value: 'forum', termType: 'variable' },
           },
-        ]
+        ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT ?o ?forum WHERE {
@@ -581,24 +746,31 @@ describe('QueryTemplate', () => {
                 ?s ?p ?o
             }`;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: 'Add triple for the person being a moderator of a forum',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'literal', termType: 'literal' }
+            object: { value: 'literal', termType: 'literal' },
           },
-        ]
+        ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT ?o WHERE {
@@ -617,24 +789,31 @@ describe('QueryTemplate', () => {
                 }
             }`;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: 'Add triple for the person being a moderator of a forum',
         location: 1,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' }
+            object: { value: 'forum', termType: 'variable' },
           },
-        ]
+        ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT ?o ?forum WHERE {
@@ -657,21 +836,27 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: 'Add union triple for the person being a moderator of a forum',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' }
+            object: { value: 'forum', termType: 'variable' },
           },
-        ]
+        ],
       };
-
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT * WHERE {
@@ -681,7 +866,6 @@ describe('QueryTemplate', () => {
   {  }
 }`,
       );
-
     });
     it('should add new union operator to query (second position)', () => {
       const queryString = ` SELECT * WHERE {
@@ -692,21 +876,28 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: 'Add union triple for the person being a moderator of a forum',
         location: 1,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' }
+            object: { value: 'forum', termType: 'variable' },
           },
-        ]
+        ],
       };
 
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT * WHERE {
@@ -733,21 +924,29 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: 'Add union triple for the person being a moderator of a forum',
         location: 2,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' }
+            object: { value: 'forum', termType: 'variable' },
           },
-        ]
+        ],
       };
 
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
+
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
 `SELECT * WHERE {
@@ -763,7 +962,6 @@ describe('QueryTemplate', () => {
   { ?x ?p ?o. }
 }`,
       );
-
     });
     it('should add new optional operator to query', () => {
       const queryString = ` SELECT * WHERE {
@@ -774,21 +972,28 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: 'Add optional triple for the person being a moderator of a forum',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' }
+            object: { value: 'forum', termType: 'variable' },
           },
-        ]
+        ],
       };
 
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT * WHERE {
@@ -808,21 +1013,27 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: 'Add optional triple for the person being a moderator of a forum',
         location: 1,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' }
+            object: { value: 'forum', termType: 'variable' },
           },
-        ]
+        ],
       };
-
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT * WHERE {
@@ -841,22 +1052,29 @@ describe('QueryTemplate', () => {
                 ?x ?o ?b
             }`;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: 'Remove random triple',
         location: 0,
+        id: 0,
         target: [ ],
       };
 
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
 
-      jest.spyOn((<any> input.template, 'rng').mockImplementation().mockReturnValue(0.99);
+      jest.spyOn(<any> input.template, 'rng').mockImplementation().mockReturnValue(0.99);
 
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT * WHERE { <ex:s1> ?p ?o. }`,
@@ -868,26 +1086,31 @@ describe('QueryTemplate', () => {
                 ?x ?o ?b
             }`;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: 'Remove random triple',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'p', termType: 'variable' },
             object: { value: 'o', termType: 'variable' },
-          }
+          },
         ],
       };
-
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
-
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT * WHERE { ?x ?o ?b. }`,
@@ -905,22 +1128,28 @@ describe('QueryTemplate', () => {
             }
             `;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: 'Remove random triple',
         location: 1,
+        id: 0,
         target: [
         ],
       };
-
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
-      jest.spyOn((<any> input.template, 'rng').mockImplementation().mockReturnValue(0.99);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
+      jest.spyOn(<any> input.template, 'rng').mockImplementation().mockReturnValue(0.99);
 
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
 `SELECT * WHERE {
@@ -941,26 +1170,31 @@ describe('QueryTemplate', () => {
             }
             `;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: 'Remove random triple',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'p', termType: 'variable' },
             object: { value: 'o', termType: 'variable' },
-          }
+          },
         ],
       };
-
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
-
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
 `SELECT * WHERE {
@@ -979,22 +1213,27 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'p', termType: 'variable' },
             object: { value: 'o', termType: 'variable' },
-          }
+          },
         ],
       };
-
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
-
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
       expect(new Generator().stringify(transformed)).toBe(
@@ -1015,22 +1254,27 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 1,
+        id: 0,
         target: [
           {
             subject: { value: 'x', termType: 'variable' },
             predicate: { value: 'y', termType: 'variable' },
             object: { value: 'z', termType: 'variable' },
-          }
+          },
         ],
       };
-
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
-
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
       expect(new Generator().stringify(transformed)).toBe(
@@ -1059,20 +1303,27 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 2,
+        id: 0,
         target: [
           {
             subject: { value: 'z', termType: 'variable' },
             predicate: { value: 'k', termType: 'variable' },
             object: { value: 'o', termType: 'variable' },
-          }
+          },
         ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
       expect(new Generator().stringify(transformed)).toBe(
@@ -1101,6 +1352,7 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
@@ -1111,15 +1363,21 @@ describe('QueryTemplate', () => {
             subject: { value: 'x', termType: 'variable' },
             predicate: { value: 'y', termType: 'variable' },
             object: { value: 'z', termType: 'variable' },
-          }
+          },
         ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
             `SELECT * WHERE {
@@ -1140,6 +1398,7 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             type: 'operation',
@@ -1147,16 +1406,22 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('salary'),
               DF.literal('50000', DF.namedNode('http://www.w3.org/2001/XMLSchema#decimal')),
-            ]
+            ],
           },
-        ]
+        ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
       expect(new Generator().stringify(transformed)).toBe(
@@ -1177,6 +1442,7 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             type: 'operation',
@@ -1184,9 +1450,9 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('salary'),
               DF.literal('50000', DF.namedNode('http://www.w3.org/2001/XMLSchema#decimal')),
-            ]
+            ],
           },
-        ]
+        ],
       };
       // Simulate like this filter was previously removed and now will be added back
       refinementState.stateFilter.removedExp = [{
@@ -1195,14 +1461,20 @@ describe('QueryTemplate', () => {
         args: [
           DF.variable('salary'),
           DF.literal('50000', DF.namedNode('http://www.w3.org/2001/XMLSchema#decimal')),
-        ]
+        ],
       }];
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
       expect(new Generator().stringify(transformed)).toBe(
@@ -1225,6 +1497,7 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             type: 'operation',
@@ -1232,16 +1505,22 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('salary'),
               DF.literal('50000', DF.namedNode('http://www.w3.org/2001/XMLSchema#decimal')),
-            ]
+            ],
           },
-        ]
+        ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
       expect(new Generator().stringify(transformed)).toBe(
@@ -1266,6 +1545,7 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             type: 'operation',
@@ -1273,16 +1553,22 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('o'),
               DF.literal('5'),
-            ]
+            ],
           },
-        ]
+        ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
       expect(new Generator().stringify(transformed)).toBe(
@@ -1299,9 +1585,9 @@ describe('QueryTemplate', () => {
           args: [
             DF.variable('o'),
             DF.literal('5'),
-          ]
+          ],
         },
-);
+      );
     });
     it('should remove a random filter when no target is given', () => {
       const queryString = `SELECT * WHERE {
@@ -1315,22 +1601,29 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 0,
         target: [
         ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
             `SELECT * WHERE {
   ?salary ?p ?o.
   FILTER(?o > "5")
 }`,
-      );        
+      );
     });
     it('should remove the filter expression when no filters are left', () => {
       const queryString = `SELECT * WHERE {
@@ -1342,6 +1635,7 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             type: 'operation',
@@ -1349,16 +1643,22 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('o'),
               DF.literal('5'),
-            ]
+            ],
           },
-        ]
+        ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
             `SELECT * WHERE { ?salary ?p ?o. }`,
@@ -1376,25 +1676,31 @@ describe('QueryTemplate', () => {
             }
             `;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: 'Remove triple',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'p', termType: 'variable' },
             object: { value: 'o', termType: 'variable' },
-          }
+          },
         ],
       };
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
-
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
       expect(new Generator().stringify(transformed)).toBe(
                 `SELECT ?x WHERE {
@@ -1416,35 +1722,39 @@ describe('QueryTemplate', () => {
             }
             `;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: 'Remove triple',
         location: 1,
+        id: 0,
         target: [
           {
             subject: { value: 'x', termType: 'variable' },
             predicate: { value: 'y', termType: 'variable' },
             object: { value: 'z', termType: 'variable' },
-          }
+          },
         ],
       };
-
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
-
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
-      console.log(new Generator().stringify(transformed));
       expect(new Generator().stringify(transformed)).toBe(
 `SELECT ?p WHERE {
   { SELECT * WHERE { <ex:s1> ?p ?o. } }
   
 }`,
-);
+      );
     });
 
     it('should not remove variable if the variable is used elsewhere', () => {
@@ -1455,31 +1765,154 @@ describe('QueryTemplate', () => {
             }
             `;
       const refinementPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: 'Remove triple',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 'x', termType: 'variable' },
             predicate: { value: 'y', termType: 'variable' },
             object: { value: 'z', termType: 'variable' },
-          }
+          },
         ],
       };
 
-      const input = createRefinementInput(queryString, variableMappings, refinementPattern);
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
 
       const transformed = input.template.applyRefinementPattern(
         refinementPattern,
         input.query,
         input.variableMapping,
-        refinementState
+        input.variableMappingAlternative,
+        refinementState,
       );
 
       expect(new Generator().stringify(transformed)).toBe(
 `SELECT ?x WHERE { ?x ?y1 ?z1. }`,
-);
+      );
+    });
+    it('should correctly substitute template values in query', () => {
+      const queryString = `SELECT ?o WHERE {
+    ?s ?p ?o
+    {
+        SELECT * WHERE {
+            ?s ?p1 <ex:o1>
+        }
+    }
+
+    UNION {
+        ?s <ex:relatedTo> ?x
+    }
+
+    OPTIONAL {
+        ?s <ex:hasProperty> ?prop
+    }
+
+    FILTER(STRSTARTS(STR(?s), "http://example.org/resource/"))
+}`;
+      const refinementPattern: IQueryRefinementPattern = {
+        type: 'SUB',
+        id: 8,
+        operation: 'addition',
+        description: 'Substitute the person parameter in query',
+        location: 0,
+        target: { value: 's', termType: 'Variable', equals: () => true },
+      };
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
+      refinementState.stateSubstitution = {
+        s: {
+          original: DF.namedNode('ex:s1'),
+          nCalls: 0,
+          active: false,
+        },
+      };
+      const transformed = input.template.applyRefinementPattern(
+        refinementPattern,
+        input.query,
+        input.variableMapping,
+        input.variableMappingAlternative,
+        refinementState,
+      );
+      expect(new Generator().stringify(transformed)).toBe(
+`SELECT ?o WHERE {
+  <ex:s2> ?p ?o.
+  { SELECT * WHERE { <ex:s2> ?p1 <ex:o1>. } }
+  UNION
+  { <ex:s2> <ex:relatedTo> ?x. }
+  OPTIONAL { <ex:s2> <ex:hasProperty> ?prop. }
+  FILTER(STRSTARTS(STR(<ex:s2>), "http://example.org/resource/"))
+}`,
+      );
+    });
+    it('should correctly substitute back the original template values in query for removal pattern', () => {
+      const queryString = `SELECT ?o WHERE {
+    ?s ?p ?o
+    {
+        SELECT * WHERE {
+            ?s ?p1 <ex:o1>
+        }
+    }
+
+    UNION {
+        ?s <ex:relatedTo> ?x
+    }
+
+    OPTIONAL {
+        ?s <ex:hasProperty> ?prop
+    }
+
+    FILTER(STRSTARTS(STR(?s), "http://example.org/resource/"))
+}`;
+      const refinementPattern: IQueryRefinementPattern = {
+        type: 'SUB',
+        id: 8,
+        operation: 'removal',
+        description: 'Substitute the person parameter in query',
+        location: 0,
+        target: { value: 's', termType: 'Variable', equals: () => true },
+      };
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
+      refinementState.stateSubstitution = {
+        s: {
+          original: DF.namedNode('ex:s1'),
+          nCalls: 1,
+          active: true,
+        },
+      };
+      const transformed = input.template.applyRefinementPattern(
+        refinementPattern,
+        input.query,
+        input.variableMapping,
+        input.variableMappingAlternative,
+        refinementState,
+      );
+      expect(new Generator().stringify(transformed)).toBe(
+`SELECT ?o WHERE {
+  <ex:s1> ?p ?o.
+  { SELECT * WHERE { <ex:s1> ?p1 <ex:o1>. } }
+  UNION
+  { <ex:s1> <ex:relatedTo> ?x. }
+  OPTIONAL { <ex:s1> <ex:hasProperty> ?prop. }
+  FILTER(STRSTARTS(STR(<ex:s1>), "http://example.org/resource/"))
+}`,
+      );
     });
   });
 
@@ -1489,31 +1922,34 @@ describe('QueryTemplate', () => {
                 ?s ?p ?o .
             }`;
       const additionPattern1: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
             object: { value: 'forum', termType: 'variable' },
-          }
+          },
         ],
       };
       const additionPattern2: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: '',
         location: 0,
+        id: 1,
         target: [ ],
       };
 
       const removalPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: '',
         location: 0,
+        id: 2,
         target: [
 
         ],
@@ -1523,14 +1959,15 @@ describe('QueryTemplate', () => {
         .mockReturnValueOnce(0.5)
         .mockReturnValueOnce(0.1);
 
-      const input = createRefinementInput(queryString, {}, additionPattern1, mockRng);
+      const input = createRefinementInput(queryString, {}, {}, additionPattern1, mockRng);
       const refinedSequence = input.template.createRefinementSequence(
         [ additionPattern1, additionPattern2, removalPattern ],
         input.query,
         2,
         {},
+        {},
       );
-      const patternToQuery = refinedSequence.map(transformed => new Generator().stringify(transformed));
+      const patternToQuery = refinedSequence.queries.map(transformed => new Generator().stringify(transformed));
       expect(patternToQuery).toEqual(
         [
 `SELECT * WHERE { ?s ?p ?o. }`,
@@ -1539,7 +1976,7 @@ describe('QueryTemplate', () => {
     <snvoc:isModeratorOf> ?forum.
 }`,
 `SELECT * WHERE { ?s <snvoc:isModeratorOf> ?forum. }`,
-        ]
+        ],
       );
     });
     it('should correctly create sequence for union with instantiation value', () => {
@@ -1551,12 +1988,13 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
             object: { value: 'forum', termType: 'variable' },
-          }
+          },
         ],
       };
       const additionPattern2: IQueryRefinementPattern = {
@@ -1564,12 +2002,13 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 1,
+        id: 1,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
             object: { value: 'forum', termType: 'variable' },
-          }
+          },
         ],
       };
       const removalPattern: IQueryRefinementPattern = {
@@ -1577,12 +2016,13 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 1,
+        id: 2,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
             object: { value: 'forum', termType: 'variable' },
-          }
+          },
         ],
       };
       const mockRng = jest.fn()
@@ -1591,14 +2031,21 @@ describe('QueryTemplate', () => {
         .mockReturnValueOnce(0.1)
         .mockReturnValueOnce(0.8);
 
-      const input = createRefinementInput(queryString, { s: [ DF.namedNode('foaf:person') ]}, additionPattern1, mockRng);
+      const input = createRefinementInput(
+        queryString,
+        { s: [ DF.namedNode('foaf:person') ]},
+        { s: [ DF.namedNode('foaf:person2') ]},
+        additionPattern1,
+        mockRng,
+      );
       const refinedSequence = input.template.createRefinementSequence(
         [ additionPattern1, additionPattern2, removalPattern ],
         input.query,
         3,
         input.variableMapping,
+        input.variableMappingAlternative,
       );
-      const patternToQuery = refinedSequence.map(transformed => new Generator().stringify(transformed));
+      const patternToQuery = refinedSequence.queries.map(transformed => new Generator().stringify(transformed));
       expect(patternToQuery).toEqual(
         [
 `SELECT * WHERE { <foaf:person> ?p ?o. }`,
@@ -1620,7 +2067,7 @@ describe('QueryTemplate', () => {
   UNION
   {  }
 }`,
-        ]
+        ],
       );
     });
     it('should correctly create sequence for filter', () => {
@@ -1633,6 +2080,7 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             type: 'operation',
@@ -1640,15 +2088,16 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s1'),
               DF.literal('60'),
-            ]
+            ],
           },
-        ]
+        ],
       };
       const additionPattern2: IQueryRefinementPattern = {
         type: 'FILTER',
         operation: 'addition',
         description: '',
         location: 0,
+        id: 1,
         target: [
           {
             type: 'operation',
@@ -1656,15 +2105,16 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s1'),
               DF.literal('18'),
-            ]
+            ],
           },
-        ]
+        ],
       };
       const additionPatternInvalid: IQueryRefinementPattern = {
         type: 'FILTER',
         operation: 'addition',
         description: '',
         location: 0,
+        id: 2,
         target: [
           {
             type: 'operation',
@@ -1672,9 +2122,9 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s'),
               DF.literal('80'),
-            ]
+            ],
           },
-        ]
+        ],
       };
 
       const removalPattern1: IQueryRefinementPattern = {
@@ -1682,6 +2132,7 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 3,
         target: [
           {
             type: 'operation',
@@ -1689,15 +2140,16 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s1'),
               DF.literal('18'),
-            ]
+            ],
           },
-        ]
+        ],
       };
       const removalPattern2: IQueryRefinementPattern = {
         type: 'FILTER',
         operation: 'removal',
         description: '',
         location: 0,
+        id: 4,
         target: [
         ],
       };
@@ -1707,14 +2159,23 @@ describe('QueryTemplate', () => {
         .mockReturnValueOnce(0.6)
         .mockReturnValueOnce(0.1);
 
-      const input = createRefinementInput(queryString, { s: [ DF.namedNode('foaf:person') ]}, additionPattern1, mockRng);
+      const input = createRefinementInput(
+        queryString,
+        { s: [ DF.namedNode('foaf:person') ]},
+        { s: [ DF.namedNode('foaf:person2') ]},
+        additionPattern1,
+        mockRng,
+      );
       const refinedSequence = input.template.createRefinementSequence(
         [ additionPattern1, additionPattern2, additionPatternInvalid, removalPattern1, removalPattern2 ],
         input.query,
         3,
         input.variableMapping,
+        input.variableMappingAlternative,
       );
-      const patternToQuery = refinedSequence.map(transformed => new Generator().stringify(transformed));
+      const patternToQuery = refinedSequence.queries.map(
+        (transformed: SelectQuery) => new Generator().stringify(transformed),
+      );
       expect(patternToQuery).toEqual(
         [
 `SELECT * WHERE {
@@ -1737,7 +2198,7 @@ describe('QueryTemplate', () => {
   ?s1 ?p1 ?o1.
   FILTER(?s1 < "60")
 }`,
-]
+        ],
       );
     });
     it('should correctly create sequence for optional', () => {
@@ -1750,12 +2211,13 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'foaf:name', termType: 'namedNode' },
             object: { value: 'name', termType: 'variable' },
-          }
+          },
         ],
       };
       const additionPattern2: IQueryRefinementPattern = {
@@ -1763,12 +2225,13 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 1,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'foaf:email', termType: 'namedNode' },
             object: { value: 'email', termType: 'variable' },
-          }
+          },
         ],
       };
       const removalPattern: IQueryRefinementPattern = {
@@ -1776,12 +2239,13 @@ describe('QueryTemplate', () => {
         operation: 'removal',
         description: '',
         location: 0,
+        id: 2,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'foaf:name', termType: 'namedNode' },
             object: { value: 'name', termType: 'variable' },
-          }
+          },
         ],
       };
       const mockRng = jest.fn()
@@ -1789,14 +2253,21 @@ describe('QueryTemplate', () => {
         .mockReturnValueOnce(0.2)
         .mockReturnValue(0.4);
 
-      const input = createRefinementInput(queryString, { s: [ DF.namedNode('foaf:person') ]}, additionPattern1, mockRng);
+      const input = createRefinementInput(
+        queryString,
+        { s: [ DF.namedNode('foaf:person') ]},
+        { s: [ DF.namedNode('foaf:person2') ]},
+        additionPattern1,
+        mockRng,
+      );
       const refinedSequence = input.template.createRefinementSequence(
         [ additionPattern1, additionPattern2, removalPattern ],
         input.query,
         3,
         input.variableMapping,
+        input.variableMappingAlternative,
       );
-      const patternToQuery = refinedSequence.map(transformed => new Generator().stringify(transformed));
+      const patternToQuery = refinedSequence.queries.map(transformed => new Generator().stringify(transformed));
       expect(patternToQuery).toEqual(
         [
 `SELECT * WHERE {
@@ -1821,7 +2292,7 @@ describe('QueryTemplate', () => {
   ?s1 ?p1 ?o1.
   OPTIONAL { <foaf:person> <foaf:email> ?email. }
 }`,
-        ]
+        ],
       );
     });
     it('should correctly create sequence for mixed refinements', () => {
@@ -1830,16 +2301,17 @@ describe('QueryTemplate', () => {
                 ?s1 ?p1 ?o1 .
             }`;
       const bgpAddition: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'addition',
         description: '',
         location: 0,
+        id: 0,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'rdf:type', termType: 'namedNode' },
             object: { value: 'foaf:Person', termType: 'namedNode' },
-          }
+          },
         ],
       };
       const filterAddition: IQueryRefinementPattern = {
@@ -1847,6 +2319,7 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 1,
         target: [
           {
             type: 'operation',
@@ -1854,21 +2327,22 @@ describe('QueryTemplate', () => {
             args: [
               DF.variable('s1'),
               DF.literal('18'),
-            ]
+            ],
           },
-        ]
+        ],
       };
       const optionalAddition: IQueryRefinementPattern = {
         type: 'OPTIONAL',
         operation: 'addition',
         description: '',
         location: 0,
+        id: 2,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'foaf:name', termType: 'namedNode' },
             object: { value: 'name', termType: 'variable' },
-          }
+          },
         ],
       };
       const unionAddition: IQueryRefinementPattern = {
@@ -1876,25 +2350,27 @@ describe('QueryTemplate', () => {
         operation: 'addition',
         description: '',
         location: 0,
+        id: 3,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'rdf:type', termType: 'namedNode' },
             object: { value: 'foaf:Person', termType: 'namedNode' },
-          }
+          },
         ],
       };
       const removalPattern: IQueryRefinementPattern = {
-        type: 'QUERY',
+        type: 'BGP',
         operation: 'removal',
         description: '',
         location: 0,
+        id: 4,
         target: [
           {
             subject: { value: 's', termType: 'variable' },
             predicate: { value: 'rdf:type', termType: 'namedNode' },
             object: { value: 'foaf:Person', termType: 'namedNode' },
-          }
+          },
         ],
       };
       const mockRng = jest.fn()
@@ -1904,14 +2380,21 @@ describe('QueryTemplate', () => {
         .mockReturnValueOnce(0.99)
         .mockReturnValueOnce(0);
 
-      const input = createRefinementInput(queryString, { s: [ DF.namedNode('foaf:person') ]}, bgpAddition, mockRng);
+      const input = createRefinementInput(
+        queryString,
+        { s: [ DF.namedNode('foaf:person') ]},
+        { s: [ DF.namedNode('foaf:person2') ]},
+        bgpAddition,
+        mockRng,
+      );
       const refinedSequence = input.template.createRefinementSequence(
         [ bgpAddition, filterAddition, optionalAddition, unionAddition, removalPattern ],
         input.query,
         5,
         input.variableMapping,
+        input.variableMappingAlternative,
       );
-      const patternToQuery = refinedSequence.map(transformed => new Generator().stringify(transformed));
+      const patternToQuery = refinedSequence.queries.map(transformed => new Generator().stringify(transformed));
       expect(patternToQuery).toEqual(
         [
 `SELECT * WHERE {
@@ -1951,7 +2434,7 @@ describe('QueryTemplate', () => {
   {  }
   FILTER(?s1 > "18")
 }`,
-        ]
+        ],
       );
     });
   });
@@ -1965,7 +2448,13 @@ describe('QueryTemplate', () => {
  * @param refinementPattern The refinement pattern used to create alternative version of query
  * @returns input data required to apply refinement
  */
-function createRefinementInput(query: string, variableMappings: Record<string, RDF.Term[]>, refinementPattern: IQueryRefinementPattern, rngParam?: any): IRefinementInput {
+function createRefinementInput(
+  query: string,
+  variableMappings: Record<string, RDF.Term[]>,
+  variableMappingsAlternative: Record<string, RDF.Term[]>,
+  refinementPattern: IQueryRefinementPattern,
+  rngParam?: any,
+): IRefinementInput {
   const template = new QuerySequenceTemplate(
     new Parser().parse(query),
     variableMappings,
@@ -1980,10 +2469,17 @@ function createRefinementInput(query: string, variableMappings: Record<string, R
       .filter(([ _, arr ]) => arr.length > 0)
       .map(([ key, arr ]) => [ key, arr[0] ]),
   );
+  const singleVariableMappingAlternative = Object.fromEntries(
+    Object.entries(variableMappingsAlternative)
+      .filter(([ _, arr ]) => arr.length > 0)
+      .map(([ key, arr ]) => [ key, arr[0] ]),
+  );
+
   const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(new Parser().parse(query), singleVariableMapping);
   return {
     query: syntaxTreeQuery,
     variableMapping: singleVariableMapping,
+    variableMappingAlternative: singleVariableMappingAlternative,
     template,
   };
 }
@@ -1997,8 +2493,9 @@ function createOperatorState(): IOperatorState {
   };
 }
 
-export interface IRefinementInput {
+interface IRefinementInput {
   query: SelectQuery;
   variableMapping: Record<string, RDF.Term>;
+  variableMappingAlternative: Record<string, RDF.Term>;
   template: QuerySequenceTemplate;
 }

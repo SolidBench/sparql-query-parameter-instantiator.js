@@ -1,6 +1,6 @@
 import type * as RDF from '@rdfjs/types';
 import { cloneDeep } from 'lodash';
-import { DataFactory, NamedNode } from 'rdf-data-factory';
+import { DataFactory } from 'rdf-data-factory';
 
 // eslint-disable-next-line ts/no-require-imports
 import seedrandom = require('seedrandom');
@@ -39,14 +39,12 @@ import {
   extractExpressionPerOperator,
   extractTriplePatternsPerOperator,
   getVariablesInExpression,
-  replacePrefixes,
 } from './utils/RefinementSequenceUtils';
 
 /**
  * Data object for a query template.
  */
 export class QuerySequenceTemplate {
-  private readonly baseUrl;
   private readonly syntaxTree: SparqlQuery;
   private readonly variableMappings: Record<string, RDF.Term[]>;
   private readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
@@ -57,14 +55,12 @@ export class QuerySequenceTemplate {
   public readonly instantiationCounts: Record<string, Record<string, Record<string, number>>> = {};
 
   public constructor(
-    baseUrl: string,
     syntaxTree: SparqlQuery,
     variableMappings: Record<string, RDF.Term[]>,
     variableProbabilities: Record<string, Record<string, IEntityLogits[]>>,
     rng: seedrandom.PRNG,
     refinementPatterns?: IQueryRefinementPattern[],
   ) {
-    this.baseUrl = baseUrl;
     this.syntaxTree = syntaxTree;
     this.variableMappings = variableMappings;
     this.variableProbabilities = variableProbabilities;
@@ -123,13 +119,13 @@ export class QuerySequenceTemplate {
         alternativeMapping,
       );
       return {
-        queries: queries.map(query => replacePrefixes(new Generator().stringify(query), this.baseUrl)),
+        queries: queries.map(query => new Generator().stringify(query)),
         patternMetadata: metadata,
       };
     }
     // Instantiate syntax tree
     return {
-      queries: [ replacePrefixes(new Generator().stringify(instantiatedSyntaxTree), this.baseUrl) ],
+      queries: [ new Generator().stringify(instantiatedSyntaxTree) ],
       patternMetadata: [{}],
     };
   }
@@ -303,12 +299,10 @@ export class QuerySequenceTemplate {
       );
       const operatorExpressions: Record<string, Expression[][]> = {};
       extractExpressionPerOperator(query.where!, operatorExpressions, 'filter');
-      const termsInOperators = this.termsInOperators(operatorTriples);
 
       const validPatterns = this.findValidRefinementPatterns(
         operatorTriples,
         operatorExpressions,
-        termsInOperators,
         refinementPatterns,
         refinementState,
         variableMapping,
@@ -535,7 +529,6 @@ export class QuerySequenceTemplate {
   public findValidRefinementPatterns(
     operatorTriplePatterns: Record<string, Triple[][]>,
     operatorExpressions: Record<string, Expression[][]>,
-    termsInOperators: Set<string>,
     refinementPatterns: IQueryRefinementPattern[],
     refinementState: IRefinementState,
     variableMapping: Record<string, RDF.Term>,
@@ -553,7 +546,6 @@ export class QuerySequenceTemplate {
     return refinementPatterns.filter((pattern) => {
       if (pattern.type === 'FILTER') {
         return this.isValidFilterPattern(pattern, {
-          termsInOperators,
           queryExpressions,
           operatorExpressionsFlattened,
           refinementState,
@@ -577,7 +569,6 @@ export class QuerySequenceTemplate {
         return true;
       }
       return this.isValidTriplePattern(pattern, {
-        termsInOperators,
         queryTriples,
         operatorTriplePatternsFlattened,
         refinementState,
@@ -597,7 +588,6 @@ export class QuerySequenceTemplate {
   private isValidFilterPattern(
     pattern: IFilterRefinementPattern,
     context: {
-      termsInOperators: Set<string>;
       queryExpressions: Expression[];
       operatorExpressionsFlattened: Record<string, Expression[]>;
       refinementState: IRefinementState;
@@ -646,7 +636,6 @@ export class QuerySequenceTemplate {
   private isValidTriplePattern(
     pattern: IOtherRefinementPattern,
     context: {
-      termsInOperators: Set<string>;
       queryTriples: Triple[];
       operatorTriplePatternsFlattened: Record<string, Triple[]>;
       refinementState: IRefinementState;
@@ -671,7 +660,7 @@ export class QuerySequenceTemplate {
       }
 
       // If we want to remove a triple pattern from the query it shouldn't leave an empty one
-      if (patternType === 'query' &&
+      if (patternType === 'bgp' &&
         context.operatorTriplePatternsFlattened[patternType].length - targets.length <= 0) {
         return false;
       }

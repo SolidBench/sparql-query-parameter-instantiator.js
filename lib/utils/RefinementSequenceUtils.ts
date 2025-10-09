@@ -17,7 +17,7 @@ export function extractBgpPerOperator(
   patterns: Pattern[],
   bgpsPerOperator: Record<string, BgpPattern[]>,
   previousOperator: 'bgp' | 'union' | 'optional',
-) {
+): void {
   for (const pattern of patterns) {
     switch (pattern.type) {
       case 'group':
@@ -64,7 +64,7 @@ export function extractExpressionPerOperator(
   patterns: Pattern[],
   expressionsPerOperator: Record<string, Expression[]>,
   previousOperator: 'filter',
-) {
+): void {
   for (const pattern of patterns) {
     switch (pattern.type) {
       case 'query':
@@ -198,12 +198,4 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
 
   recurse(expr);
   return variables;
-}
-
-export function replacePrefixes(
-  query: string,
-  baseUrl: string,
-  toReplace = 'http://localhost:3000/',
-): string {
-  return query.replace(toReplace, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
 }

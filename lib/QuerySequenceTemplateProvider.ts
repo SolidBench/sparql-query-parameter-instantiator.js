@@ -194,7 +194,7 @@ export interface IFilterRefinementPattern extends IBaseRefinementPattern {
   useVariableMapping?: boolean;
 }
 
-export interface ISubRefinementPatter extends IBaseRefinementPattern {
+export interface ISubRefinementPattern extends IBaseRefinementPattern {
   type: 'SUB';
   target: RDF.Variable;
 }
@@ -205,7 +205,7 @@ export interface IOtherRefinementPattern extends IBaseRefinementPattern {
 }
 
 export type IQueryRefinementPattern =
-  | ISubRefinementPatter
+  | ISubRefinementPattern
   | IFilterRefinementPattern
   | IOtherRefinementPattern;
 
