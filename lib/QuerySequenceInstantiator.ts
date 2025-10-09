@@ -84,7 +84,7 @@ export class QuerySequenceInstantiator {
         task: provider.queryTask,
         name: provider.getTemplateName(),
         nextFilePaths: provider.getNextTemplateName(),
-        template: await provider.createTemplate(this.baseUrl, this.rngSeeded, this.temperature),
+        template: await provider.createTemplate(this.rngSeeded, this.temperature),
       })),
     );
 

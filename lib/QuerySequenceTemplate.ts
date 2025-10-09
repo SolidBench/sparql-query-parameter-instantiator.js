@@ -52,6 +52,8 @@ export class QuerySequenceTemplate {
   // eslint-disable-next-line ts/naming-convention
   private readonly DF: DataFactory = new DataFactory();
   private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
+  private readonly minRefinementLength: number;
+  private readonly maxRefinementLength: number;
   public readonly instantiationCounts: Record<string, Record<string, Record<string, number>>> = {};
 
   public constructor(
@@ -59,6 +61,8 @@ export class QuerySequenceTemplate {
     variableMappings: Record<string, RDF.Term[]>,
     variableProbabilities: Record<string, Record<string, IEntityLogits[]>>,
     rng: seedrandom.PRNG,
+    minRefinementLength: number,
+    maxRefinementLength: number,
     refinementPatterns?: IQueryRefinementPattern[],
   ) {
     this.syntaxTree = syntaxTree;
@@ -66,11 +70,19 @@ export class QuerySequenceTemplate {
     this.variableProbabilities = variableProbabilities;
     this.rng = rng;
     this.refinementPatterns = refinementPatterns?.map((pattern) => {
+      // Map config representation of target of substitution to a RDF.Variable object
+      if (pattern.type === 'SUB' && !this.isVariable(pattern.target)) {
+        pattern.target = <RDF.Variable> this.toTermNoLiteral(pattern.target);
+      }
+      // Same mapping of target triples to RDF triple objects
       if (pattern.type !== 'FILTER' && pattern.type !== 'SUB') {
         pattern.target = pattern.target.map(triple => this.targetToTriple(triple));
       }
+      // Filters don't need mapping, as no functions are defined in the object interface.
       return pattern;
     });
+    this.minRefinementLength = minRefinementLength;
+    this.maxRefinementLength = maxRefinementLength;
   }
 
   /**
@@ -111,10 +123,11 @@ export class QuerySequenceTemplate {
       if (!this.refinementPatterns) {
         throw new Error(`No refinement patterns available for instantiation`);
       }
+      const patternLength = this.randomIntFromInterval(this.minRefinementLength, this.maxRefinementLength);
       const { queries, metadata } = this.createRefinementSequence(
         this.refinementPatterns,
         instantiatedSyntaxTree,
-        4,
+        patternLength,
         variableMapping,
         alternativeMapping,
       );
@@ -914,7 +927,8 @@ export class QuerySequenceTemplate {
   }
 
   private toTermNoLiteral(value: ITargetTriplePatternTerm): RDF.Variable | RDF.NamedNode {
-    if (value.termType === 'variable') {
+    const termType = value.termType.toLowerCase();
+    if (termType === 'variable') {
       return this.DF.variable(value.value);
     }
     return this.DF.namedNode(value.value);
@@ -1026,6 +1040,10 @@ export class QuerySequenceTemplate {
 
   public sampleRandom<T>(array: T[]): T {
     return array[Math.floor(this.rng() * array.length)];
+  }
+
+  public randomIntFromInterval(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1) + min);
   }
 
   public updateCounter(user: string, variable: string, value: string): void {

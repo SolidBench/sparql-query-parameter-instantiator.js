@@ -40,6 +40,8 @@ describe('QueryTemplate', () => {
         { s: [ DF.namedNode('ex:s1') ]},
         {},
         rng,
+        2,
+        5,
       );
 
       additionPattern1 = {
@@ -2460,6 +2462,8 @@ function createRefinementInput(
     variableMappings,
     {},
     rngParam ?? rng,
+    2,
+    5,
     [ refinementPattern ],
   );
 

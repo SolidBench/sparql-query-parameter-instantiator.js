@@ -25,6 +25,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);
@@ -48,6 +50,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);
@@ -90,6 +94,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);
@@ -136,6 +142,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);
@@ -180,6 +188,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);
@@ -217,6 +227,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);
@@ -250,6 +262,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);
@@ -295,6 +309,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);
@@ -329,6 +345,8 @@ describe('countTriplePatternsPerOperator', () => {
       { s: [ DF.namedNode('ex:s1') ]},
       {},
       rng,
+      2,
+      6,
     );
 
     const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(parsedQuery, singleVariableMapping);

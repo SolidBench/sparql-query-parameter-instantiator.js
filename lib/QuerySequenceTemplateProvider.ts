@@ -13,7 +13,6 @@ import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
  */
 export class QuerySequenceTemplateProvider {
   private readonly templateFilePath: string;
-  private readonly destinationFilePath: string;
   private readonly variables: IVariableTemplate[];
   // Name of query
   private readonly name: string;
@@ -23,25 +22,29 @@ export class QuerySequenceTemplateProvider {
   private readonly nextTemplateNames: Set<string>;
   // File location for refinement patterns, if any
   private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
+  private readonly minRefinementLength: number;
+  private readonly maxRefinementLength: number;
 
   private readonly parser: SparqlParser;
 
   public constructor(
     templateFilePath: string,
-    destinationFilePath: string,
     variables: IVariableTemplate[],
     name: string,
     queryTask: string,
     nextTemplateFilePath: string[],
+    minRefinementLength: number,
+    maxRefinementLength: number,
     refinementPatternsFilePath?: string,
   ) {
     this.templateFilePath = templateFilePath;
-    this.destinationFilePath = destinationFilePath;
     this.variables = variables;
     this.name = name;
     this.queryTask = queryTask;
     this.nextTemplateNames = new Set(nextTemplateFilePath);
     this.refinementPatterns = this.parseRefinementFile(refinementPatternsFilePath);
+    this.minRefinementLength = minRefinementLength;
+    this.maxRefinementLength = maxRefinementLength;
 
     this.parser = new Parser();
   }
@@ -50,7 +53,6 @@ export class QuerySequenceTemplateProvider {
    * Create a new query template data object.
    */
   public async createTemplate(
-    baseUrl: string,
     rng: seedrandom.PRNG,
     temperature: number,
   ): Promise<QuerySequenceTemplate> {
@@ -79,11 +81,12 @@ export class QuerySequenceTemplateProvider {
       }
     }
     return new QuerySequenceTemplate(
-      baseUrl,
       syntaxTree,
       variableMappings,
       variableProbabilityMappings,
       rng,
+      this.minRefinementLength,
+      this.maxRefinementLength,
       this.refinementPatterns,
     );
   }
@@ -196,7 +199,7 @@ export interface IFilterRefinementPattern extends IBaseRefinementPattern {
 
 export interface ISubRefinementPattern extends IBaseRefinementPattern {
   type: 'SUB';
-  target: RDF.Variable;
+  target: ITargetTriplePatternVariable | RDF.Variable;
 }
 
 export interface IOtherRefinementPattern extends IBaseRefinementPattern {
@@ -213,6 +216,11 @@ export interface ITargetTriplePattern {
   subject: ITargetTriplePatternTerm;
   predicate: ITargetTriplePatternTerm;
   object: ITargetTriplePatternTerm;
+}
+
+export interface ITargetTriplePatternVariable
+  extends ITargetTriplePatternTerm {
+  termType: 'variable';
 }
 
 export interface ITargetTriplePatternTerm {
