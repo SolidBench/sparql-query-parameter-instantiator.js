@@ -771,22 +771,6 @@ export class QuerySequenceTemplate {
     return term;
   }
 
-  private termsInOperators(operatorTriples: Record<string, Triple[][]>): Set<string> {
-    const termsInOperatorQuery: Set<string> = new Set();
-    for (const triple of Object.values(operatorTriples).flat(2)) {
-      if (!this.isVariable(triple.subject)) {
-        termsInOperatorQuery.add(triple.subject.value);
-      }
-      if (!this.isVariable(triple.predicate) && 'termType' in triple.predicate) {
-        termsInOperatorQuery.add(triple.predicate.value);
-      }
-      if (!this.isVariable(triple.object)) {
-        termsInOperatorQuery.add(triple.object.value);
-      }
-    }
-    return termsInOperatorQuery;
-  }
-
   private targetToTriple(target: ITargetTriplePattern | Triple): Triple {
     if (this.isRdfJsTriple(target)) {
       return target;

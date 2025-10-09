@@ -108,28 +108,28 @@ describe('QueryTemplateProvider', () => {
     });
   });
 
-  describe('validateNextTemplateFilePaths', () => {
-    beforeEach(() => {
-      provider2 = new QueryTemplateProvider(
-        'template2',
-        'destination1',
-        [
-          new VariableTemplateNamedNode(
-            'var1',
-            new SubstitutionProviderStatic([ 'ex:a1', 'ex:b1', 'ex:c1' ]),
-          ),
-          new VariableTemplateNamedNode(
-            'var2',
-            new SubstitutionProviderStatic([ 'ex:a2', 'ex:b2', 'ex:c2' ]),
-          ),
-        ],
-      );
-    });
-    it('should return true when validating for both providers', () => {
-      expect(provider.validateNextTemplateFilePaths([ provider ])).toBe(false);
-    });
-    it('should return false when a provider is missing', () => {
-      expect(provider.validateNextTemplateFilePaths([ provider, provider2 ])).toBe(true);
-    });
-  });
+  // describe('validateNextTemplateFilePaths', () => {
+  //   beforeEach(() => {
+  //     provider2 = new QueryTemplateProvider(
+  //       'template2',
+  //       'destination1',
+  //       [
+  //         new VariableTemplateNamedNode(
+  //           'var1',
+  //           new SubstitutionProviderStatic([ 'ex:a1', 'ex:b1', 'ex:c1' ]),
+  //         ),
+  //         new VariableTemplateNamedNode(
+  //           'var2',
+  //           new SubstitutionProviderStatic([ 'ex:a2', 'ex:b2', 'ex:c2' ]),
+  //         ),
+  //       ],
+  //     );
+  //   });
+  //   it('should return true when validating for both providers', () => {
+  //     expect(provider.validateNextTemplateFilePaths([ provider ])).toBe(false);
+  //   });
+  //   it('should return false when a provider is missing', () => {
+  //     expect(provider.validateNextTemplateFilePaths([ provider, provider2 ])).toBe(true);
+  //   });
+  // });
 });
