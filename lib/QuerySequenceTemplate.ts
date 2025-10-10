@@ -33,6 +33,7 @@ import type {
   ITargetTriplePattern,
   ITargetTriplePatternTerm,
   IOtherRefinementPattern,
+  IUnionRefinementPattern,
 } from './QuerySequenceTemplateProvider';
 import {
   extractBgpPerOperator,
@@ -73,9 +74,12 @@ export class QuerySequenceTemplate {
       // Map config representation of target of substitution to a RDF.Variable object
       if (pattern.type === 'SUB' && !this.isVariable(pattern.target)) {
         pattern.target = <RDF.Variable> this.toTermNoLiteral(pattern.target);
-      }
-      // Same mapping of target triples to RDF triple objects
-      if (pattern.type !== 'FILTER' && pattern.type !== 'SUB') {
+      } else if (pattern.type === 'UNION') {
+        pattern.target = [
+          pattern.target[0].map(triple => this.targetToTriple(triple)),
+          pattern.target[1].map(triple => this.targetToTriple(triple)),
+        ];
+      } else if (pattern.type !== 'FILTER' && pattern.type !== 'SUB') {
         pattern.target = pattern.target.map(triple => this.targetToTriple(triple));
       }
       // Filters don't need mapping, as no functions are defined in the object interface.
@@ -322,6 +326,9 @@ export class QuerySequenceTemplate {
       );
 
       const patternToApply = this.sampleRandom(validPatterns);
+      if (!patternToApply) {
+        throw new Error(`Found no valid patterns for ${JSON.stringify(query, null, 2)}`);
+      }
       const refinedQuery = this.applyRefinementPattern(
         patternToApply,
         query,
@@ -387,31 +394,51 @@ export class QuerySequenceTemplate {
           break;
         }
         case 'UNION': {
-          let toRefineUnion: BgpPattern;
+          let toRefineUnionLeft: BgpPattern;
+          let toRefineUnionRight: BgpPattern;
           if (!groupPattern || groupPattern.length === 0) {
-            // If no optionals are present, add a new optional pattern
+            // If no UNIONs are present, add a new optional pattern
             const leftUnion: BgpPattern = { type: 'bgp', triples: []};
             const rightUnion: BgpPattern = { type: 'bgp', triples: []};
 
             const unionBlock: UnionPattern = { type: 'union', patterns: [ leftUnion, rightUnion ]};
             query.where!.push(unionBlock);
 
-            toRefineUnion = <BgpPattern> unionBlock.patterns[pattern.location];
+            toRefineUnionLeft = <BgpPattern> unionBlock.patterns[0];
+            toRefineUnionRight = <BgpPattern> unionBlock.patterns[1];
           } else {
-            toRefineUnion = operatorToBgp[patternType.toLowerCase()][pattern.location];
+            // Each union has two bgps in operatorToBgp record. So to extract start bgp of union
+            // at given location we do * 2.
+            const unionLeftBgpIndex = pattern.location * 2;
+            toRefineUnionLeft = operatorToBgp[patternType.toLowerCase()][unionLeftBgpIndex];
+            toRefineUnionRight = operatorToBgp[patternType.toLowerCase()][unionLeftBgpIndex + 1];
           }
-          if (!toRefineUnion) {
-            throw new Error(`BGP Doesn't exist at index ${pattern.location} 
-              for union operator with ${JSON.stringify(operatorToBgp[patternType], null, 2)} BGPs`);
+          // It is possible to add to a partial union if the target for that part of the union is empty
+          // otherwise there should be a BGP there.
+          if (!toRefineUnionLeft && pattern.target[0].length > 0) {
+            throw new Error(`BGP Doesn't exist for left union for union at ${pattern.location},
+              while target is defined.`);
+          }
+          if (!toRefineUnionRight && pattern.target[1].length > 0) {
+            throw new Error(`BGP Doesn't exist for right union for union at ${pattern.location},
+              while target is defined.`);
           }
 
           this.addTargetToBgp(
-            toRefineUnion,
-            pattern.target,
+            toRefineUnionLeft,
+            pattern.target[0],
             query,
             variableMapping,
             (<IOperatorState> state),
           );
+          this.addTargetToBgp(
+            toRefineUnionRight,
+            pattern.target[1],
+            query,
+            variableMapping,
+            (<IOperatorState> state),
+          );
+
           break;
         }
         case 'FILTER': {
@@ -503,7 +530,6 @@ export class QuerySequenceTemplate {
           break;
         }
         case 'OPTIONAL':
-        case 'UNION':
         case 'BGP': {
           const bgpToRefine = operatorToBgp[patternType.toLowerCase()][pattern.location];
           if (!bgpToRefine) {
@@ -531,6 +557,44 @@ export class QuerySequenceTemplate {
             });
           }
           (<IOperatorState>state).removedTps.push(...removed);
+          break;
+        }
+        case 'UNION': {
+          const unionLeftBgpIndex = pattern.location * 2;
+          const bgpToRefineLeft = operatorToBgp[patternType.toLowerCase()][unionLeftBgpIndex];
+          const bgpToRefineRight = operatorToBgp[patternType.toLowerCase()][unionLeftBgpIndex + 1];
+          const bgps = [ bgpToRefineLeft, bgpToRefineRight ];
+
+          if (!bgpToRefineLeft && !bgpToRefineRight) {
+            throw new Error(`BGP Doesn't exist at index ${unionLeftBgpIndex} and ${unionLeftBgpIndex + 1}
+              for query bgp operator with ${JSON.stringify(operatorToBgp[patternType], null, 2)} BGPs`);
+          }
+
+          let triplesToRemove: Triple[][] = pattern.target.map(x => x.map(y => this.targetToTriple(y)));
+          if (triplesToRemove.length === 0) {
+            const tripleToRemove = [ this.sampleRandom([ ...bgpToRefineLeft.triples, ...bgpToRefineRight.triples ]) ];
+            triplesToRemove = [ tripleToRemove, tripleToRemove ];
+          }
+          for (let i = 0; i < 2; i++) {
+            const removed = this.removeTargetFromBgp(bgps[i], triplesToRemove[i], variableMapping);
+            const triplePatternsLeft = Object.values(operatorToBgp).map(bgps => bgps.map(bgp => bgp.triples)).flat(2);
+            const variablesLeftInQuery = this.getAllVariables(triplePatternsLeft);
+            if (!this.hasWildCard(query.variables)) {
+              query.variables = query.variables.filter((x) => {
+                if ('expression' in x) {
+                  const varsInExpression = getVariablesInExpression(x.expression);
+                  for (const v of varsInExpression) {
+                    if (!variablesLeftInQuery.has(v)) {
+                      return false;
+                    }
+                  }
+                }
+                return true;
+              });
+            }
+            (<IOperatorState>state).removedTps.push(...removed);
+          }
+          break;
         }
       }
     } else {
@@ -580,6 +644,14 @@ export class QuerySequenceTemplate {
           return false;
         }
         return true;
+      }
+      if (pattern.type === 'UNION') {
+        return this.isValidUnionPattern(pattern, {
+          queryTriples,
+          operatorTriplePatternsFlattened,
+          refinementState,
+          variableMapping,
+        });
       }
       return this.isValidTriplePattern(pattern, {
         queryTriples,
@@ -646,8 +718,8 @@ export class QuerySequenceTemplate {
     return context.refinementState[typeToKeyMap[pattern.type]].removedExp.length > 0;
   }
 
-  private isValidTriplePattern(
-    pattern: IOtherRefinementPattern,
+  private isValidUnionPattern(
+    pattern: IUnionRefinementPattern,
     context: {
       queryTriples: Triple[];
       operatorTriplePatternsFlattened: Record<string, Triple[]>;
@@ -655,7 +727,34 @@ export class QuerySequenceTemplate {
       variableMapping: Record<string, RDF.Term>;
     },
   ): boolean {
-    const patternType = pattern.type.toLowerCase();
+    // Function checks if each sub-target is valid for UNION, if so the UNION pattern is also valid
+    for (const subTarget of pattern.target) {
+      const subRefinementPattern: IOtherRefinementPattern = {
+        ...pattern,
+        type: 'OPTIONAL',
+        target: subTarget,
+      };
+      if (!this.isValidTriplePattern(subRefinementPattern, { ...context, patternTypeOverride: 'UNION' })) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private isValidTriplePattern(
+    pattern: IOtherRefinementPattern,
+    context: {
+      queryTriples: Triple[];
+      operatorTriplePatternsFlattened: Record<string, Triple[]>;
+      refinementState: IRefinementState;
+      variableMapping: Record<string, RDF.Term>;
+      patternTypeOverride?: string;
+    },
+  ): boolean {
+    let patternType = pattern.type.toLowerCase();
+    if (context.patternTypeOverride) {
+      patternType = context.patternTypeOverride.toLowerCase();
+    }
     const targets = pattern.target.map(t =>
       this.instantiateTriple(this.targetToTriple(t), context.variableMapping));
 
@@ -684,6 +783,10 @@ export class QuerySequenceTemplate {
     }
 
     if (targets.length > 0) {
+      return true;
+    }
+    // UNION targets can be empty to allow updates to only one part of the union operator
+    if (targets.length === 0 && patternType === 'union') {
       return true;
     }
     return context.refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0;
@@ -901,7 +1004,6 @@ export class QuerySequenceTemplate {
     variableMapping: Record<string, RDF.Term>,
   ): Triple[] {
     const removedTriplePatterns: Triple[] = [];
-
     for (const target of targets) {
       // Instantiate the triple to map variables to terms (as is also done in the query)
       const instantiatedTriple = this.instantiateTriple(target, variableMapping);

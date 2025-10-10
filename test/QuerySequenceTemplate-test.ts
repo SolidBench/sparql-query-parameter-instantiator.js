@@ -23,6 +23,7 @@ describe('QueryTemplate', () => {
     let removalPattern2: IQueryRefinementPattern;
     let removalPattern3: IQueryRefinementPattern;
     let removalPattern4: IQueryRefinementPattern;
+    let removalPattern5: IQueryRefinementPattern;
     let subPattern1: ISubRefinementPattern;
     let subPattern2: ISubRefinementPattern;
     let refinementState: IRefinementState;
@@ -73,14 +74,22 @@ describe('QueryTemplate', () => {
         location: 0,
         id: 2,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' },
-          },
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
         ],
       };
-
       additionPattern4 = {
         type: 'FILTER',
         operation: 'addition',
@@ -98,7 +107,6 @@ describe('QueryTemplate', () => {
           },
         ],
       };
-
       removalPattern1 = {
         type: 'BGP',
         operation: 'removal',
@@ -128,11 +136,20 @@ describe('QueryTemplate', () => {
         location: 0,
         id: 6,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' },
-          },
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
         ],
       };
       removalPattern4 = {
@@ -150,6 +167,23 @@ describe('QueryTemplate', () => {
               DF.literal('18'),
             ],
           },
+        ],
+      };
+      removalPattern5 = {
+        type: 'UNION',
+        operation: 'removal',
+        description: '',
+        location: 0,
+        id: 10,
+        target: [
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [],
         ],
       };
       subPattern1 = {
@@ -178,6 +212,7 @@ describe('QueryTemplate', () => {
         removalPattern2,
         removalPattern3,
         removalPattern4,
+        removalPattern5,
         subPattern1,
         subPattern2,
       ];
@@ -239,7 +274,7 @@ describe('QueryTemplate', () => {
         {},
       )).toEqual([ additionPattern1, additionPattern3, removalPattern2, subPattern1 ]);
     });
-    it('should correctly filter for 2 triple pattern query with tp in union', () => {
+    it('should correctly filter for 2 triple pattern query with tps in union', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
         bgp: [[
           {
@@ -254,6 +289,11 @@ describe('QueryTemplate', () => {
             predicate: DF.namedNode('snvoc:isModeratorOf'),
             object: DF.variable('forum'),
           },
+          {
+            subject: DF.variable('s'),
+            predicate: DF.namedNode('snvoc:isOwnerOf'),
+            object: DF.variable('forum'),
+          },
         ]],
       };
       const opExpressions: Record<string, Expression[][]> = {};
@@ -264,7 +304,7 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         {},
-      )).toEqual([ additionPattern4, removalPattern3, subPattern1 ]);
+      )).toEqual([ additionPattern4, removalPattern5, subPattern1 ]);
     });
     it('should correctly filter for 2 triple pattern query with tp not in union', () => {
       const operatorTriplePatterns: Record<string, Triple[][]> = {
@@ -383,7 +423,7 @@ describe('QueryTemplate', () => {
         allPatterns,
         refinementState,
         { '?s': DF.namedNode('ex:s1') },
-      )).toEqual([ additionPattern4, removalPattern3, subPattern1 ]);
+      )).toEqual([ additionPattern4, subPattern1 ]);
     });
 
     it('should correctly filter for query with removed triples with instantiation', () => {
@@ -840,11 +880,15 @@ describe('QueryTemplate', () => {
         location: 0,
         id: 0,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' },
-          },
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [
+          ],
         ],
       };
       const input = createRefinementInput(
@@ -880,11 +924,15 @@ describe('QueryTemplate', () => {
         location: 1,
         id: 0,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' },
-          },
+          [
+          ],
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
         ],
       };
 
@@ -906,11 +954,59 @@ describe('QueryTemplate', () => {
   <ex:s1> ?p ?o.
   {  }
   UNION
-  { <ex:s1> <snvoc:isModeratorOf> ?forum. }
+  { <ex:s1> <snvoc:isPartOf> ?forum. }
 }`,
       );
     });
-
+    it('should add new union operator to query (full union)', () => {
+      const queryString = ` SELECT * WHERE {
+                ?s ?p ?o
+            }`;
+      const refinementPattern: IQueryRefinementPattern = {
+        type: 'UNION',
+        operation: 'addition',
+        description: 'Add union triple for the person being a moderator of a forum',
+        location: 0,
+        id: 0,
+        target: [
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+        ],
+      };
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
+      const transformed = input.template.applyRefinementPattern(
+        refinementPattern,
+        input.query,
+        input.variableMapping,
+        input.variableMappingAlternative,
+        refinementState,
+      );
+      expect(new Generator().stringify(transformed)).toBe(
+                `SELECT * WHERE {
+  <ex:s1> ?p ?o.
+  { <ex:s1> <snvoc:isModeratorOf> ?forum. }
+  UNION
+  { <ex:s1> <snvoc:isPartOf> ?forum. }
+}`,
+      );
+    });
     it ('should add to the correct union operator block', () => {
       const queryString = `SELECT * WHERE {
                 ?s ?p ?o.
@@ -925,14 +1021,23 @@ describe('QueryTemplate', () => {
         type: 'UNION',
         operation: 'addition',
         description: 'Add union triple for the person being a moderator of a forum',
-        location: 2,
+        location: 1,
         id: 0,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' },
-          },
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
         ],
       };
 
@@ -961,10 +1066,72 @@ describe('QueryTemplate', () => {
     <ex:s1> <snvoc:isModeratorOf> ?forum.
   }
   UNION
+  {
+    ?x ?p ?o.
+    <ex:s1> <snvoc:isPartOf> ?forum.
+  }
+}`,
+      );
+    });
+    it ('should add to the correct union operator block when one target is empty', () => {
+      const queryString = `SELECT * WHERE {
+                ?s ?p ?o.
+                { ?x ?y ?z. }
+                 UNION 
+                { ?a ?b ?c. }
+                { ?k ?l ?m. }
+                 UNION 
+                { ?x ?p ?o. }
+            }`;
+      const refinementPattern: IQueryRefinementPattern = {
+        type: 'UNION',
+        operation: 'addition',
+        description: 'Add union triple for the person being a moderator of a forum',
+        location: 0,
+        id: 0,
+        target: [
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [
+          ],
+        ],
+      };
+
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
+
+      const transformed = input.template.applyRefinementPattern(
+        refinementPattern,
+        input.query,
+        input.variableMapping,
+        input.variableMappingAlternative,
+        refinementState,
+      );
+      expect(new Generator().stringify(transformed)).toBe(
+`SELECT * WHERE {
+  <ex:s1> ?p ?o.
+  {
+    ?x ?y ?z.
+    <ex:s1> <snvoc:isModeratorOf> ?forum.
+  }
+  UNION
+  { ?a ?b ?c. }
+  { ?k ?l ?m. }
+  UNION
   { ?x ?p ?o. }
 }`,
       );
     });
+
     it('should add new optional operator to query', () => {
       const queryString = ` SELECT * WHERE {
                 ?s ?p ?o
@@ -1217,11 +1384,14 @@ describe('QueryTemplate', () => {
         location: 0,
         id: 0,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'p', termType: 'variable' },
-            object: { value: 'o', termType: 'variable' },
-          },
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'p', termType: 'variable' },
+              object: { value: 'o', termType: 'variable' },
+            },
+          ],
+          [],
         ],
       };
       const input = createRefinementInput(
@@ -1255,14 +1425,17 @@ describe('QueryTemplate', () => {
         type: 'UNION',
         operation: 'removal',
         description: '',
-        location: 1,
+        location: 0,
         id: 0,
         target: [
-          {
-            subject: { value: 'x', termType: 'variable' },
-            predicate: { value: 'y', termType: 'variable' },
-            object: { value: 'z', termType: 'variable' },
-          },
+          [],
+          [
+            {
+              subject: { value: 'x', termType: 'variable' },
+              predicate: { value: 'y', termType: 'variable' },
+              object: { value: 'z', termType: 'variable' },
+            },
+          ],
         ],
       };
       const input = createRefinementInput(
@@ -1287,6 +1460,56 @@ describe('QueryTemplate', () => {
 }`,
       );
     });
+    it('should remove correct union (both)', () => {
+      const queryString = `
+                SELECT * WHERE {
+                { ?s ?p ?o } UNION { ?x ?y ?z }
+                }`;
+      const refinementPattern: IQueryRefinementPattern = {
+        type: 'UNION',
+        operation: 'removal',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'p', termType: 'variable' },
+              object: { value: 'o', termType: 'variable' },
+            },
+          ],
+          [
+            {
+              subject: { value: 'x', termType: 'variable' },
+              predicate: { value: 'y', termType: 'variable' },
+              object: { value: 'z', termType: 'variable' },
+            },
+          ],
+        ],
+      };
+      const input = createRefinementInput(
+        queryString,
+        variableMappings,
+        variableMappingsAlternative,
+        refinementPattern,
+      );
+      const transformed = input.template.applyRefinementPattern(
+        refinementPattern,
+        input.query,
+        input.variableMapping,
+        input.variableMappingAlternative,
+        refinementState,
+      );
+
+      expect(new Generator().stringify(transformed)).toBe(
+            `SELECT * WHERE {
+  {  }
+  UNION
+  {  }
+}`,
+      );
+    });
     it('should remove correct nested union', () => {
       const queryString = `
                 SELECT * WHERE {
@@ -1304,14 +1527,23 @@ describe('QueryTemplate', () => {
         type: 'UNION',
         operation: 'removal',
         description: '',
-        location: 2,
+        location: 1,
         id: 0,
         target: [
-          {
-            subject: { value: 'z', termType: 'variable' },
-            predicate: { value: 'k', termType: 'variable' },
-            object: { value: 'o', termType: 'variable' },
-          },
+          [
+            {
+              subject: { value: 'x', termType: 'variable' },
+              predicate: { value: 'y', termType: 'variable' },
+              object: { value: 'z', termType: 'variable' },
+            },
+          ],
+          [
+            {
+              subject: { value: 'z', termType: 'variable' },
+              predicate: { value: 'k', termType: 'variable' },
+              object: { value: 'o', termType: 'variable' },
+            },
+          ],
         ],
       };
       const input = createRefinementInput(
@@ -1334,7 +1566,7 @@ describe('QueryTemplate', () => {
     { <ex:s1> ?p ?o. }
     UNION
     {
-      { ?x ?y ?z. }
+      {  }
       UNION
       { <ex:s1> ?p ?o. }
     }
@@ -1356,16 +1588,14 @@ describe('QueryTemplate', () => {
         location: 0,
         id: 0,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'p', termType: 'variable' },
-            object: { value: 'o', termType: 'variable' },
-          },
-          {
-            subject: { value: 'x', termType: 'variable' },
-            predicate: { value: 'y', termType: 'variable' },
-            object: { value: 'z', termType: 'variable' },
-          },
+          [],
+          [
+            {
+              subject: { value: 'x', termType: 'variable' },
+              predicate: { value: 'y', termType: 'variable' },
+              object: { value: 'z', termType: 'variable' },
+            },
+          ],
         ],
       };
       const input = createRefinementInput(
@@ -1992,39 +2222,54 @@ describe('QueryTemplate', () => {
         location: 0,
         id: 0,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' },
-          },
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isHeadModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [],
         ],
       };
       const additionPattern2: IQueryRefinementPattern = {
         type: 'UNION',
         operation: 'addition',
         description: '',
-        location: 1,
+        location: 0,
         id: 1,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' },
-          },
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isModeratorOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
         ],
       };
       const removalPattern: IQueryRefinementPattern = {
         type: 'UNION',
         operation: 'removal',
         description: '',
-        location: 1,
+        location: 0,
         id: 2,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
-            object: { value: 'forum', termType: 'variable' },
-          },
+          [],
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'snvoc:isPartOf', termType: 'namedNode' },
+              object: { value: 'forum', termType: 'variable' },
+            },
+          ],
         ],
       };
       const mockRng = jest.fn()
@@ -2053,19 +2298,25 @@ describe('QueryTemplate', () => {
 `SELECT * WHERE { <foaf:person> ?p ?o. }`,
 `SELECT * WHERE {
   <foaf:person> ?p ?o.
-  {  }
-  UNION
-  { <foaf:person> <snvoc:isPartOf> ?forum. }
-}`,
-`SELECT * WHERE {
-  <foaf:person> ?p ?o.
   { <foaf:person> <snvoc:isModeratorOf> ?forum. }
   UNION
   { <foaf:person> <snvoc:isPartOf> ?forum. }
 }`,
 `SELECT * WHERE {
   <foaf:person> ?p ?o.
-  { <foaf:person> <snvoc:isModeratorOf> ?forum. }
+  {
+    <foaf:person> <snvoc:isModeratorOf> ?forum;
+      <snvoc:isHeadModeratorOf> ?forum.
+  }
+  UNION
+  { <foaf:person> <snvoc:isPartOf> ?forum. }
+}`,
+`SELECT * WHERE {
+  <foaf:person> ?p ?o.
+  {
+    <foaf:person> <snvoc:isModeratorOf> ?forum;
+      <snvoc:isHeadModeratorOf> ?forum.
+  }
   UNION
   {  }
 }`,
@@ -2354,11 +2605,20 @@ describe('QueryTemplate', () => {
         location: 0,
         id: 3,
         target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'rdf:type', termType: 'namedNode' },
-            object: { value: 'foaf:Person', termType: 'namedNode' },
-          },
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'rdf:type', termType: 'namedNode' },
+              object: { value: 'foaf:Person', termType: 'namedNode' },
+            },
+          ],
+          [
+            {
+              subject: { value: 's', termType: 'variable' },
+              predicate: { value: 'rdf:type', termType: 'namedNode' },
+              object: { value: 'foaf:Lizard', termType: 'namedNode' },
+            },
+          ],
         ],
       };
       const removalPattern: IQueryRefinementPattern = {
@@ -2425,7 +2685,7 @@ describe('QueryTemplate', () => {
   OPTIONAL { <foaf:person> <foaf:name> ?name. }
   { <foaf:person> <rdf:type> <foaf:Person>. }
   UNION
-  {  }
+  { <foaf:person> <rdf:type> <foaf:Lizard>. }
 }`,
 `SELECT * WHERE {
   <foaf:person> ?p ?o.
@@ -2433,7 +2693,7 @@ describe('QueryTemplate', () => {
   OPTIONAL { <foaf:person> <foaf:name> ?name. }
   { <foaf:person> <rdf:type> <foaf:Person>. }
   UNION
-  {  }
+  { <foaf:person> <rdf:type> <foaf:Lizard>. }
   FILTER(?s1 > "18")
 }`,
         ],

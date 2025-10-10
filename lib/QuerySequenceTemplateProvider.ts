@@ -187,7 +187,7 @@ export interface IBaseRefinementPattern {
   operation: 'addition' | 'removal';
   id: number;
   description: string;
-  location?: number;
+  location: number;
 }
 
 // FILTER: uses Expression[]
@@ -202,14 +202,20 @@ export interface ISubRefinementPattern extends IBaseRefinementPattern {
   target: ITargetTriplePatternVariable | RDF.Variable;
 }
 
+export interface IUnionRefinementPattern extends IBaseRefinementPattern {
+  type: 'UNION';
+  target: [(Triple | ITargetTriplePattern)[], (Triple | ITargetTriplePattern)[]];
+}
+
 export interface IOtherRefinementPattern extends IBaseRefinementPattern {
-  type: 'OPTIONAL' | 'UNION' | 'BGP';
+  type: 'OPTIONAL' | 'BGP';
   target: (Triple | ITargetTriplePattern)[];
 }
 
 export type IQueryRefinementPattern =
   | ISubRefinementPattern
   | IFilterRefinementPattern
+  | IUnionRefinementPattern
   | IOtherRefinementPattern;
 
 export interface ITargetTriplePattern {

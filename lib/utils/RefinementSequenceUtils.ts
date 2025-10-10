@@ -37,13 +37,29 @@ export function extractBgpPerOperator(
         bgpsPerOperator[previousOperator].push(pattern);
         break;
 
-      case 'union':
+      case 'union': {
         if (!bgpsPerOperator.union) {
           bgpsPerOperator.union = [];
         }
-        extractBgpPerOperator(pattern.patterns, bgpsPerOperator, 'union');
+        const nestedUnions = pattern.patterns.filter(x => x.type === 'union');
+        // Ensure we account for *each* branch in the UNION, even if empty
+        for (const branch of pattern.patterns) {
+          // For nested unions with no other patterns or empty union we add an empty bgp to the 
+          // output, to represent the left-right structure of UNION.
+          if (branch.type === 'union' || (branch.type === 'group' && branch.patterns.length === 0)) {
+            bgpsPerOperator.union.push({
+              type: 'bgp',
+              triples: [],
+            });
+          } else {
+            extractBgpPerOperator([ branch ], bgpsPerOperator, 'union');
+          }
+        }
+        if (nestedUnions.length > 0) {
+          extractBgpPerOperator(nestedUnions, bgpsPerOperator, 'union');
+        }
         break;
-
+      }
       case 'optional':
         if (!bgpsPerOperator.optional) {
           bgpsPerOperator.optional = [];
