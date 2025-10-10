@@ -44,7 +44,7 @@ export function extractBgpPerOperator(
         const nestedUnions = pattern.patterns.filter(x => x.type === 'union');
         // Ensure we account for *each* branch in the UNION, even if empty
         for (const branch of pattern.patterns) {
-          // For nested unions with no other patterns or empty union we add an empty bgp to the 
+          // For nested unions with no other patterns or empty union we add an empty bgp to the
           // output, to represent the left-right structure of UNION.
           if (branch.type === 'union' || (branch.type === 'group' && branch.patterns.length === 0)) {
             bgpsPerOperator.union.push({

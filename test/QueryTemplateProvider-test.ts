@@ -108,7 +108,7 @@ describe('QueryTemplateProvider', () => {
     });
   });
 
-  // describe('validateNextTemplateFilePaths', () => {
+  // Describe('validateNextTemplateFilePaths', () => {
   //   beforeEach(() => {
   //     provider2 = new QueryTemplateProvider(
   //       'template2',
