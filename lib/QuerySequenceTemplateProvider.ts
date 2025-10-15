@@ -24,6 +24,7 @@ export class QuerySequenceTemplateProvider {
   private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
   private readonly minRefinementLength: number;
   private readonly maxRefinementLength: number;
+  private readonly maxLogits: number;
 
   private readonly parser: SparqlParser;
 
@@ -35,6 +36,7 @@ export class QuerySequenceTemplateProvider {
     nextTemplateFilePath: string[],
     minRefinementLength: number,
     maxRefinementLength: number,
+    maxLogits: number,
     refinementPatternsFilePath?: string,
   ) {
     this.templateFilePath = templateFilePath;
@@ -45,6 +47,7 @@ export class QuerySequenceTemplateProvider {
     this.refinementPatterns = this.parseRefinementFile(refinementPatternsFilePath);
     this.minRefinementLength = minRefinementLength;
     this.maxRefinementLength = maxRefinementLength;
+    this.maxLogits = maxLogits;
 
     this.parser = new Parser();
   }
@@ -119,8 +122,9 @@ export class QuerySequenceTemplateProvider {
   public softMaxLogits(logits: Record<string, IEntityLogits[]>, temperature = 1): Record<string, IEntityLogits[]> {
     const softMaxedLogits: Record<string, IEntityLogits[]> = {};
     for (const [ user, logitsUser ] of Object.entries(logits)) {
-      const logitEntities = logitsUser.map(x => x.entity);
-      const logitValues = logitsUser.map(x => x.similarity);
+      const slicedLogitsUser = logitsUser.slice(0, this.maxLogits);
+      const logitEntities = slicedLogitsUser.map(x => x.entity);
+      const logitValues = slicedLogitsUser.map(x => x.similarity);
       const probabilities = this.softmax(logitValues, temperature);
       const userProbabilities: IEntityLogits[] = [];
       for (const [ i, probability ] of probabilities.entries()) {
