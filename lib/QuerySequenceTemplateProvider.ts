@@ -47,8 +47,10 @@ export class QuerySequenceTemplateProvider {
 
     // If no probabilities are given, each template has equal probability of being selected next
     this.validateNextTemplateProbabilities(this.nextTemplates);
-    if (!this.hasProbabilitiesDefined(this.nextTemplates)){
-      this.nextTemplates.forEach(nextTemplate => nextTemplate.probability = 1 / this.nextTemplates.length);
+    if (!this.hasProbabilitiesDefined(this.nextTemplates)) {
+      for (const nextTemplate of this.nextTemplates) {
+        nextTemplate.probability = 1 / this.nextTemplates.length;
+      }
     }
 
     this.refinementPatterns = this.parseRefinementFile(refinementPatternsFilePath);
@@ -156,15 +158,16 @@ export class QuerySequenceTemplateProvider {
     const sum = exps.reduce((a, b) => a + b, 0);
     return exps.map(v => v / sum);
   }
-  private validateNextTemplateProbabilities(nextTemplates: INextTemplate[]){
+
+  private validateNextTemplateProbabilities(nextTemplates: INextTemplate[]) {
     const hasProbability = nextTemplates.some(item => item.probability !== undefined);
     const hasNoProbability = nextTemplates.some(item => item.probability === undefined);
     if (hasProbability && hasNoProbability) {
       throw new Error(`Either all or none of the next templates for provider ${this.templateFilePath} must have a defined probability.`);
     }
-    if (hasNoProbability){
+    if (hasNoProbability) {
       const sumProbability = nextTemplates.reduce((sum, curr) => sum + curr.probability!, 0);
-      if ( sumProbability != 1){
+      if (sumProbability != 1) {
         throw new Error(`Probabilities do not sum to 1 for provider ${this.templateFilePath}`);
       }
     }
@@ -189,8 +192,8 @@ export interface IEntityLogits {
 }
 
 export interface INextTemplate {
-  template: string,
-  probability?: number,
+  template: string;
+  probability?: number;
 }
 
 export interface IBaseRefinementPattern {

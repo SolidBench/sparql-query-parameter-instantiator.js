@@ -11,7 +11,7 @@ import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
 export class QuerySequenceInstantiator {
   private readonly providers: QuerySequenceTemplateProvider[];
   private readonly personProvider: IVariableTemplate;
-  
+
   private readonly count: number;
   private readonly rngSeeded: seedrandom.PRNG;
 
@@ -168,12 +168,12 @@ export class QuerySequenceInstantiator {
       }
 
       // Next templateFilePath with attached probability
-      const nextTemplatesWithProbability: IProbabilities<INextTemplate>[] = 
-        nextTemplateFilePaths.map(t => ({entity: t, probability: t.probability!}));
+      const nextTemplatesWithProbability: IProbabilities<INextTemplate>[] =
+        nextTemplateFilePaths.map(t => ({ entity: t, probability: t.probability! }));
       const nextQueryFilePath = this.sampleProbability(nextTemplatesWithProbability);
 
       const nextQuery = templates.find(template => template.name === nextQueryFilePath.template);
-      if (nextQuery === undefined){
+      if (nextQuery === undefined) {
         throw new Error(`No matching template found for nextTemplateFilePath: ${nextQueryFilePath.template}`);
       }
 
