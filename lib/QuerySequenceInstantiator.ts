@@ -2,31 +2,36 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as seedrandom from 'seedrandom';
 import type { QuerySequenceTemplate } from './QuerySequenceTemplate';
-import type { QuerySequenceTemplateProvider } from './QuerySequenceTemplateProvider';
+import type { INextTemplate, QuerySequenceTemplateProvider } from './QuerySequenceTemplateProvider';
 import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
 
 /**
  * Instantiates query providers a number of times.
  */
 export class QuerySequenceInstantiator {
-  private readonly baseUrl: string;
   private readonly providers: QuerySequenceTemplateProvider[];
   private readonly personProvider: IVariableTemplate;
+  
   private readonly count: number;
   private readonly rngSeeded: seedrandom.PRNG;
+
   private readonly meanLogSequenceLength: number;
   private readonly stdLogSequenceLength: number;
+
   private readonly meanLogSessionLength: number;
   private readonly stdLogSessionLength: number;
+
   private readonly meanLogTransitionProbability: number;
   private readonly stdLogTransitionProbability: number;
+
   private readonly refinementPatternProbability: number;
+
   private readonly temperature: number;
+
   private readonly destinationFilePath: string;
   private readonly metadataDestinationFilePath: string;
 
   public constructor(args: IQuerySequenceInstantiatorArgs) {
-    this.baseUrl = args.baseUrl;
     this.providers = args.providers;
     this.personProvider = args.personProvider;
     this.temperature = args.temperature;
@@ -142,8 +147,9 @@ export class QuerySequenceInstantiator {
 
       // Determine the possible next templates from current sequence tail
       const nextTemplateFilePaths = currentSession.templates.at(-1)!.nextFilePaths;
+
       // Terminal query, no next templates defined
-      if (nextTemplateFilePaths.size === 0) {
+      if (nextTemplateFilePaths.length === 0) {
         currentSession.ended = true;
         // If no next templates are defined, we end the session and continue with the next one.
         currentSession = this.startNewSession(taskToTemplate, queryTasks, sequenceSessions.length);
@@ -161,12 +167,16 @@ export class QuerySequenceInstantiator {
         continue;
       }
 
-      const nextTemplates = templates.filter(x => nextTemplateFilePaths.has(x.name));
-      if (nextTemplates.length === 0) {
-        throw new Error(`No valid next templates found for current template: ${
-          currentSession.templates.at(-1)!.name}`);
+      // Next templateFilePath with attached probability
+      const nextTemplatesWithProbability: IProbabilities<INextTemplate>[] = 
+        nextTemplateFilePaths.map(t => ({entity: t, probability: t.probability!}));
+      const nextQueryFilePath = this.sampleProbability(nextTemplatesWithProbability);
+
+      const nextQuery = templates.find(template => template.name === nextQueryFilePath.template);
+      if (nextQuery === undefined){
+        throw new Error(`No matching template found for nextTemplateFilePath: ${nextQueryFilePath.template}`);
       }
-      const nextQuery = this.sampleRandom(nextTemplates);
+
       this.addTemplateToSequence(
         nextQuery,
         currentSession,
@@ -288,7 +298,7 @@ export class QuerySequenceInstantiator {
     return array[Math.floor(this.rngSeeded() * array.length)];
   }
 
-  public sampleProbability(probabilities: IProbabilities[]): string {
+  public sampleProbability<T>(probabilities: IProbabilities<T>[]): T {
     const r = this.rngSeeded();
     let cumulative = 0;
 
@@ -329,10 +339,6 @@ export class QuerySequenceInstantiator {
  * Configuration for QuerySequenceInstantiator
  */
 export interface IQuerySequenceInstantiatorArgs {
-  /**
-   * Base url of the server
-   */
-  baseUrl: string;
   /**
    * @param providers - The list of template providers
    */
@@ -409,8 +415,8 @@ export interface IQuerySequenceInstantiatorArgs {
   metadataDestinationFilePath?: string;
 }
 
-export interface IProbabilities {
-  entity: string;
+export interface IProbabilities<T> {
+  entity: T;
   probability: number;
 }
 
@@ -428,7 +434,7 @@ export interface IQuerySessionMetadata {
 export interface IQuerySequenceElementTemplate {
   task: string;
   name: string;
-  nextFilePaths: Set<string>;
+  nextFilePaths: INextTemplate[];
   template: QuerySequenceTemplate;
 }
 

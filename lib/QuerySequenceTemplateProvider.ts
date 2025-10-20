@@ -19,7 +19,7 @@ export class QuerySequenceTemplateProvider {
   // What task this query belongs to
   public readonly queryTask: string;
   // What templates can occur after the current query template provider.
-  private readonly nextTemplateNames: Set<string>;
+  private readonly nextTemplates: INextTemplate[];
   // File location for refinement patterns, if any
   private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
   private readonly minRefinementLength: number;
@@ -33,7 +33,7 @@ export class QuerySequenceTemplateProvider {
     variables: IVariableTemplate[],
     name: string,
     queryTask: string,
-    nextTemplateFilePath: string[],
+    nextTemplateFilePath: INextTemplate[],
     minRefinementLength: number,
     maxRefinementLength: number,
     maxLogits: number,
@@ -43,7 +43,14 @@ export class QuerySequenceTemplateProvider {
     this.variables = variables;
     this.name = name;
     this.queryTask = queryTask;
-    this.nextTemplateNames = new Set(nextTemplateFilePath);
+    this.nextTemplates = nextTemplateFilePath;
+
+    // If no probabilities are given, each template has equal probability of being selected next
+    this.validateNextTemplateProbabilities(this.nextTemplates);
+    if (!this.hasProbabilitiesDefined(this.nextTemplates)){
+      this.nextTemplates.forEach(nextTemplate => nextTemplate.probability = 1 / this.nextTemplates.length);
+    }
+
     this.refinementPatterns = this.parseRefinementFile(refinementPatternsFilePath);
     this.minRefinementLength = minRefinementLength;
     this.maxRefinementLength = maxRefinementLength;
@@ -111,8 +118,8 @@ export class QuerySequenceTemplateProvider {
    */
   public validateNextTemplateFilePaths(providers: QuerySequenceTemplateProvider[]): boolean {
     const allTemplates = new Set(providers.map(provider => provider.templateFilePath));
-    for (const nextTemplate of this.nextTemplateNames) {
-      if (!allTemplates.has(nextTemplate)) {
+    for (const nextTemplate of this.nextTemplates) {
+      if (!allTemplates.has(nextTemplate.template)) {
         return false;
       }
     }
@@ -149,9 +156,26 @@ export class QuerySequenceTemplateProvider {
     const sum = exps.reduce((a, b) => a + b, 0);
     return exps.map(v => v / sum);
   }
+  private validateNextTemplateProbabilities(nextTemplates: INextTemplate[]){
+    const hasProbability = nextTemplates.some(item => item.probability !== undefined);
+    const hasNoProbability = nextTemplates.some(item => item.probability === undefined);
+    if (hasProbability && hasNoProbability) {
+      throw new Error(`Either all or none of the next templates for provider ${this.templateFilePath} must have a defined probability.`);
+    }
+    if (hasNoProbability){
+      const sumProbability = nextTemplates.reduce((sum, curr) => sum + curr.probability!, 0);
+      if ( sumProbability != 1){
+        throw new Error(`Probabilities do not sum to 1 for provider ${this.templateFilePath}`);
+      }
+    }
+  }
 
-  public getNextTemplateName(): Set<string> {
-    return this.nextTemplateNames;
+  private hasProbabilitiesDefined(nextTemplates: INextTemplate[]): boolean {
+    return nextTemplates.some(item => item.probability !== undefined);
+  }
+
+  public getNextTemplateName(): INextTemplate[] {
+    return this.nextTemplates;
   }
 
   public getTemplateName(): string {
@@ -164,28 +188,10 @@ export interface IEntityLogits {
   similarity: number;
 }
 
-// Export interface IQueryRefinementPattern {
-//   /**
-//    * Operation type of the refinement pattern.
-//    */
-//   type: 'OPTIONAL' | 'FILTER' | 'UNION' | 'QUERY';
-//   /**
-//    * Operation to be performed, such as addition or removal of triple pattern in a block.
-//    */
-//   operation: 'addition' | 'removal';
-//   /**
-//    * Description of the refinement pattern.
-//    */
-//   description: string;
-//   /**
-//    * Target triple pattern(s) of the refinement pattern
-//    */
-//   target: ITargetTriplePattern[] | Expression[];
-//   /**
-//    * Optional index where the triple pattern should be added or removed.
-//    */
-//   location?: number;
-// }
+export interface INextTemplate {
+  template: string,
+  probability?: number,
+}
 
 export interface IBaseRefinementPattern {
   operation: 'addition' | 'removal';
