@@ -145,10 +145,12 @@ export class QuerySequenceTemplateProvider {
     if (nextTemplateProbabilities && nextTemplates.length !== nextTemplateProbabilities.length) {
       throw new Error(`Unequal number of nextTemplates and nextTemplateProbabilities in ${this.name}`);
     }
-
+    if (nextTemplates.length === 0){
+        return [];
+    }
     return nextTemplates.map((template, i) => ({
       template,
-      probability: nextTemplateProbabilities ? nextTemplateProbabilities[i] :  1 / this.nextTemplates.length,
+      probability: nextTemplateProbabilities ? nextTemplateProbabilities[i] :  1 / nextTemplates.length,
     }));
   }
 
