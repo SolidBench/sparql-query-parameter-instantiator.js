@@ -27,6 +27,9 @@ export class QuerySequenceTemplateProvider {
 
   private readonly parser: SparqlParser;
 
+  /**
+   * @param nextTemplateProbabilities - Probability of selecting each next template @range {float}
+   */
   public constructor(
     templateFilePath: string,
     variables: IVariableTemplate[],
