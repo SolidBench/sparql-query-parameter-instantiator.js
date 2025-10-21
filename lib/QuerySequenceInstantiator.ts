@@ -88,7 +88,7 @@ export class QuerySequenceInstantiator {
       this.providers.map(async provider => ({
         task: provider.queryTask,
         name: provider.getTemplateName(),
-        nextFilePaths: provider.getNextTemplateName(),
+        nextFilePaths: provider.getNextTemplates(),
         template: await provider.createTemplate(this.rngSeeded, this.temperature),
       })),
     );

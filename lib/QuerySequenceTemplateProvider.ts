@@ -18,8 +18,7 @@ export class QuerySequenceTemplateProvider {
   private readonly name: string;
   // What task this query belongs to
   public readonly queryTask: string;
-  // What templates can occur after the current query template provider.
-  private readonly nextTemplates: INextTemplate[];
+  private readonly nextTemplatesValidated: INextTemplate[];
   // File location for refinement patterns, if any
   private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
   private readonly minRefinementLength: number;
@@ -28,12 +27,16 @@ export class QuerySequenceTemplateProvider {
 
   private readonly parser: SparqlParser;
 
+  /**
+   * @param nextTemplates - Next template configurations 
+   * @range {json}
+  */
   public constructor(
     templateFilePath: string,
     variables: IVariableTemplate[],
     name: string,
     queryTask: string,
-    nextTemplateFilePath: INextTemplate[],
+    nextTemplates: Record<string, any>,
     minRefinementLength: number,
     maxRefinementLength: number,
     maxLogits: number,
@@ -43,13 +46,14 @@ export class QuerySequenceTemplateProvider {
     this.variables = variables;
     this.name = name;
     this.queryTask = queryTask;
-    this.nextTemplates = nextTemplateFilePath;
 
-    // If no probabilities are given, each template has equal probability of being selected next
-    this.validateNextTemplateProbabilities(this.nextTemplates);
-    if (!this.hasProbabilitiesDefined(this.nextTemplates)) {
-      for (const nextTemplate of this.nextTemplates) {
-        nextTemplate.probability = 1 / this.nextTemplates.length;
+    // Validate input json from config to be a valid nextTemplate interface with valid probability values
+    this.nextTemplatesValidated = this.validateNextTemplates(nextTemplates);
+
+    // If no probabilities are defined equal probability is assigned to each nextTemplate
+    if (!this.hasProbabilitiesDefined(this.nextTemplatesValidated)) {
+      for (const nextTemplate of this.nextTemplatesValidated) {
+        nextTemplate.probability = 1 / this.nextTemplatesValidated.length;
       }
     }
 
@@ -120,7 +124,7 @@ export class QuerySequenceTemplateProvider {
    */
   public validateNextTemplateFilePaths(providers: QuerySequenceTemplateProvider[]): boolean {
     const allTemplates = new Set(providers.map(provider => provider.templateFilePath));
-    for (const nextTemplate of this.nextTemplates) {
+    for (const nextTemplate of this.nextTemplatesValidated) {
       if (!allTemplates.has(nextTemplate.template)) {
         return false;
       }
@@ -159,26 +163,88 @@ export class QuerySequenceTemplateProvider {
     return exps.map(v => v / sum);
   }
 
-  private validateNextTemplateProbabilities(nextTemplates: INextTemplate[]) {
-    const hasProbability = nextTemplates.some(item => item.probability !== undefined);
-    const hasNoProbability = nextTemplates.some(item => item.probability === undefined);
-    if (hasProbability && hasNoProbability) {
-      throw new Error(`Either all or none of the next templates for provider ${this.templateFilePath} must have a defined probability.`);
-    }
-    if (hasNoProbability) {
-      const sumProbability = nextTemplates.reduce((sum, curr) => sum + curr.probability!, 0);
-      if (sumProbability != 1) {
-        throw new Error(`Probabilities do not sum to 1 for provider ${this.templateFilePath}`);
+  // private validateNextTemplates(nextTemplates: Record<string,any>[]): INextTemplate[] {
+  //   nextTemplates.forEach((nextT, index) => {
+  //     if (!this.isValidNextTemplate(nextT)) {
+  //       throw new Error(`Invalid nextTemplate at index ${index}: ${JSON.stringify(nextT, null, 2)}`);
+  //     }
+  //   });
+
+  //   const hasProbability = nextTemplates.some(item => item.probability !== undefined);
+  //   const hasNoProbability = nextTemplates.some(item => item.probability === undefined);
+  //   if (hasProbability && hasNoProbability) {
+  //     throw new Error(`Either all or none of the next templates for provider ${this.templateFilePath} must have a defined probability.`);
+  //   }
+  //   if (hasNoProbability) {
+  //     const sumProbability = nextTemplates.reduce((sum, curr) => sum + curr.probability!, 0);
+  //     if (sumProbability != 1) {
+  //       throw new Error(`Probabilities do not sum to 1 for provider ${this.templateFilePath}`);
+  //     }
+  //   }
+  //   return nextTemplates as INextTemplate[];
+  // }
+  private validateNextTemplates(nextTemplates: Record<string,any>): INextTemplate[] {
+    const nextTemplatesTest: INextTemplate[] = []
+    if ('template' in nextTemplates){
+      if ('probability' in nextTemplates){
+        if (nextTemplates.template.length === nextTemplates.probability.length){
+          for (let i = 0; i < nextTemplates.template.length; i++){
+            nextTemplatesTest.push({template: nextTemplates.template[i], probability: nextTemplates.probability[i]})
+          }
+        }
+      }
+      else{
+        for (let i = 0; i < nextTemplates.template.length; i++){
+          nextTemplatesTest.push({template: nextTemplates.template[i]})
+        }
       }
     }
+    return nextTemplatesTest;
+    // nextTemplates.forEach((nextT, index) => {
+    //   if (!this.isValidNextTemplate(nextT)) {
+    //     throw new Error(`Invalid nextTemplate at index ${index}: ${JSON.stringify(nextT, null, 2)}`);
+    //   }
+    // });
+
+    // const hasProbability = nextTemplates.some(item => item.probability !== undefined);
+    // const hasNoProbability = nextTemplates.some(item => item.probability === undefined);
+    // if (hasProbability && hasNoProbability) {
+    //   throw new Error(`Either all or none of the next templates for provider ${this.templateFilePath} must have a defined probability.`);
+    // }
+    // if (hasNoProbability) {
+    //   const sumProbability = nextTemplates.reduce((sum, curr) => sum + curr.probability!, 0);
+    //   if (sumProbability != 1) {
+    //     throw new Error(`Probabilities do not sum to 1 for provider ${this.templateFilePath}`);
+    //   }
+    // }
+    // return nextTemplates as INextTemplate[];
   }
+
+
+  private isValidNextTemplate(obj: any): obj is INextTemplate {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+      return false;
+    }
+    
+    const keys = Object.keys(obj);
+    const hasTemplate = typeof obj.template === 'string' && obj.template.trim() !== '';
+    const validProbability = !('probability' in obj) || 
+      (typeof obj.probability === 'number' && !isNaN(obj.probability));
+    
+    // Check that only allowed keys are present
+    const allowedKeys = ['template', 'probability'];
+    const hasOnlyAllowedKeys = keys.every(key => allowedKeys.includes(key));
+    
+    return hasTemplate && validProbability && hasOnlyAllowedKeys;
+  }
+
 
   private hasProbabilitiesDefined(nextTemplates: INextTemplate[]): boolean {
     return nextTemplates.some(item => item.probability !== undefined);
   }
 
-  public getNextTemplateName(): INextTemplate[] {
-    return this.nextTemplates;
+  public getNextTemplates(): INextTemplate[] {
+    return this.nextTemplatesValidated;
   }
 
   public getTemplateName(): string {
