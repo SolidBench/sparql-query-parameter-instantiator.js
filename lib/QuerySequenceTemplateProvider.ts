@@ -18,6 +18,10 @@ export class QuerySequenceTemplateProvider {
   private readonly name: string;
   // What task this query belongs to
   public readonly queryTask: string;
+  // When starting a new session, what is the probability of choosing this template
+  // This is used to ensure that number of occurrences templates in sequences is
+  // expected to be equal
+  public readonly baseProbabilityTemplate: number;
   private readonly nextTemplates: INextTemplate[];
   // File location for refinement patterns, if any
   private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
@@ -39,6 +43,7 @@ export class QuerySequenceTemplateProvider {
     minRefinementLength: number,
     maxRefinementLength: number,
     maxLogits: number,
+    baseProbabilityTemplate: number,
     refinementPatternsFilePath?: string,
     nextTemplateProbabilities?: number[],
   ) {
@@ -49,7 +54,8 @@ export class QuerySequenceTemplateProvider {
 
     // Validate input json from config to be a valid nextTemplate interface with valid probability values
     this.nextTemplates = this.validateNextTemplates(nextTemplates, nextTemplateProbabilities);
-
+    this.baseProbabilityTemplate = baseProbabilityTemplate;
+    
     this.refinementPatterns = this.parseRefinementFile(refinementPatternsFilePath);
     this.minRefinementLength = minRefinementLength;
     this.maxRefinementLength = maxRefinementLength;

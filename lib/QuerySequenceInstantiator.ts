@@ -83,23 +83,19 @@ export class QuerySequenceInstantiator {
     console.log(`Instantiating sequence ${n} with length ${sequenceLength} 
       for user ${user} with session transition probability ${sessionTransitionProbability.toFixed(2)}`);
 
-    const queryTasks = [ ...new Set(this.providers.map(x => x.queryTask)) ];
     const templates: IQuerySequenceElementTemplate[] = await Promise.all(
       this.providers.map(async provider => ({
         task: provider.queryTask,
         name: provider.getTemplateName(),
+        baseProbabilityTemplate: provider.baseProbabilityTemplate,
         nextFilePaths: provider.getNextTemplates(),
         template: await provider.createTemplate(this.rngSeeded, this.temperature),
       })),
     );
-
-    const taskToTemplate = Object.fromEntries(
-      templates.map(template => [ template.task, templates.filter(p => p.task === template.task) ]),
-    );
     const templateCounts: Record<string, number> = Object.fromEntries(
       this.providers.map(x => [ x.getTemplateName(), 0 ]),
     );
-    let currentSession = this.startNewSession(taskToTemplate, queryTasks, sequenceSessions.length);
+    let currentSession = this.startNewSession(templates, sequenceSessions.length);
     sequenceSessions.push(currentSession);
 
     const startQuery = currentSession.templates.at(-1)!;
@@ -127,7 +123,7 @@ export class QuerySequenceInstantiator {
         const openExtraSessions = sequenceSessions.filter(x => !x.ended).filter(x => x !== currentSession);
         if (this.sampleHit(0.5) || openExtraSessions.length <= 1) {
           // Start a new session
-          currentSession = this.startNewSession(taskToTemplate, queryTasks, sequenceSessions.length);
+          currentSession = this.startNewSession(templates, sequenceSessions.length);
           sequenceSessions.push(currentSession);
           this.addTemplateToSequence(
             currentSession.templates[0],
@@ -152,7 +148,7 @@ export class QuerySequenceInstantiator {
       if (nextTemplateFilePaths.length === 0) {
         currentSession.ended = true;
         // If no next templates are defined, we end the session and continue with the next one.
-        currentSession = this.startNewSession(taskToTemplate, queryTasks, sequenceSessions.length);
+        currentSession = this.startNewSession(templates, sequenceSessions.length);
         sequenceSessions.push(currentSession);
         this.addTemplateToSequence(
           currentSession.templates[0],
@@ -170,6 +166,7 @@ export class QuerySequenceInstantiator {
       // Next templateFilePath with attached probability
       const nextTemplatesWithProbability: IProbabilities<INextTemplate>[] =
         nextTemplateFilePaths.map(t => ({ entity: t, probability: t.probability! }));
+
       const nextQueryFilePath = this.sampleProbability(nextTemplatesWithProbability);
 
       const nextQuery = templates.find(template => template.name === nextQueryFilePath.template);
@@ -204,11 +201,13 @@ export class QuerySequenceInstantiator {
   }
 
   public startNewSession(
-    taskToTemplate: Record<string, IQuerySequenceElementTemplate[]>,
-    queryTasks: string[],
+    templates: IQuerySequenceElementTemplate[],
     nSessions: number,
   ): IQuerySession {
-    const startQuery = this.sampleRandom(taskToTemplate[this.sampleRandom(queryTasks)]);
+    const templateWithProbability = templates.map(
+      t => ({entity: t, probability: t.baseProbabilityTemplate})
+    );
+    const startQuery = this.sampleProbability(templateWithProbability);
     const newSession = {
       sessionId: nSessions,
       templates: [ startQuery ],
@@ -435,6 +434,7 @@ export interface IQuerySequenceElementTemplate {
   task: string;
   name: string;
   nextFilePaths: INextTemplate[];
+  baseProbabilityTemplate: number;
   template: QuerySequenceTemplate;
 }
 
