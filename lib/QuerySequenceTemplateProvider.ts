@@ -32,6 +32,7 @@ export class QuerySequenceTemplateProvider {
   private readonly parser: SparqlParser;
 
   /**
+   * @param baseProbabilityTemplate - Probability of starting new session with this template @range {float}
    * @param nextTemplateProbabilities - Probability of selecting each next template @range {float}
    */
   public constructor(
@@ -55,7 +56,7 @@ export class QuerySequenceTemplateProvider {
     // Validate input json from config to be a valid nextTemplate interface with valid probability values
     this.nextTemplates = this.validateNextTemplates(nextTemplates, nextTemplateProbabilities);
     this.baseProbabilityTemplate = baseProbabilityTemplate;
-    
+
     this.refinementPatterns = this.parseRefinementFile(refinementPatternsFilePath);
     this.minRefinementLength = minRefinementLength;
     this.maxRefinementLength = maxRefinementLength;
