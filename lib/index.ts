@@ -1,3 +1,4 @@
+export * from './sequence/SequenceGenerator';
 export * from './substitution/ISubstitutionProvider';
 export * from './substitution/SubstitutionProviderCsv';
 export * from './substitution/SubstitutionProviderShuffle';
@@ -6,7 +7,6 @@ export * from './substitution/SubstitutionProviderUnion';
 export * from './valuetransformer/IValueTransformer';
 export * from './valuetransformer/ValueTransformerPad';
 export * from './valuetransformer/ValueTransformerDistributeIri';
-export * from './valuetransformer/ValueTransformerReplaceIri';
 export * from './valuetransformer/ValueTransformerCsvMap';
 export * from './variable/IVariableTemplate';
 export * from './variable/VariableTemplateAdapter';

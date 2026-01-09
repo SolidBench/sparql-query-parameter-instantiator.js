@@ -35,6 +35,7 @@ import type {
   IOtherRefinementPattern,
   IUnionRefinementPattern,
 } from './QuerySequenceTemplateProvider';
+import { randomIntFromInterval, sampleRandom } from './utils/RandomUtils';
 import {
   extractBgpPerOperator,
   extractExpressionPerOperator,
@@ -49,6 +50,12 @@ export class QuerySequenceTemplate {
   private readonly syntaxTree: SparqlQuery;
   private readonly variableMappings: Record<string, RDF.Term[]>;
   private readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
+  // Mapping from variable to be instantiated to the type of variable (defined in config)
+  public readonly instantiationVariableTypeMap: Record<string, string>;
+  // Mapping from output query variable usable for next query instantiation to the type
+  // of instantiator
+  public readonly outputVariableTypeMap: Record<string, string>;
+
   private readonly rng: seedrandom.PRNG;
   // eslint-disable-next-line ts/naming-convention
   private readonly DF: DataFactory = new DataFactory();
@@ -61,6 +68,8 @@ export class QuerySequenceTemplate {
     syntaxTree: SparqlQuery,
     variableMappings: Record<string, RDF.Term[]>,
     variableProbabilities: Record<string, Record<string, IEntityLogits[]>>,
+    instantiationVariableToType: Record<string, string>,
+    outputPossibleInstantiationValue: Record<string, string>,
     rng: seedrandom.PRNG,
     minRefinementLength: number,
     maxRefinementLength: number,
@@ -69,6 +78,8 @@ export class QuerySequenceTemplate {
     this.syntaxTree = syntaxTree;
     this.variableMappings = variableMappings;
     this.variableProbabilities = variableProbabilities;
+    this.instantiationVariableTypeMap = instantiationVariableToType;
+    this.outputVariableTypeMap = outputPossibleInstantiationValue;
     this.rng = rng;
     this.refinementPatterns = refinementPatterns?.map((pattern) => {
       // Map config representation of target of substitution to a RDF.Variable object
@@ -92,10 +103,18 @@ export class QuerySequenceTemplate {
   /**
    * Instantiate this template for the given counter value.
    * This counter value is used to determine what variable value should be used.
+   * When passed a previous query result, the query will be instantiated with one of these values
+   * instead. This is to simulate 'click through' behavior of a user.
    * @param counter The current counter value.
+   * @param
    */
-  public instantiate(counter: number, instantiateRefinementPattern: boolean, user?: string):
-  { queries: string[]; patternMetadata: Record<string, any>[] } {
+  public instantiate(
+    counter: number,
+    instantiateRefinementPattern: boolean,
+    previousQueryResult: Record<string, RDF.Term[]>,
+    user?: string,
+  ):
+    { queries: string[]; patternMetadata: Record<string, any>[]; ast: SelectQuery } {
     // Determine variables to instantiate with
     const variableMapping: Record<string, RDF.Term> = {};
     const alternativeMapping: Record<string, RDF.Term> = {};
@@ -127,7 +146,7 @@ export class QuerySequenceTemplate {
       if (!this.refinementPatterns) {
         throw new Error(`No refinement patterns available for instantiation`);
       }
-      const patternLength = this.randomIntFromInterval(this.minRefinementLength, this.maxRefinementLength);
+      const patternLength = randomIntFromInterval(this.rng, this.minRefinementLength, this.maxRefinementLength);
       const { queries, metadata } = this.createRefinementSequence(
         this.refinementPatterns,
         instantiatedSyntaxTree,
@@ -137,12 +156,14 @@ export class QuerySequenceTemplate {
       );
       return {
         queries: queries.map(query => new Generator().stringify(query)),
+        ast: queries[0],
         patternMetadata: metadata,
       };
     }
     // Instantiate syntax tree
     return {
       queries: [ new Generator().stringify(instantiatedSyntaxTree) ],
+      ast: instantiatedSyntaxTree,
       patternMetadata: [{}],
     };
   }
@@ -325,7 +346,7 @@ export class QuerySequenceTemplate {
         variableMapping,
       );
 
-      const patternToApply = this.sampleRandom(validPatterns);
+      const patternToApply = sampleRandom(this.rng, validPatterns);
       if (!patternToApply) {
         throw new Error(`Found no valid patterns for ${JSON.stringify(query, null, 2)}`);
       }
@@ -450,7 +471,7 @@ export class QuerySequenceTemplate {
           // Add back a triple when no target is specified
           // const state = refinementState[typeToKeyMap[patternType]];
           if (targetFilters.length === 0) {
-            targetFilters = [ this.sampleRandom((<IOperatorState>state).removedExp) ];
+            targetFilters = [ sampleRandom(this.rng, (<IOperatorState>state).removedExp) ];
           }
 
           // The triple pattern is no longer a 'removed' pattern
@@ -477,7 +498,7 @@ export class QuerySequenceTemplate {
           // Add back a triple when no target is specified
           const state = refinementState[typeToKeyMap[patternType]];
           if (pattern.target.length === 0) {
-            targetTriples = [ this.sampleRandom(state.removedTps) ];
+            targetTriples = [ sampleRandom(this.rng, state.removedTps) ];
           }
 
           // The triple patterns are no longer a removed pattern
@@ -520,7 +541,8 @@ export class QuerySequenceTemplate {
           let filtersToRemove = pattern.target.map(t => this.instantiateExpression(t, variableMapping));
           if (filtersToRemove.length === 0) {
             // Randomly select a filter to remove
-            filtersToRemove = [ this.sampleRandom(
+            filtersToRemove = [ sampleRandom(
+              this.rng,
               query.where!.filter(queryPattern => queryPattern.type === 'filter'),
             ).expression ];
           }
@@ -538,7 +560,7 @@ export class QuerySequenceTemplate {
           }
           let triplesToRemove = pattern.target.map(x => this.targetToTriple(x));
           if (triplesToRemove.length === 0) {
-            triplesToRemove = [ this.sampleRandom(bgpToRefine.triples) ];
+            triplesToRemove = [ sampleRandom(this.rng, bgpToRefine.triples) ];
           }
           const removed = this.removeTargetFromBgp(bgpToRefine, triplesToRemove, variableMapping);
           const triplePatternsLeft = Object.values(operatorToBgp).map(bgps => bgps.map(bgp => bgp.triples)).flat(2);
@@ -572,7 +594,7 @@ export class QuerySequenceTemplate {
 
           let triplesToRemove: Triple[][] = pattern.target.map(x => x.map(y => this.targetToTriple(y)));
           if (triplesToRemove.length === 0) {
-            const tripleToRemove = [ this.sampleRandom([ ...bgpToRefineLeft.triples, ...bgpToRefineRight.triples ]) ];
+            const tripleToRemove = [ sampleRandom(this.rng, [ ...bgpToRefineLeft.triples, ...bgpToRefineRight.triples ]) ];
             triplesToRemove = [ tripleToRemove, tripleToRemove ];
           }
           for (let i = 0; i < 2; i++) {
@@ -1138,14 +1160,6 @@ export class QuerySequenceTemplate {
       }
     }
     throw new Error('Failed sampling, likely due to probabilities not summing to 1.');
-  }
-
-  public sampleRandom<T>(array: T[]): T {
-    return array[Math.floor(this.rng() * array.length)];
-  }
-
-  public randomIntFromInterval(min: number, max: number): number {
-    return Math.floor(this.rng() * (max - min + 1) + min);
   }
 
   public updateCounter(user: string, variable: string, value: string): void {

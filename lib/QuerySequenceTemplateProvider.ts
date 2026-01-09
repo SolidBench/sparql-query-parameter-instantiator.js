@@ -18,6 +18,11 @@ export class QuerySequenceTemplateProvider {
   private readonly name: string;
   // What task this query belongs to
   public readonly queryTask: string;
+  // Mapping from variable to be instantiated to the type of variable (defined in config)
+  public readonly instantiationVariableTypeMap: Record<string, string>;
+  // Mapping from output query variable usable for next query instantiation to the type
+  // of instantiator
+  public readonly outputVariableTypeMap: Record<string, string>;
   // When starting a new session, what is the probability of choosing this template
   // This is used to ensure that number of occurrences templates in sequences is
   // expected to be equal
@@ -34,12 +39,16 @@ export class QuerySequenceTemplateProvider {
   /**
    * @param baseProbabilityTemplate - Probability of starting new session with this template @range {float}
    * @param nextTemplateProbabilities - Probability of selecting each next template @range {float}
+   * @param instantiationVariableTypeMap - Mapping from instantiation variable in template to the type of instantiation @range {json}
+   * @param outputVariableTypeMap - Mapping from variable in output of the template to the type of entity @range {json}
    */
   public constructor(
     templateFilePath: string,
     variables: IVariableTemplate[],
     name: string,
     queryTask: string,
+    instantiationVariableTypeMap: Record<string, string>,
+    outputVariableTypeMap: Record<string, string>,
     nextTemplates: string[],
     minRefinementLength: number,
     maxRefinementLength: number,
@@ -50,8 +59,11 @@ export class QuerySequenceTemplateProvider {
   ) {
     this.templateFilePath = templateFilePath;
     this.variables = variables;
+
     this.name = name;
     this.queryTask = queryTask;
+    this.instantiationVariableTypeMap = instantiationVariableTypeMap;
+    this.outputVariableTypeMap = outputVariableTypeMap;
 
     // Validate input json from config to be a valid nextTemplate interface with valid probability values
     this.nextTemplates = this.validateNextTemplates(nextTemplates, nextTemplateProbabilities);
@@ -100,6 +112,8 @@ export class QuerySequenceTemplateProvider {
       syntaxTree,
       variableMappings,
       variableProbabilityMappings,
+      this.instantiationVariableTypeMap,
+      this.outputVariableTypeMap,
       rng,
       this.minRefinementLength,
       this.maxRefinementLength,
@@ -150,17 +164,17 @@ export class QuerySequenceTemplateProvider {
 
   private validateNextTemplates(
     nextTemplates: string[],
-    nextTemplateProbabilities?: number[]
+    nextTemplateProbabilities?: number[],
   ): INextTemplate[] {
     if (nextTemplateProbabilities && nextTemplates.length !== nextTemplateProbabilities.length) {
       throw new Error(`Unequal number of nextTemplates and nextTemplateProbabilities in ${this.name}`);
     }
-    if (nextTemplates.length === 0){
-        return [];
+    if (nextTemplates.length === 0) {
+      return [];
     }
     return nextTemplates.map((template, i) => ({
       template,
-      probability: nextTemplateProbabilities ? nextTemplateProbabilities[i] :  1 / nextTemplates.length,
+      probability: nextTemplateProbabilities ? nextTemplateProbabilities[i] : 1 / nextTemplates.length,
     }));
   }
 
@@ -190,7 +204,6 @@ export interface IBaseRefinementPattern {
   location: number;
 }
 
-// FILTER: uses Expression[]
 export interface IFilterRefinementPattern extends IBaseRefinementPattern {
   type: 'FILTER';
   target: Expression[];

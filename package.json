@@ -49,6 +49,8 @@
     "version": "manual-git-changelog onversion"
   },
   "dependencies": {
+    "@comunica/query-sparql-file": "^5.0.1",
+    "@comunica/types": "^5.0.0",
     "@rdfjs/types": "*",
     "@types/sparqljs": "*",
     "componentsjs": "^6.0.0",
