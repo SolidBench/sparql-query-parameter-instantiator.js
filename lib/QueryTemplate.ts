@@ -15,6 +15,7 @@ import type {
   Expression,
 } from 'sparqljs';
 import { Generator } from 'sparqljs';
+import { recurseExpression, recursePatterns, TermCallback } from './utils/SyntaxTreeUtils';
 
 /**
  * Data object for a query template.
@@ -48,11 +49,25 @@ export class QueryTemplate {
     }
 
     // Instantiate syntax tree
-    return new Generator().stringify(this.instantiateSyntaxTree(this.syntaxTree, variableMapping));
+    return new Generator().stringify(this.instantiateSyntaxTreeWrap(this.syntaxTree, variableMapping));
   }
 
-  public instantiateSyntaxTree(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
+  public instantiateSyntaxTreeWrap(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>){
+    const context: Record<string, any> = { variableMapping };
+    return this.instantiateSyntaxTreeRecurse(syntaxTree, this.instantiateTerm, context);
+  }
+
+  private instantiateSyntaxTreeRecurse = (
+    syntaxTree: SparqlQuery,
+    termCallback: TermCallback,
+    context: Record<string, any>
+  ): SelectQuery => {
     // Only allow SELECT queries
+    const variableMapping: Record<string, RDF.Term> = context.variableMapping;
+    if (!variableMapping){
+      throw new Error("Instantiation of syntax tree failed due to missing variableMapping in context");
+    }
+
     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
       throw new Error(`Only instantiations of SELECT queries are supported`);
     }
@@ -71,114 +86,35 @@ export class QueryTemplate {
     // Apply expressions in variables
     syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
       if ('expression' in variable) {
-        variable.expression = this.instantiateExpression(variable.expression, variableMapping);
+        variable.expression = recurseExpression(variable.expression, termCallback, context, this.instantiateSyntaxTreeRecurse);
       }
       return variable;
     });
 
     // Handle where clause in a recursive manner
-    syntaxTree.where = this.instantiatePatterns(syntaxTree.where!, variableMapping);
+    syntaxTree.where = recursePatterns(syntaxTree.where!, termCallback, context, this.instantiateSyntaxTreeRecurse);
 
     // Handle GROUP BY
     if (syntaxTree.group) {
       syntaxTree.group = syntaxTree.group
-        .map(group => ({ expression: this.instantiateExpression(group.expression, variableMapping) }));
+        .map(group => ({ expression: recurseExpression(group.expression, termCallback, context, this.instantiateSyntaxTreeRecurse) }));
     }
 
     return syntaxTree;
   }
 
-  public instantiatePatterns(patterns: Pattern[], variableMapping: Record<string, RDF.Term>): Pattern[] {
-    // eslint-disable-next-line array-callback-return
-    return patterns.map((pattern) => {
-      pattern = { ...pattern };
-      switch (pattern.type) {
-        case 'query':
-          return this.instantiateSyntaxTree(pattern, variableMapping);
-        case 'bgp':
-        case 'graph':
-          if ('triples' in pattern) {
-            return {
-              type: 'bgp',
-              triples: pattern.triples.map(triple => this.instantiateTriple(triple, variableMapping)),
-            };
-          }
-          return {
-            type: 'graph',
-            name: pattern.name,
-            patterns: this.instantiatePatterns(pattern.patterns, variableMapping),
-          };
-        case 'union':
-        case 'group':
-        case 'optional':
-        case 'minus':
-        case 'service':
-          return {
-            ...pattern,
-            patterns: this.instantiatePatterns(pattern.patterns, variableMapping),
-          };
-        case 'filter':
-        case 'bind':
-          return {
-            ...pattern,
-            expression: this.instantiateExpression(pattern.expression, variableMapping),
-          };
-        case 'values':
-          return pattern;
-      }
-    });
-  }
-
-  public instantiateExpression(expression: Expression, variableMapping: Record<string, RDF.Term>): Expression {
-    if ('type' in expression) {
-      switch (expression.type) {
-        case 'group':
-        case 'graph':
-          return <Expression> {
-            ...expression,
-            patterns: this.instantiatePatterns(expression.patterns, variableMapping),
-          };
-        case 'bgp':
-          return <Expression> {
-            ...expression,
-            triples: expression.triples.map(triple => this.instantiateTriple(triple, variableMapping)),
-          };
-        case 'operation':
-        case 'functionCall':
-          return {
-            ...expression,
-            args: expression.args.map(arg => this.instantiateExpression(arg, variableMapping)),
-          };
-        case 'aggregate':
-          return {
-            ...expression,
-            expression: this.instantiateExpression(expression.expression, variableMapping),
-          };
-      }
-    } else {
-      return <Expression> this.instantiateTerm(<Term> expression, variableMapping);
-    }
-  }
-
-  public instantiateTriple(triple: Triple, variableMapping: Record<string, RDF.Term>): Triple {
-    return {
-      subject: <any> this.instantiateTerm(triple.subject, variableMapping),
-      predicate: <any> this.instantiateTerm(triple.predicate, variableMapping),
-      object: <any> this.instantiateTerm(triple.object, variableMapping),
-    };
-  }
-
-  public instantiateTerm<T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
+  private instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
     term: T,
-    variableMapping: Record<string, RDF.Term>,
-  ): T | RDF.Term {
-    if ('termType' in term && (<RDF.Term> term).termType === 'Variable') {
-      const variableName = (<VariableTerm> term).value;
-      const variableValue = variableMapping[variableName];
+    context: Record<string, any>,
+  ): T | RDF.Term => {
+    if (term && typeof term === 'object' && 'termType' in term && (<RDF.Term>term).termType === 'Variable') {
+      const variableName = (<VariableTerm>term).value;
+      const variableValue = context.variableMapping[variableName];
       if (variableValue) {
         return variableValue;
       }
     }
     return term;
-  }
+  };
+
 }
