@@ -3,8 +3,8 @@ import type { BindingsStream } from '@comunica/types';
 import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
 import type { ValueTransformerCsvMap } from '../valuetransformer/ValueTransformerCsvMap';
-import { SelectQuery, Generator, SparqlQuery, VariableExpression, VariableTerm, IriTerm, BlankTerm, QuadTerm, PropertyPath } from 'sparqljs';
-import { recurseExpression, recursePatterns, TermCallback } from './SyntaxTreeUtils';
+import { SelectQuery, Generator, SparqlQuery, VariableTerm, IriTerm, BlankTerm, QuadTerm, PropertyPath } from 'sparqljs';
+import { recurseExpression, recursePatterns, TermCallback } from './../utils/SyntaxTreeUtils';
 
 export class QueryNextInstantiatorValue {
   protected readonly dataLocations: string[];
@@ -13,6 +13,8 @@ export class QueryNextInstantiatorValue {
 
   protected readonly engine: QueryEngine;
   protected readonly timeout: number;
+
+  protected indexedFiles: boolean = false;
 
   public constructor(args: IQueryNextInstantiatorValueArgs) {
     this.dataLocations = args.dataLocations;
@@ -24,22 +26,21 @@ export class QueryNextInstantiatorValue {
   }
 
   public async getNextQueryInstantiationValues(query: SelectQuery) {
-    const tranformedQuery = this.transformQuery(query);
+    // First run takes a while due to file indexing. So we prerun this
+    // to avoid timeout issues
+    const transformedQuery = this.transformQuery(query);
     const { message, results } = await this.executeQuery(
-        new Generator().stringify(tranformedQuery)
+        new Generator().stringify(transformedQuery)
     );
+    // TODO: Use reverse mapping for comment and post transformation, currently wrong way around
     // TODO: 
     // Transform results back to fragmented state. Easily done by apply the transformers backwards in sequence.
     return results;
   }
 
   protected transformQuery(query: SelectQuery) {
-    // TODO: First test if this works correctly. Then we fix next todos
-    // TODO: Also transform the prefixes if they exist. Just do simple string search.
     const transformedQuery = this.transformSyntaxTreeRecurse(query, this.instantiateTerm, {});
-    console.log(transformedQuery);
-    console.log(query);
-    return query;
+    return transformedQuery;
   }
 
   private instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | RDF.Term>(
@@ -66,6 +67,19 @@ export class QueryNextInstantiatorValue {
     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
       throw new Error(`Only instantiations of SELECT queries are supported`);
     }
+
+    // Update prefixes. These don't require the mappingTransformer as this is only
+    // for fragmented subjects
+    syntaxTree.prefixes = Object.fromEntries(
+    Object.entries(syntaxTree.prefixes).map(([prefix, iri]) => {
+        // Logic: Add a slash to the end of every IRI if it's missing
+        let transformed = iri;
+        for (const tranformerIri of this.transformers){
+            transformed = tranformerIri.transformFragmentedToOriginalRaw(transformed);
+        }
+        return [prefix, transformed];
+    })
+    );
 
     // Apply expressions in variables
     syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
@@ -140,16 +154,16 @@ export class TermTransformer {
 
   private readonly DF = new DataFactory();
 
-  public constructor(searchRegex: string, searchString: string, replacementRegex: string, replacementString: string) {
-    this.originalExp = new RegExp(searchRegex, 'u');
-    this.originalString = searchString;
-    this.fragmentedExp = new RegExp(replacementRegex, 'u');
-    this.fragmentedString = replacementString;
+  public constructor(args: ITermTransformerArgs) {
+    this.originalExp = new RegExp(args.originalRegex, 'u');
+    this.originalString = args.originalString;
+    this.fragmentedExp = new RegExp(args.fragmentedRegex, 'u');
+    this.fragmentedString = args.fragmentedString;
   }
 
   public transformOriginalToFragmented(term: RDF.Term): RDF.Term {
     if (term.termType === 'NamedNode') {
-      const value = term.value.replace(this.originalExp, this.fragmentedString);
+      const value = this.transformOriginalToFragmentedRaw(term.value);
       return this.DF.namedNode(value);
     }
     return term;
@@ -157,10 +171,18 @@ export class TermTransformer {
 
   public transformFragmentedToOriginal(term: RDF.Term): RDF.Term {
     if (term.termType === 'NamedNode') {
-      const value = term.value.replace(this.fragmentedExp, this.originalString);
+      const value = this.transformFragmentedToOriginalRaw(term.value);
       return this.DF.namedNode(value);
     }
     return term;
+  }
+
+  public transformFragmentedToOriginalRaw(value: string): string {
+    return value.replace(this.fragmentedExp, this.originalString);
+  }
+
+  public transformOriginalToFragmentedRaw(value: string): string {
+    return value.replace(this.originalExp, this.fragmentedString);
   }
 }
 
@@ -182,6 +204,13 @@ export interface IQueryNextInstantiatorValueArgs {
    * Timeout for query execution in seconds
    */
   timeout: number;
+}
+
+export interface ITermTransformerArgs {
+  originalRegex: string,
+  originalString: string,
+  fragmentedRegex: string,
+  fragmentedString: string 
 }
 
 export interface IQueryExecutionResult {

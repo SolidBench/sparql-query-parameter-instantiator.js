@@ -4,7 +4,7 @@ import type { SelectQuery } from 'sparqljs';
 import { QuerySequenceTemplate } from '../QuerySequenceTemplate';
 import type { INextTemplate, QuerySequenceTemplateProvider } from '../QuerySequenceTemplateProvider';
 import { calculateExpectedMeanLogNormal, logNormal, logNormalRoundedUp, sampleHit, sampleProbability, sampleRandom } from '../utils/RandomUtils';
-import { QueryNextInstantiatorValue } from '../utils/NextInstantiationQueryUtils';
+import { QueryNextInstantiatorValue } from './QueryNextInstantiationValue';
 
 export class SequenceGenerator {
   private readonly meanLogSequenceLength: number;
@@ -96,7 +96,7 @@ export class SequenceGenerator {
     return newSession;
   }
 
-  public addTemplateToSequence(
+  public async addTemplateToSequence(
     rng: seedrandom.PRNG,
     query: IQuerySequenceElementTemplate,
     session: IQuerySession,
@@ -105,12 +105,20 @@ export class SequenceGenerator {
     user: string,
     templateCounts: Record<string, number>,
     sequenceMetadata: IQuerySequenceMetadata,
-  ): SelectQuery {
+  ): Promise<SelectQuery> {
     let instantiateRefinementPattern = false;
     if (rng() < this.refinementPatternProbability) {
       instantiateRefinementPattern = true;
     }
-
+    // Last ast is only defined if a previous query has been instantiated in the query
+    // thus this can serve as starting point to determine next instantiation
+    if (session.lastAst){
+      await this.determineNextInstantiator(
+        session.lastAst,
+        session.templates[session.templates.length - 1].template,
+        query.template
+      );
+    }
     // Add template to session
     const { queries, patternMetadata, ast } = query.template.instantiate(
       templateCounts[query.name],
@@ -120,6 +128,8 @@ export class SequenceGenerator {
     );
     sequence.push(...queries);
     session.templates.push(query);
+    session.lastAst = ast;
+
     // Update template counts
     templateCounts[query.name] += 1;
     // Close session if it is full
@@ -138,6 +148,7 @@ export class SequenceGenerator {
         refinementMetadata: metadata,
       });
     }
+
     // Return the last template in the session
     return ast;
   }
@@ -172,11 +183,11 @@ export class SequenceGenerator {
     const sequenceSessions: IQuerySession[] = [];
     const querySequence: string[] = [];
 
-    const createAndRegisterNewSession = () => {
+    const createAndRegisterNewSession = async () => {
       const session = this.startNewSession(rng, templates, sequenceSessions.length);
       sequenceSessions.push(session);
       // Add query to the sequence and sessions and return the ast of the last query.
-      const ast = this.addTemplateToSequence(
+      const ast = await this.addTemplateToSequence(
         rng,
         session.templates[0],
         session,
@@ -189,7 +200,7 @@ export class SequenceGenerator {
       return { session, ast };
     };
 
-    let { session: currentSession, ast: lastAst } = createAndRegisterNewSession();
+    let { session: currentSession, ast: lastAst } = await createAndRegisterNewSession();
 
     for (let i = 0; i < sequenceLength - 1; i++) {
       // Random chance of switching session
@@ -202,22 +213,20 @@ export class SequenceGenerator {
           currentSession = sampleRandom(rng, openExtraSessions);
         } else {
           // Start a new session
-          ({ session: currentSession, ast: lastAst } = createAndRegisterNewSession());
+          ({ session: currentSession, ast: lastAst } = await createAndRegisterNewSession());
           continue;
         }
       }
 
-      // B. Template Navigation Logic
       const lastElement = currentSession.templates.at(-1)!;
       const nextOptions = lastElement.nextFilePaths;
 
       if (nextOptions.length === 0) {
         currentSession.ended = true;
-        ({ session: currentSession, ast: lastAst } = createAndRegisterNewSession());
+        ({ session: currentSession, ast: lastAst } = await createAndRegisterNewSession());
         continue;
       }
 
-      // C. Sampling & Execution
       const choice = sampleProbability(rng, nextOptions.map(t => ({
         entity: t,
         probability: t.probability!,
@@ -228,7 +237,7 @@ export class SequenceGenerator {
         throw new Error(`Template not found: ${choice.template}`);
       }
 
-      lastAst = this.addTemplateToSequence(
+      lastAst = await this.addTemplateToSequence(
         rng,
         nextQuery,
         currentSession,
@@ -242,7 +251,7 @@ export class SequenceGenerator {
     return { querySequence, sequenceMetadata };
   }
 
-  public determineNextInstantiator(
+  public async determineNextInstantiator(
     ast: SelectQuery,
     lastTemplate: QuerySequenceTemplate,
     nextTemplate: QuerySequenceTemplate
@@ -252,7 +261,8 @@ export class SequenceGenerator {
     const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(
         lastTemplate, nextTemplate
     );
-    this.findNextInstantiationValue.getNextQueryInstantiationValues(ast);
+    console.log(mapping);
+    await this.findNextInstantiationValue.getNextQueryInstantiationValues(ast);
   }
 
   private mapOutputVariablesToInstatiationVariables(
@@ -363,6 +373,7 @@ export interface IProbabilities<T> {
 export interface IQuerySession extends IQuerySessionMetadata {
   templates: IQuerySequenceElementTemplate[];
   ended: boolean;
+  lastAst?: SelectQuery;
 }
 
 export interface IQuerySessionMetadata {
