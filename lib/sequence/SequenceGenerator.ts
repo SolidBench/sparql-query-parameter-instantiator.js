@@ -249,7 +249,7 @@ export class SequenceGenerator {
   ) {
     // Determine what query output variables should be used as possible values for instantiation
     // of the next template
-    const mapping: Record<string, string> = this.mapOutputVariablesToInstatiationVariables(
+    const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(
         lastTemplate, nextTemplate
     );
     this.findNextInstantiationValue.getNextQueryInstantiationValues(ast);

@@ -42,6 +42,7 @@ import {
   extractTriplePatternsPerOperator,
   getVariablesInExpression,
 } from './utils/RefinementSequenceUtils';
+import { processTriple, recurseExpression, recursePatterns, TermCallback } from './utils/SyntaxTreeUtils';
 
 /**
  * Data object for a query template.
@@ -139,7 +140,7 @@ export class QuerySequenceTemplate {
         );
       }
     }
-    const instantiatedSyntaxTree = this.instantiateSyntaxTree(this.syntaxTree, variableMapping);
+    const instantiatedSyntaxTree = this.instantiateSyntaxTreeWrap(this.syntaxTree, variableMapping);
 
     // Create an array of SelectQueries that are all slight variations of the same template
     if (instantiateRefinementPattern) {
@@ -167,9 +168,22 @@ export class QuerySequenceTemplate {
       patternMetadata: [{}],
     };
   }
+  public instantiateSyntaxTreeWrap(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>){
+    const context: Record<string, any> = { variableMapping };
+    return this.instantiateSyntaxTreeRecurse(syntaxTree, this.instantiateTerm, context);
+  }
 
-  public instantiateSyntaxTree(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
+  private instantiateSyntaxTreeRecurse = (
+    syntaxTree: SparqlQuery,
+    termCallback: TermCallback,
+    context: Record<string, any>
+  ): SelectQuery => {
     // Only allow SELECT queries
+    const variableMapping: Record<string, RDF.Term> = context.variableMapping;
+    if (!variableMapping){
+      throw new Error("Instantiation of syntax tree failed due to missing variableMapping in context");
+    }
+
     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
       throw new Error(`Only instantiations of SELECT queries are supported`);
     }
@@ -188,116 +202,36 @@ export class QuerySequenceTemplate {
     // Apply expressions in variables
     syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
       if ('expression' in variable) {
-        variable.expression = this.instantiateExpression(variable.expression, variableMapping);
+        variable.expression = recurseExpression(variable.expression, termCallback, context, this.instantiateSyntaxTreeRecurse);
       }
       return variable;
     });
 
     // Handle where clause in a recursive manner
-    syntaxTree.where = this.instantiatePatterns(syntaxTree.where!, variableMapping);
+    syntaxTree.where = recursePatterns(syntaxTree.where!, termCallback, context, this.instantiateSyntaxTreeRecurse);
 
     // Handle GROUP BY
     if (syntaxTree.group) {
       syntaxTree.group = syntaxTree.group
-        .map(group => ({ expression: this.instantiateExpression(group.expression, variableMapping) }));
+        .map(group => ({ expression: recurseExpression(group.expression, termCallback, context, this.instantiateSyntaxTreeRecurse) }));
     }
 
     return syntaxTree;
   }
 
-  public instantiatePatterns(patterns: Pattern[], variableMapping: Record<string, RDF.Term>): Pattern[] {
-    // eslint-disable-next-line array-callback-return
-    return patterns.map((pattern) => {
-      pattern = { ...pattern };
-      switch (pattern.type) {
-        case 'query':
-          return this.instantiateSyntaxTree(pattern, variableMapping);
-        case 'bgp':
-        case 'graph':
-          if ('triples' in pattern) {
-            return {
-              type: 'bgp',
-              triples: pattern.triples.map(triple => this.instantiateTriple(triple, variableMapping)),
-            };
-          }
-          return {
-            type: 'graph',
-            name: pattern.name,
-            patterns: this.instantiatePatterns(pattern.patterns, variableMapping),
-          };
-        case 'union':
-        case 'group':
-        case 'optional':
-        case 'minus':
-        case 'service':
-          return {
-            ...pattern,
-            patterns: this.instantiatePatterns(pattern.patterns, variableMapping),
-          };
-        case 'filter':
-        case 'bind':
-          return {
-            ...pattern,
-            expression: this.instantiateExpression(pattern.expression, variableMapping),
-          };
-        case 'values':
-          return pattern;
-      }
-    });
-  }
-
-  public instantiateExpression(expression: Expression, variableMapping: Record<string, RDF.Term>): Expression {
-    if ('type' in expression) {
-      switch (expression.type) {
-        case 'group':
-        case 'graph':
-          return <Expression> {
-            ...expression,
-            patterns: this.instantiatePatterns(expression.patterns, variableMapping),
-          };
-        case 'bgp':
-          return <Expression> {
-            ...expression,
-            triples: expression.triples.map(triple => this.instantiateTriple(triple, variableMapping)),
-          };
-        case 'operation':
-        case 'functionCall':
-          return {
-            ...expression,
-            args: expression.args.map(arg => this.instantiateExpression(arg, variableMapping)),
-          };
-        case 'aggregate':
-          return {
-            ...expression,
-            expression: this.instantiateExpression(expression.expression, variableMapping),
-          };
-      }
-    } else {
-      return <Expression> this.instantiateTerm(<Term> expression, variableMapping);
-    }
-  }
-
-  public instantiateTriple(triple: Triple, variableMapping: Record<string, RDF.Term>): Triple {
-    return {
-      subject: <any> this.instantiateTerm(triple.subject, variableMapping),
-      predicate: <any> this.instantiateTerm(triple.predicate, variableMapping),
-      object: <any> this.instantiateTerm(triple.object, variableMapping),
-    };
-  }
-
-  public instantiateTerm<T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
+  private instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
     term: T,
-    variableMapping: Record<string, RDF.Term>,
-  ): T | RDF.Term {
-    if ('termType' in term && (<RDF.Term> term).termType === 'Variable') {
-      const variableName = (<VariableTerm> term).value;
-      const variableValue = variableMapping[variableName];
+    context: Record<string, any>,
+  ): T | RDF.Term => {
+    if (term && typeof term === 'object' && 'termType' in term && (<RDF.Term>term).termType === 'Variable') {
+      const variableName = (<VariableTerm>term).value;
+      const variableValue = context.variableMapping[variableName];
       if (variableValue) {
         return variableValue;
       }
     }
     return term;
-  }
+  };
 
   public createRefinementSequence(
     refinementPatterns: IQueryRefinementPattern[],
@@ -465,9 +399,8 @@ export class QuerySequenceTemplate {
         case 'FILTER': {
           // Targets are instantiated and then evaluated
           let targetFilters: Expression[] = pattern.target.map(
-            t => this.instantiateExpression(t, variableMapping),
+            t => recurseExpression(t, this.instantiateTerm, { variableMapping }, this.instantiateSyntaxTreeRecurse),
           );
-
           // Add back a triple when no target is specified
           // const state = refinementState[typeToKeyMap[patternType]];
           if (targetFilters.length === 0) {
@@ -538,7 +471,9 @@ export class QuerySequenceTemplate {
         }
         case 'FILTER': {
           // Filters to remove are instantiated versions of target
-          let filtersToRemove = pattern.target.map(t => this.instantiateExpression(t, variableMapping));
+          let filtersToRemove = pattern.target.map(
+            t => recurseExpression(t, this.instantiateTerm, { variableMapping }, this.instantiateSyntaxTreeRecurse)
+          );
           if (filtersToRemove.length === 0) {
             // Randomly select a filter to remove
             filtersToRemove = [ sampleRandom(
@@ -704,7 +639,14 @@ export class QuerySequenceTemplate {
     },
   ): boolean {
     const patternType = pattern.type.toLowerCase();
-    const targets = pattern.target.map(x => this.instantiateExpression(x, context.variableMapping));
+    const targets = pattern.target.map(
+      x => recurseExpression(
+        x, 
+        this.instantiateTerm,
+        { variableMapping: context.variableMapping },
+        this.instantiateSyntaxTreeRecurse
+      )
+    );
 
     const alreadyPresent = targets.length > 0 && targets.every(t =>
       context.queryExpressions.some(q => this.expressionEquals(t, q)));
@@ -777,8 +719,13 @@ export class QuerySequenceTemplate {
     if (context.patternTypeOverride) {
       patternType = context.patternTypeOverride.toLowerCase();
     }
+
     const targets = pattern.target.map(t =>
-      this.instantiateTriple(this.targetToTriple(t), context.variableMapping));
+      processTriple(this.targetToTriple(t), this.instantiateTerm, {variableMapping: context.variableMapping})
+    );
+
+    // const targets = pattern.target.map(t =>
+    //   this.instantiateTriple(this.targetToTriple(t), context.variableMapping));
 
     const alreadyPresent = targets.length > 0 && targets.every(t =>
       context.queryTriples.some(q => this.tripleEquals(q, t)));
@@ -1009,9 +956,10 @@ export class QuerySequenceTemplate {
     for (const target of targets) {
       const targetTriple = this.targetToTriple(target);
       if (!this.hasTriple(bgp, targetTriple)) {
-        const instantiatedTriple = this.instantiateTriple(
+        const instantiatedTriple = processTriple(
           targetTriple,
-          variableMapping,
+          this.instantiateTerm,
+          { variableMapping },
         );
         bgp.triples.push(instantiatedTriple);
         query.variables = this.updateVariablesQuery(query, instantiatedTriple);
@@ -1028,7 +976,7 @@ export class QuerySequenceTemplate {
     const removedTriplePatterns: Triple[] = [];
     for (const target of targets) {
       // Instantiate the triple to map variables to terms (as is also done in the query)
-      const instantiatedTriple = this.instantiateTriple(target, variableMapping);
+      const instantiatedTriple = processTriple(target, this.instantiateTerm, { variableMapping });
       // Check if the target triple pattern is already added
       if (this.hasTriple(bgp, instantiatedTriple)) {
         // If it is, remove the triple from the BGP
