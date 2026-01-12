@@ -3,7 +3,8 @@ import type { BindingsStream } from '@comunica/types';
 import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
 import type { ValueTransformerCsvMap } from '../valuetransformer/ValueTransformerCsvMap';
-import { SelectQuery, Generator } from 'sparqljs';
+import { SelectQuery, Generator, SparqlQuery, VariableExpression, VariableTerm, IriTerm, BlankTerm, QuadTerm, PropertyPath } from 'sparqljs';
+import { recurseExpression, recursePatterns, TermCallback } from './SyntaxTreeUtils';
 
 export class QueryNextInstantiatorValue {
   protected readonly dataLocations: string[];
@@ -27,15 +28,63 @@ export class QueryNextInstantiatorValue {
     const { message, results } = await this.executeQuery(
         new Generator().stringify(tranformedQuery)
     );
+    // TODO: 
+    // Transform results back to fragmented state. Easily done by apply the transformers backwards in sequence.
     return results;
   }
 
   protected transformQuery(query: SelectQuery) {
-    // TODO: Use code like the function instantiateSyntaxTree in QueryTemplate to apply an
-    // array of transformers to each namedNode found in the query. Then return that query
-    // Then in the follow up code we apply the array of transformers to the output bindings
-    // which will be passed to the instantiator.
+    // TODO: First test if this works correctly. Then we fix next todos
+    // TODO: Also transform the prefixes if they exist. Just do simple string search.
+    const transformedQuery = this.transformSyntaxTreeRecurse(query, this.instantiateTerm, {});
+    console.log(transformedQuery);
+    console.log(query);
     return query;
+  }
+
+  private instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | RDF.Term>(
+    term: T,
+    context: Record<string, any>,
+  ): T | RDF.Term => {
+    if (term && typeof term === 'object' && 'termType' in term && (<RDF.Term>term).termType === 'NamedNode') {
+      let transformed = <RDF.Term> term;
+      transformed = this.termMappingTransformer.transform(transformed);
+      for (const transformerIri of this.transformers){
+        transformed = transformerIri.transformFragmentedToOriginal(transformed);
+      }
+      return transformed;
+    }
+    return term;
+  };
+
+  private transformSyntaxTreeRecurse = (
+    syntaxTree: SparqlQuery,
+    termCallback: TermCallback,
+    context: Record<string, any>
+  ): SelectQuery => {
+    // Only allow SELECT queries
+    if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
+      throw new Error(`Only instantiations of SELECT queries are supported`);
+    }
+
+    // Apply expressions in variables
+    syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
+      if ('expression' in variable) {
+        variable.expression = recurseExpression(variable.expression, termCallback, context, this.transformSyntaxTreeRecurse);
+      }
+      return variable;
+    });
+
+    // Handle where clause in a recursive manner
+    syntaxTree.where = recursePatterns(syntaxTree.where!, termCallback, context, this.transformSyntaxTreeRecurse);
+
+    // Handle GROUP BY
+    if (syntaxTree.group) {
+      syntaxTree.group = syntaxTree.group
+        .map(group => ({ expression: recurseExpression(group.expression, termCallback, context, this.transformSyntaxTreeRecurse) }));
+    }
+
+    return syntaxTree;
   }
 
   protected async executeQuery(query: string): Promise<IQueryExecutionResult> {
@@ -98,7 +147,7 @@ export class TermTransformer {
     this.fragmentedString = replacementString;
   }
 
-  protected transformOriginalToFragmented(term: RDF.Term): RDF.Term {
+  public transformOriginalToFragmented(term: RDF.Term): RDF.Term {
     if (term.termType === 'NamedNode') {
       const value = term.value.replace(this.originalExp, this.fragmentedString);
       return this.DF.namedNode(value);
@@ -106,7 +155,7 @@ export class TermTransformer {
     return term;
   }
 
-  protected transformFragmentedToOriginal(term: RDF.Term): RDF.Term {
+  public transformFragmentedToOriginal(term: RDF.Term): RDF.Term {
     if (term.termType === 'NamedNode') {
       const value = term.value.replace(this.fragmentedExp, this.originalString);
       return this.DF.namedNode(value);
