@@ -1,42 +1,17 @@
 import type * as RDF from '@rdfjs/types';
-import type { BlankTerm, Expression, IriTerm, Pattern, PropertyPath, QuadTerm, SelectQuery, SparqlQuery, Term, Triple, VariableTerm } from 'sparqljs';
-
-// Export function recurseSyntaxTree(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
-//     // Only allow SELECT queries
-//     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
-//         throw new Error(`Only instantiations of SELECT queries are supported`);
-//     }
-
-//     // Remove variables
-//     syntaxTree = { ...syntaxTree };
-//     if (!(syntaxTree.variables.length === 1 &&
-//         'termType' in syntaxTree.variables[0] &&
-//         syntaxTree.variables[0].termType === 'Wildcard')) {
-//         syntaxTree.variables = (<RDF.Variable[]> syntaxTree.variables)
-//         .filter((variable: VariableExpression | VariableTerm) => !('termType' in variable) ||
-//             variable.termType !== 'Variable' ||
-//             !(variable.value in variableMapping));
-//     }
-
-//     // Apply expressions in variables
-//     syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
-//         if ('expression' in variable) {
-//         variable.expression = this.instantiateExpression(variable.expression, variableMapping);
-//         }
-//         return variable;
-//     });
-
-//     // Handle where clause in a recursive manner
-//     syntaxTree.where = recursePatterns(syntaxTree.where!, variableMapping);
-
-//     // Handle GROUP BY
-//     if (syntaxTree.group) {
-//         syntaxTree.group = syntaxTree.group
-//         .map(group => ({ expression: this.instantiateExpression(group.expression, variableMapping) }));
-//     }
-
-//     return syntaxTree;
-// }
+import type {
+  BlankTerm,
+  Expression,
+  IriTerm,
+  Pattern,
+  PropertyPath,
+  QuadTerm,
+  SelectQuery,
+  SparqlQuery,
+  Term,
+  Triple,
+  VariableTerm,
+} from 'sparqljs';
 
 export function recursePatterns(
   patterns: Pattern[],

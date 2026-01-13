@@ -11,7 +11,7 @@ import { recurseExpression, recursePatterns } from './../utils/SyntaxTreeUtils';
 export class QueryNextInstantiatorValue {
   protected readonly dataLocations: string[];
   protected readonly termMappingTransformer: ValueTransformerCsvMap;
-  protected readonly transformers: TermTransformer[];
+  protected readonly transformers: TermTransformerBiDirectional[];
 
   protected readonly engine: QueryEngine;
   protected readonly timeout: number;
@@ -27,25 +27,29 @@ export class QueryNextInstantiatorValue {
     this.timeout = args.timeout;
   }
 
-  public async getNextQueryInstantiationValues(query: SelectQuery) {
+  public async getNextQueryInstantiationValues(query: SelectQuery): Promise<RDF.Bindings[]> {
     // First run takes a while due to file indexing. So we prerun this
     // to avoid timeout issues
     const transformedQuery = this.transformQuery(query);
     const { message, results } = await this.executeQuery(
       new Generator().stringify(transformedQuery),
     );
+    console.log(message);
+    console.log(results.length);
     // TODO: Use reverse mapping for comment and post transformation, currently wrong way around
     // TODO:
     // Transform results back to fragmented state. Easily done by apply the transformers backwards in sequence.
     return results;
   }
 
-  protected transformQuery(query: SelectQuery) {
+  protected transformQuery(query: SelectQuery): SelectQuery {
     const transformedQuery = this.transformSyntaxTreeRecurse(query, this.instantiateTerm, {});
     return transformedQuery;
   }
 
-  private readonly instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | RDF.Term>(
+  private readonly instantiateTerm = <
+    T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | RDF.Term,
+  >(
     term: T,
     context: Record<string, any>,
   ): T | RDF.Term => {
@@ -72,6 +76,7 @@ export class QueryNextInstantiatorValue {
 
     // Update prefixes. These don't require the mappingTransformer as this is only
     // for fragmented subjects
+    syntaxTree = { ...syntaxTree };
     syntaxTree.prefixes = Object.fromEntries(
       Object.entries(syntaxTree.prefixes).map(([ prefix, iri ]) => {
         // Logic: Add a slash to the end of every IRI if it's missing
@@ -86,7 +91,12 @@ export class QueryNextInstantiatorValue {
     // Apply expressions in variables
     syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
       if ('expression' in variable) {
-        variable.expression = recurseExpression(variable.expression, termCallback, context, this.transformSyntaxTreeRecurse);
+        variable.expression = recurseExpression(
+          variable.expression,
+          termCallback,
+          context,
+          this.transformSyntaxTreeRecurse,
+        );
       }
       return variable;
     });
@@ -97,7 +107,14 @@ export class QueryNextInstantiatorValue {
     // Handle GROUP BY
     if (syntaxTree.group) {
       syntaxTree.group = syntaxTree.group
-        .map(group => ({ expression: recurseExpression(group.expression, termCallback, context, this.transformSyntaxTreeRecurse) }));
+        .map(group => ({
+          expression: recurseExpression(
+            group.expression,
+            termCallback,
+            context,
+            this.transformSyntaxTreeRecurse,
+          ),
+        }));
     }
 
     return syntaxTree;
@@ -122,7 +139,7 @@ export class QueryNextInstantiatorValue {
         bindingsStream = await this.engine.queryBindings(query, {
           sources: this.dataLocations,
         });
-        bindingsStream.on('data', (data) => {
+        bindingsStream.on('data', (data: RDF.Bindings) => {
           results.push(data);
         });
         bindingsStream.on('end', () => {
@@ -140,7 +157,6 @@ export class QueryNextInstantiatorValue {
       const message = await Promise.race([ queryResults, timeoutPromise ]);
       return { message, results };
     } catch (error) {
-      console.error(`Query failed:`, error);
       throw error;
     } finally {
       clearTimeout(timeoutHandle!);
@@ -148,12 +164,13 @@ export class QueryNextInstantiatorValue {
   }
 }
 
-export class TermTransformer {
+export class TermTransformerBiDirectional {
   private readonly originalExp: RegExp;
   private readonly originalString: string;
   private readonly fragmentedExp: RegExp;
   private readonly fragmentedString: string;
 
+  // eslint-disable-next-line ts/naming-convention
   private readonly DF = new DataFactory();
 
   public constructor(args: ITermTransformerArgs) {
@@ -201,7 +218,7 @@ export interface IQueryNextInstantiatorValueArgs {
   /**
    * Transformers mapping (parts) of IRIs from fragmented to centralized and back
    */
-  transformers: TermTransformer[];
+  transformers: TermTransformerBiDirectional[];
   /**
    * Timeout for query execution in seconds
    */

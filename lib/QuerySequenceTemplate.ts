@@ -44,6 +44,7 @@ import {
 } from './utils/RefinementSequenceUtils';
 import type { TermCallback } from './utils/SyntaxTreeUtils';
 import { processTriple, recurseExpression, recursePatterns } from './utils/SyntaxTreeUtils';
+import type { IValueTransformer } from './valuetransformer/IValueTransformer';
 
 /**
  * Data object for a query template.
@@ -61,9 +62,13 @@ export class QuerySequenceTemplate {
   private readonly rng: seedrandom.PRNG;
   // eslint-disable-next-line ts/naming-convention
   private readonly DF: DataFactory = new DataFactory();
+
+  private readonly iriTransformer?: IValueTransformer;
+
   private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
   private readonly minRefinementLength: number;
   private readonly maxRefinementLength: number;
+
   public readonly instantiationCounts: Record<string, Record<string, Record<string, number>>> = {};
 
   public constructor(
@@ -75,6 +80,7 @@ export class QuerySequenceTemplate {
     rng: seedrandom.PRNG,
     minRefinementLength: number,
     maxRefinementLength: number,
+    iriTransformer?: IValueTransformer,
     refinementPatterns?: IQueryRefinementPattern[],
   ) {
     this.syntaxTree = syntaxTree;
@@ -100,6 +106,7 @@ export class QuerySequenceTemplate {
     });
     this.minRefinementLength = minRefinementLength;
     this.maxRefinementLength = maxRefinementLength;
+    this.iriTransformer = iriTransformer;
   }
 
   /**
@@ -170,6 +177,8 @@ export class QuerySequenceTemplate {
     };
   }
 
+  // TODO: This has complete overlap with QueryTemplate functions. When we're happy with the benchmark
+  // we should make a base instantiator class.
   public instantiateSyntaxTreeWrap(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
     const context: Record<string, any> = { variableMapping };
     return this.instantiateSyntaxTreeRecurse(syntaxTree, this.instantiateTerm, context);
@@ -192,6 +201,17 @@ export class QuerySequenceTemplate {
 
     // Remove variables
     syntaxTree = { ...syntaxTree };
+
+    // Ensure prefixes get same transformation as iris
+    if (this.iriTransformer) {
+      syntaxTree.prefixes = Object.fromEntries(
+        Object.entries(syntaxTree.prefixes).map(([ prefix, iri ]) => {
+          const transformed = this.iriTransformer!.transform(this.DF.namedNode(iri));
+          return [ prefix, transformed.value ];
+        }),
+      );
+    }
+
     if (!(syntaxTree.variables.length === 1 &&
       'termType' in syntaxTree.variables[0] &&
       syntaxTree.variables[0].termType === 'Wildcard')) {
@@ -244,8 +264,28 @@ export class QuerySequenceTemplate {
         return variableValue;
       }
     }
+    // If we're passed an IRI transformers we transform any term we encounter during instantiation
+    if (this.iriTransformer) {
+      if (term && typeof term === 'object' && 'termType' in term &&
+        (<RDF.Term>term).termType === 'NamedNode') {
+        return this.iriTransformer.transform(term);
+      }
+
+      if (term && typeof term === 'object' && 'pathType' in term) {
+        return <T> this.transformPropertyPath(term, context);
+      }
+    }
     return term;
   };
+
+  private transformPropertyPath(path: PropertyPath, context: Record<string, any>): PropertyPath {
+    return {
+      ...path,
+      // Map over every item in the path (whether it's an IRI or a nested PropertyPath)
+      // and route it back through the main instantiator.
+      items: path.items.map(item => <IriTerm | PropertyPath> this.instantiateTerm(item, context)),
+    };
+  }
 
   public createRefinementSequence(
     refinementPatterns: IQueryRefinementPattern[],

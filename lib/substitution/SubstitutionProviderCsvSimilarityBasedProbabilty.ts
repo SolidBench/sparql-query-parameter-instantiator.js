@@ -1,6 +1,10 @@
 import * as fs from 'node:fs';
+
 import type { ISubstitutionProviderProbabilities } from './ISubstitutionProvider';
+
+// eslint-disable-next-line ts/no-require-imports, ts/no-var-requires
 const csvParser = require('csv-parser');
+
 /**
  * A subsitution provider for CSV files.
  */
@@ -13,7 +17,13 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
   private readonly columnNameSimilarities: string = 'similarities';
   private readonly separator: string;
 
-  public constructor(csvFilePath: string | undefined, columnName: string, columnNameSimilaritySubject: string, csvFilePathSimilarities: string, separator = ',') {
+  public constructor(
+    csvFilePath: string | undefined,
+    columnName: string,
+    columnNameSimilaritySubject: string,
+    csvFilePathSimilarities: string,
+    separator = ',',
+  ) {
     this.csvFilePath = csvFilePath;
     this.csvFilePathSimilarities = csvFilePathSimilarities;
     this.columnName = columnName;
@@ -56,7 +66,7 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
                 was not set in the CSV file ${this.csvFilePathSimilarities}`));
           }
           try {
-            const similarities = JSON.parse(data[this.columnNameSimilarities]);
+            const similarities = JSON.parse(<string> data[this.columnNameSimilarities]);
             results[<string>data[this.columnNameSimilaritySubject]] = similarities;
           } catch {
             throw new Error('Failed');

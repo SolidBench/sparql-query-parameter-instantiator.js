@@ -115,7 +115,7 @@ export class SequenceGenerator {
     if (session.lastAst) {
       await this.determineNextInstantiator(
         session.lastAst,
-        session.templates.at(-1).template,
+        session.templates.at(-1)!.template,
         query.template,
       );
     }

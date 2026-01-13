@@ -1,4 +1,5 @@
 import type * as RDF from '@rdfjs/types';
+import { DataFactory } from 'rdf-data-factory';
 import type {
   BlankTerm,
   IriTerm,
@@ -14,6 +15,7 @@ import type {
 import { Generator } from 'sparqljs';
 import type { TermCallback } from './utils/SyntaxTreeUtils';
 import { recurseExpression, recursePatterns } from './utils/SyntaxTreeUtils';
+import type { IValueTransformer } from './valuetransformer/IValueTransformer';
 
 /**
  * Data object for a query template.
@@ -21,13 +23,19 @@ import { recurseExpression, recursePatterns } from './utils/SyntaxTreeUtils';
 export class QueryTemplate {
   private readonly syntaxTree: SparqlQuery;
   private readonly variableMappings: Record<string, RDF.Term[]>;
+  private readonly iriTransformer?: IValueTransformer;
+
+  // eslint-disable-next-line ts/naming-convention
+  private readonly DF: DataFactory = new DataFactory();
 
   public constructor(
     syntaxTree: SparqlQuery,
     variableMappings: Record<string, RDF.Term[]>,
+    prefixStringTransformer?: IValueTransformer,
   ) {
     this.syntaxTree = syntaxTree;
     this.variableMappings = variableMappings;
+    this.iriTransformer = prefixStringTransformer;
   }
 
   /**
@@ -70,8 +78,19 @@ export class QueryTemplate {
       throw new Error(`Only instantiations of SELECT queries are supported`);
     }
 
-    // Remove variables
     syntaxTree = { ...syntaxTree };
+
+    // Ensure prefixes get same transformation as iris
+    if (this.iriTransformer) {
+      syntaxTree.prefixes = Object.fromEntries(
+        Object.entries(syntaxTree.prefixes).map(([ prefix, iri ]) => {
+          const transformed = this.iriTransformer!.transform(this.DF.namedNode(iri));
+          return [ prefix, transformed.value ];
+        }),
+      );
+    }
+
+    // Remove variables
     if (!(syntaxTree.variables.length === 1 &&
       'termType' in syntaxTree.variables[0] &&
       syntaxTree.variables[0].termType === 'Wildcard')) {
@@ -121,6 +140,26 @@ export class QueryTemplate {
         return variableValue;
       }
     }
+    // If we're passed an IRI transformers we transform any term we encounter during instantiation
+    if (this.iriTransformer) {
+      if (term && typeof term === 'object' && 'termType' in term &&
+        (<RDF.Term>term).termType === 'NamedNode') {
+        return this.iriTransformer.transform(term);
+      }
+
+      if (term && typeof term === 'object' && 'pathType' in term) {
+        return <T> this.transformPropertyPath(term, context);
+      }
+    }
     return term;
   };
+
+  private transformPropertyPath(path: PropertyPath, context: Record<string, any>): PropertyPath {
+    return {
+      ...path,
+      // Map over every item in the path (whether it's an IRI or a nested PropertyPath)
+      // and route it back through the main instantiator.
+      items: path.items.map(item => <IriTerm | PropertyPath> this.instantiateTerm(item, context)),
+    };
+  }
 }

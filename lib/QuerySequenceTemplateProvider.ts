@@ -6,6 +6,7 @@ import seedrandom = require('seedrandom');
 import type { Expression, SparqlParser, Triple } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QuerySequenceTemplate } from './QuerySequenceTemplate';
+import type { IValueTransformer } from './valuetransformer/IValueTransformer';
 import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
 
 /**
@@ -28,6 +29,9 @@ export class QuerySequenceTemplateProvider {
   // expected to be equal
   public readonly baseProbabilityTemplate: number;
   private readonly nextTemplates: INextTemplate[];
+
+  private readonly iriTransformer?: IValueTransformer;
+
   // File location for refinement patterns, if any
   private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
   private readonly minRefinementLength: number;
@@ -55,6 +59,7 @@ export class QuerySequenceTemplateProvider {
     maxRefinementLength: number,
     maxLogits: number,
     baseProbabilityTemplate: number,
+    iriTransformer?: IValueTransformer,
     refinementPatternsFilePath?: string,
     nextTemplateProbabilities?: number[],
   ) {
@@ -69,6 +74,8 @@ export class QuerySequenceTemplateProvider {
     // Validate input json from config to be a valid nextTemplate interface with valid probability values
     this.nextTemplates = this.validateNextTemplates(nextTemplates, nextTemplateProbabilities);
     this.baseProbabilityTemplate = baseProbabilityTemplate;
+
+    this.iriTransformer = iriTransformer;
 
     this.refinementPatterns = this.parseRefinementFile(refinementPatternsFilePath);
     this.minRefinementLength = minRefinementLength;
@@ -118,6 +125,7 @@ export class QuerySequenceTemplateProvider {
       rng,
       this.minRefinementLength,
       this.maxRefinementLength,
+      this.iriTransformer,
       this.refinementPatterns,
     );
   }

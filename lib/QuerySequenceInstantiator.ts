@@ -30,11 +30,12 @@ export class QuerySequenceInstantiator {
     this.sequenceGenerator = args.sequenceGenerator;
 
     this.destinationFilePath = args.destinationFilePath;
-    this.metadataDestinationFilePath = args.metadataDestinationFilePath || this.destinationFilePath;
+    this.metadataDestinationFilePath = args.metadataDestinationFilePath ?? this.destinationFilePath;
   }
 
   public async instantiateProviderSequence(n: number, user: string): Promise<void> {
-    const { querySequence, sequenceMetadata } = await this.sequenceGenerator.generateSequence(this.rngSeeded, this.providers, user, n);
+    const { querySequence, sequenceMetadata } =
+      await this.sequenceGenerator.generateSequence(this.rngSeeded, this.providers, user, n);
     const sequenceFile = querySequence.join('\n\n');
     await this.saveSequenceToFile(`sequence_${n}.sparql`, sequenceFile);
     await this.saveMetadataToFile(`sequence_${n}.metadata.json`, sequenceMetadata);
