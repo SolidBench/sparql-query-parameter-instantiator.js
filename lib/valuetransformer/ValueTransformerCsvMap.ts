@@ -11,9 +11,11 @@ const DF = new DataFactory();
 export class ValueTransformerCsvMap implements IValueTransformer {
   private readonly file: string;
   private readonly mapping: Record<string, string>;
+  private readonly invertMapping?: boolean;
 
-  public constructor(file: string) {
+  public constructor(file: string, invertMapping?: boolean) {
     this.file = file;
+    this.invertMapping = invertMapping;
     this.mapping = this.readMapping();
   }
 
@@ -24,7 +26,11 @@ export class ValueTransformerCsvMap implements IValueTransformer {
     for (const line of lines) {
       const [ key, value ] = line.split(',');
       if (key && value) {
-        mapping[key.trim()] = value.trim();
+        if (this.invertMapping){
+          mapping[value.trim()] = key.trim();
+        } else {
+          mapping[key.trim()] = value.trim();
+        }
       }
     }
     return mapping;

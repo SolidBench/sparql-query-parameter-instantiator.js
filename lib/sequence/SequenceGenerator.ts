@@ -1,4 +1,5 @@
 import type * as seedrandom from 'seedrandom';
+import type * as RDF from '@rdfjs/types';
 
 import type { SelectQuery } from 'sparqljs';
 import type { QuerySequenceTemplate } from '../QuerySequenceTemplate';
@@ -62,6 +63,7 @@ export class SequenceGenerator {
       user: { user, transitionProbability: sessionTransitionProbability },
       sequenceElements: [],
       sequenceLength,
+      sequenceInstantiationCounts: {}
     };
 
     console.log(`Instantiating sequence ${n} with length ${sequenceLength} 
@@ -112,8 +114,9 @@ export class SequenceGenerator {
     }
     // Last ast is only defined if a previous query has been instantiated in the query
     // thus this can serve as starting point to determine next instantiation
+    let nextInstantiators: Record<string, RDF.Term[]> = {};
     if (session.lastAst) {
-      await this.determineNextInstantiator(
+      nextInstantiators = await this.determineNextInstantiator(
         session.lastAst,
         session.templates.at(-1)!.template,
         query.template,
@@ -123,7 +126,7 @@ export class SequenceGenerator {
     const { queries, patternMetadata, ast } = query.template.instantiate(
       templateCounts[query.name],
       instantiateRefinementPattern,
-      {},
+      nextInstantiators,
       user,
     );
     sequence.push(...queries);
@@ -248,6 +251,10 @@ export class SequenceGenerator {
         sequenceMetadata,
       );
     }
+    for (const template of templates){
+      sequenceMetadata.sequenceInstantiationCounts[template.name] = 
+        template.template.getInstantiationCounts();
+    }
     return { querySequence, sequenceMetadata };
   }
 
@@ -255,15 +262,14 @@ export class SequenceGenerator {
     ast: SelectQuery,
     lastTemplate: QuerySequenceTemplate,
     nextTemplate: QuerySequenceTemplate,
-  ) {
+  ): Promise<Record<string, RDF.Term[]>> {
     // Determine what query output variables should be used as possible values for instantiation
     // of the next template
     const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(
       lastTemplate,
       nextTemplate,
     );
-    console.log(mapping);
-    await this.findNextInstantiationValue.getNextQueryInstantiationValues(ast);
+    return await this.findNextInstantiationValue.getNextQueryInstantiationValues(ast, mapping);
   }
 
   private mapOutputVariablesToInstatiationVariables(
@@ -405,9 +411,16 @@ export interface IQuerySequenceMetadata {
   user: IUserMetadata;
   sequenceElements: IQuerySequenceElementMetadata[];
   sequenceLength: number;
+  sequenceInstantiationCounts: InstantiationCounts;
 }
 
 export interface IUserMetadata {
   user: string;
   transitionProbability: number;
 }
+
+/**
+ * Counter mapping: 
+ * template -> user -> variable -> instatiation value -> # of instantiations with that value
+ */
+export type InstantiationCounts = Record<string, Record<string, Record<string, Record<string, number>>>>;

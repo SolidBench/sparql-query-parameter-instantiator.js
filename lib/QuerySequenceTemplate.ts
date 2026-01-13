@@ -51,7 +51,7 @@ import type { IValueTransformer } from './valuetransformer/IValueTransformer';
  */
 export class QuerySequenceTemplate {
   private readonly syntaxTree: SparqlQuery;
-  private readonly variableMappings: Record<string, RDF.Term[]>;
+  public readonly variableMappings: Record<string, RDF.Term[]>;
   private readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
   // Mapping from variable to be instantiated to the type of variable (defined in config)
   public readonly instantiationVariableTypeMap: Record<string, string>;
@@ -124,33 +124,16 @@ export class QuerySequenceTemplate {
     user?: string,
   ):
     { queries: string[]; patternMetadata: Record<string, any>[]; ast: SelectQuery } {
+      
     // Determine variables to instantiate with
-    const variableMapping: Record<string, RDF.Term> = {};
-    const alternativeMapping: Record<string, RDF.Term> = {};
-    for (const variable of Object.keys(this.variableMappings)) {
-      const values = this.variableMappings[variable];
-      // When no probabilities and rng is given, we simply cycle through the provided
-      // values to instantiate queries in the sequence.
-      if (!this.variableProbabilities[variable]) {
-        const instantiationIndex = counter % values.length;
-        variableMapping[variable] = values[instantiationIndex];
-      } else if (Object.keys(this.variableProbabilities).length > 0 && user) {
-        const sampledValues: RDF.Term[] = this.sampleVariableTerm(variable, user, 2);
-        variableMapping[variable] = sampledValues[0];
-        alternativeMapping[variable] = sampledValues[1];
-
-        // Track instantiation counts for the variable and user
-        this.updateCounter(user, variable, sampledValues[0].value);
-      } else {
-        throw new Error(
-          `Either probabilities (${Object.keys(this.variableProbabilities).length > 0 ? 'defined' : 'undefined'}), ` +
-          `or base user (${user ? 'defined' : 'undefined'}) are not given.`,
-        );
-      }
-    }
+    const { variableMapping, alternativeMapping } = this.getVariableMapping(
+      previousQueryResult,
+      counter, 
+      user
+    );
     const instantiatedSyntaxTree = this.instantiateSyntaxTreeWrap(this.syntaxTree, variableMapping);
 
-    // Create an array of SelectQueries that are all slight variations of the same template
+    // Create an array of SelectQueries that are variations of the same template
     if (instantiateRefinementPattern) {
       if (!this.refinementPatterns) {
         throw new Error(`No refinement patterns available for instantiation`);
@@ -175,6 +158,45 @@ export class QuerySequenceTemplate {
       ast: instantiatedSyntaxTree,
       patternMetadata: [{}],
     };
+  }
+
+  private getVariableMapping(previousQueryResult: Record<string, RDF.Term[]>, counter: number, user?: string){
+    const variableMapping: Record<string, RDF.Term> = {};
+    const alternativeMapping: Record<string, RDF.Term> = {};
+
+    for (const variable of Object.keys(this.variableMappings)) {
+      if (variable in previousQueryResult && previousQueryResult[variable].length > 0){
+        const values = previousQueryResult[variable];
+        variableMapping[variable] = values[counter % values.length];
+        alternativeMapping[variable] = values[(counter + 1) % values.length];
+        if (user){
+          this.updateCounter(user, variable, values[counter % values.length].value);
+        }
+      }
+      else {
+        const values = this.variableMappings[variable];
+        // When no probabilities and rng is given, we simply cycle through the provided
+        // values to instantiate queries in the sequence.
+        if (!this.variableProbabilities[variable]) {
+          variableMapping[variable] = values[counter % values.length];
+          alternativeMapping[variable] = values[(counter + 1) % values.length];
+
+        } else if (Object.keys(this.variableProbabilities).length > 0 && user) {
+          const sampledValues: RDF.Term[] = this.sampleVariableTerm(variable, user, 2);
+          variableMapping[variable] = sampledValues[0];
+          alternativeMapping[variable] = sampledValues[1];
+
+          // Track instantiation counts for the variable and user
+          this.updateCounter(user, variable, sampledValues[0].value);
+        } else {
+          throw new Error(
+            `Either probabilities (${Object.keys(this.variableProbabilities).length > 0 ? 'defined' : 'undefined'}), ` +
+            `or base user (${user ? 'defined' : 'undefined'}) are not given.`,
+          );
+        }
+      }
+    }
+    return { variableMapping, alternativeMapping}
   }
 
   // TODO: This has complete overlap with QueryTemplate functions. When we're happy with the benchmark

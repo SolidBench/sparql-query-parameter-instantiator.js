@@ -16,7 +16,7 @@ export class QuerySequenceTemplateProvider {
   private readonly templateFilePath: string;
   private readonly variables: IVariableTemplate[];
   // Name of query
-  private readonly name: string;
+  public readonly name: string;
   // What task this query belongs to
   public readonly queryTask: string;
   // Mapping from variable to be instantiated to the type of variable (defined in config)
