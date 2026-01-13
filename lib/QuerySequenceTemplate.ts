@@ -42,7 +42,8 @@ import {
   extractTriplePatternsPerOperator,
   getVariablesInExpression,
 } from './utils/RefinementSequenceUtils';
-import { processTriple, recurseExpression, recursePatterns, TermCallback } from './utils/SyntaxTreeUtils';
+import type { TermCallback } from './utils/SyntaxTreeUtils';
+import { processTriple, recurseExpression, recursePatterns } from './utils/SyntaxTreeUtils';
 
 /**
  * Data object for a query template.
@@ -168,20 +169,21 @@ export class QuerySequenceTemplate {
       patternMetadata: [{}],
     };
   }
-  public instantiateSyntaxTreeWrap(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>){
+
+  public instantiateSyntaxTreeWrap(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
     const context: Record<string, any> = { variableMapping };
     return this.instantiateSyntaxTreeRecurse(syntaxTree, this.instantiateTerm, context);
   }
 
-  private instantiateSyntaxTreeRecurse = (
+  private readonly instantiateSyntaxTreeRecurse = (
     syntaxTree: SparqlQuery,
     termCallback: TermCallback,
-    context: Record<string, any>
+    context: Record<string, any>,
   ): SelectQuery => {
     // Only allow SELECT queries
     const variableMapping: Record<string, RDF.Term> = context.variableMapping;
-    if (!variableMapping){
-      throw new Error("Instantiation of syntax tree failed due to missing variableMapping in context");
+    if (!variableMapping) {
+      throw new Error('Instantiation of syntax tree failed due to missing variableMapping in context');
     }
 
     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
@@ -202,7 +204,12 @@ export class QuerySequenceTemplate {
     // Apply expressions in variables
     syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
       if ('expression' in variable) {
-        variable.expression = recurseExpression(variable.expression, termCallback, context, this.instantiateSyntaxTreeRecurse);
+        variable.expression = recurseExpression(
+          variable.expression,
+          termCallback,
+          context,
+          this.instantiateSyntaxTreeRecurse,
+        );
       }
       return variable;
     });
@@ -213,19 +220,26 @@ export class QuerySequenceTemplate {
     // Handle GROUP BY
     if (syntaxTree.group) {
       syntaxTree.group = syntaxTree.group
-        .map(group => ({ expression: recurseExpression(group.expression, termCallback, context, this.instantiateSyntaxTreeRecurse) }));
+        .map(group => ({
+          expression: recurseExpression(
+            group.expression,
+            termCallback,
+            context,
+            this.instantiateSyntaxTreeRecurse,
+          ),
+        }));
     }
 
     return syntaxTree;
-  }
+  };
 
-  private instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
+  private readonly instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
     term: T,
     context: Record<string, any>,
   ): T | RDF.Term => {
     if (term && typeof term === 'object' && 'termType' in term && (<RDF.Term>term).termType === 'Variable') {
       const variableName = (<VariableTerm>term).value;
-      const variableValue = context.variableMapping[variableName];
+      const variableValue: RDF.Term = context.variableMapping[variableName];
       if (variableValue) {
         return variableValue;
       }
@@ -472,7 +486,7 @@ export class QuerySequenceTemplate {
         case 'FILTER': {
           // Filters to remove are instantiated versions of target
           let filtersToRemove = pattern.target.map(
-            t => recurseExpression(t, this.instantiateTerm, { variableMapping }, this.instantiateSyntaxTreeRecurse)
+            t => recurseExpression(t, this.instantiateTerm, { variableMapping }, this.instantiateSyntaxTreeRecurse),
           );
           if (filtersToRemove.length === 0) {
             // Randomly select a filter to remove
@@ -529,7 +543,9 @@ export class QuerySequenceTemplate {
 
           let triplesToRemove: Triple[][] = pattern.target.map(x => x.map(y => this.targetToTriple(y)));
           if (triplesToRemove.length === 0) {
-            const tripleToRemove = [ sampleRandom(this.rng, [ ...bgpToRefineLeft.triples, ...bgpToRefineRight.triples ]) ];
+            const tripleToRemove = [
+              sampleRandom(this.rng, [ ...bgpToRefineLeft.triples, ...bgpToRefineRight.triples ]),
+            ];
             triplesToRemove = [ tripleToRemove, tripleToRemove ];
           }
           for (let i = 0; i < 2; i++) {
@@ -641,11 +657,11 @@ export class QuerySequenceTemplate {
     const patternType = pattern.type.toLowerCase();
     const targets = pattern.target.map(
       x => recurseExpression(
-        x, 
+        x,
         this.instantiateTerm,
         { variableMapping: context.variableMapping },
-        this.instantiateSyntaxTreeRecurse
-      )
+        this.instantiateSyntaxTreeRecurse,
+      ),
     );
 
     const alreadyPresent = targets.length > 0 && targets.every(t =>
@@ -721,10 +737,9 @@ export class QuerySequenceTemplate {
     }
 
     const targets = pattern.target.map(t =>
-      processTriple(this.targetToTriple(t), this.instantiateTerm, {variableMapping: context.variableMapping})
-    );
+      processTriple(this.targetToTriple(t), this.instantiateTerm, { variableMapping: context.variableMapping }));
 
-    // const targets = pattern.target.map(t =>
+    // Const targets = pattern.target.map(t =>
     //   this.instantiateTriple(this.targetToTriple(t), context.variableMapping));
 
     const alreadyPresent = targets.length > 0 && targets.every(t =>

@@ -2,9 +2,11 @@ import { QueryEngine } from '@comunica/query-sparql-file';
 import type { BindingsStream } from '@comunica/types';
 import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
+import type { SelectQuery, SparqlQuery, VariableTerm, IriTerm, BlankTerm, QuadTerm, PropertyPath } from 'sparqljs';
+import { Generator } from 'sparqljs';
 import type { ValueTransformerCsvMap } from '../valuetransformer/ValueTransformerCsvMap';
-import { SelectQuery, Generator, SparqlQuery, VariableTerm, IriTerm, BlankTerm, QuadTerm, PropertyPath } from 'sparqljs';
-import { recurseExpression, recursePatterns, TermCallback } from './../utils/SyntaxTreeUtils';
+import type { TermCallback } from './../utils/SyntaxTreeUtils';
+import { recurseExpression, recursePatterns } from './../utils/SyntaxTreeUtils';
 
 export class QueryNextInstantiatorValue {
   protected readonly dataLocations: string[];
@@ -14,7 +16,7 @@ export class QueryNextInstantiatorValue {
   protected readonly engine: QueryEngine;
   protected readonly timeout: number;
 
-  protected indexedFiles: boolean = false;
+  protected indexedFiles = false;
 
   public constructor(args: IQueryNextInstantiatorValueArgs) {
     this.dataLocations = args.dataLocations;
@@ -30,10 +32,10 @@ export class QueryNextInstantiatorValue {
     // to avoid timeout issues
     const transformedQuery = this.transformQuery(query);
     const { message, results } = await this.executeQuery(
-        new Generator().stringify(transformedQuery)
+      new Generator().stringify(transformedQuery),
     );
     // TODO: Use reverse mapping for comment and post transformation, currently wrong way around
-    // TODO: 
+    // TODO:
     // Transform results back to fragmented state. Easily done by apply the transformers backwards in sequence.
     return results;
   }
@@ -43,14 +45,14 @@ export class QueryNextInstantiatorValue {
     return transformedQuery;
   }
 
-  private instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | RDF.Term>(
+  private readonly instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | RDF.Term>(
     term: T,
     context: Record<string, any>,
   ): T | RDF.Term => {
     if (term && typeof term === 'object' && 'termType' in term && (<RDF.Term>term).termType === 'NamedNode') {
       let transformed = <RDF.Term> term;
       transformed = this.termMappingTransformer.transform(transformed);
-      for (const transformerIri of this.transformers){
+      for (const transformerIri of this.transformers) {
         transformed = transformerIri.transformFragmentedToOriginal(transformed);
       }
       return transformed;
@@ -58,10 +60,10 @@ export class QueryNextInstantiatorValue {
     return term;
   };
 
-  private transformSyntaxTreeRecurse = (
+  private readonly transformSyntaxTreeRecurse = (
     syntaxTree: SparqlQuery,
     termCallback: TermCallback,
-    context: Record<string, any>
+    context: Record<string, any>,
   ): SelectQuery => {
     // Only allow SELECT queries
     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
@@ -71,14 +73,14 @@ export class QueryNextInstantiatorValue {
     // Update prefixes. These don't require the mappingTransformer as this is only
     // for fragmented subjects
     syntaxTree.prefixes = Object.fromEntries(
-    Object.entries(syntaxTree.prefixes).map(([prefix, iri]) => {
+      Object.entries(syntaxTree.prefixes).map(([ prefix, iri ]) => {
         // Logic: Add a slash to the end of every IRI if it's missing
         let transformed = iri;
-        for (const tranformerIri of this.transformers){
-            transformed = tranformerIri.transformFragmentedToOriginalRaw(transformed);
+        for (const tranformerIri of this.transformers) {
+          transformed = tranformerIri.transformFragmentedToOriginalRaw(transformed);
         }
-        return [prefix, transformed];
-    })
+        return [ prefix, transformed ];
+      }),
     );
 
     // Apply expressions in variables
@@ -99,7 +101,7 @@ export class QueryNextInstantiatorValue {
     }
 
     return syntaxTree;
-  }
+  };
 
   protected async executeQuery(query: string): Promise<IQueryExecutionResult> {
     let bindingsStream: BindingsStream;
@@ -207,10 +209,10 @@ export interface IQueryNextInstantiatorValueArgs {
 }
 
 export interface ITermTransformerArgs {
-  originalRegex: string,
-  originalString: string,
-  fragmentedRegex: string,
-  fragmentedString: string 
+  originalRegex: string;
+  originalString: string;
+  fragmentedRegex: string;
+  fragmentedString: string;
 }
 
 export interface IQueryExecutionResult {

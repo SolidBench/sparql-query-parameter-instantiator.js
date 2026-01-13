@@ -1,10 +1,10 @@
 import type * as seedrandom from 'seedrandom';
 
 import type { SelectQuery } from 'sparqljs';
-import { QuerySequenceTemplate } from '../QuerySequenceTemplate';
+import type { QuerySequenceTemplate } from '../QuerySequenceTemplate';
 import type { INextTemplate, QuerySequenceTemplateProvider } from '../QuerySequenceTemplateProvider';
 import { calculateExpectedMeanLogNormal, logNormal, logNormalRoundedUp, sampleHit, sampleProbability, sampleRandom } from '../utils/RandomUtils';
-import { QueryNextInstantiatorValue } from './QueryNextInstantiationValue';
+import type { QueryNextInstantiatorValue } from './QueryNextInstantiationValue';
 
 export class SequenceGenerator {
   private readonly meanLogSequenceLength: number;
@@ -112,11 +112,11 @@ export class SequenceGenerator {
     }
     // Last ast is only defined if a previous query has been instantiated in the query
     // thus this can serve as starting point to determine next instantiation
-    if (session.lastAst){
+    if (session.lastAst) {
       await this.determineNextInstantiator(
         session.lastAst,
-        session.templates[session.templates.length - 1].template,
-        query.template
+        session.templates.at(-1).template,
+        query.template,
       );
     }
     // Add template to session
@@ -183,7 +183,7 @@ export class SequenceGenerator {
     const sequenceSessions: IQuerySession[] = [];
     const querySequence: string[] = [];
 
-    const createAndRegisterNewSession = async () => {
+    const createAndRegisterNewSession = async() => {
       const session = this.startNewSession(rng, templates, sequenceSessions.length);
       sequenceSessions.push(session);
       // Add query to the sequence and sessions and return the ast of the last query.
@@ -254,34 +254,38 @@ export class SequenceGenerator {
   public async determineNextInstantiator(
     ast: SelectQuery,
     lastTemplate: QuerySequenceTemplate,
-    nextTemplate: QuerySequenceTemplate
+    nextTemplate: QuerySequenceTemplate,
   ) {
     // Determine what query output variables should be used as possible values for instantiation
     // of the next template
     const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(
-        lastTemplate, nextTemplate
+      lastTemplate,
+      nextTemplate,
     );
     console.log(mapping);
     await this.findNextInstantiationValue.getNextQueryInstantiationValues(ast);
   }
 
   private mapOutputVariablesToInstatiationVariables(
-    lastTemplate: QuerySequenceTemplate, nextTemplate: QuerySequenceTemplate
-  ){
+    lastTemplate: QuerySequenceTemplate,
+    nextTemplate: QuerySequenceTemplate,
+  ) {
     const typeToInstVars: Record<string, string[]> = {};
 
-    for (const [instVar, type] of Object.entries(nextTemplate.instantiationVariableTypeMap)) {
-        if (!typeToInstVars[type]) typeToInstVars[type] = [];
-        typeToInstVars[type].push(instVar);
+    for (const [ instVar, type ] of Object.entries(nextTemplate.instantiationVariableTypeMap)) {
+      if (!typeToInstVars[type]) {
+        typeToInstVars[type] = [];
+      }
+      typeToInstVars[type].push(instVar);
     }
 
     const mapping: Record<string, string[]> = {};
-    for (const [variable, type] of Object.entries(lastTemplate.outputVariableTypeMap)) {
-        if (typeToInstVars[type]) {
-            mapping[variable] = typeToInstVars[type];
-        }
+    for (const [ variable, type ] of Object.entries(lastTemplate.outputVariableTypeMap)) {
+      if (typeToInstVars[type]) {
+        mapping[variable] = typeToInstVars[type];
+      }
     }
-    return mapping;    
+    return mapping;
   }
   // Private validateNoDangling(){
   //     const instantiatorTypes: Set<string> = new Set();
@@ -359,7 +363,7 @@ export interface ISequenceGeneratorArgs {
    */
   temperature: number;
   /**
-   * Class that finds the next instantiation value within a session based on the last query in 
+   * Class that finds the next instantiation value within a session based on the last query in
    * that session
    */
   findNextInstantiationValue: QueryNextInstantiatorValue;

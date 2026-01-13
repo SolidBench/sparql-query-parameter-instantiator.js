@@ -2,20 +2,18 @@ import type * as RDF from '@rdfjs/types';
 import type {
   BlankTerm,
   IriTerm,
-  Pattern,
   QuadTerm,
   SparqlQuery,
-  Triple,
   Variable,
   VariableExpression,
   VariableTerm,
   SelectQuery,
   PropertyPath,
   Term,
-  Expression,
 } from 'sparqljs';
 import { Generator } from 'sparqljs';
-import { recurseExpression, recursePatterns, TermCallback } from './utils/SyntaxTreeUtils';
+import type { TermCallback } from './utils/SyntaxTreeUtils';
+import { recurseExpression, recursePatterns } from './utils/SyntaxTreeUtils';
 
 /**
  * Data object for a query template.
@@ -52,20 +50,20 @@ export class QueryTemplate {
     return new Generator().stringify(this.instantiateSyntaxTreeWrap(this.syntaxTree, variableMapping));
   }
 
-  public instantiateSyntaxTreeWrap(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>){
+  public instantiateSyntaxTreeWrap(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
     const context: Record<string, any> = { variableMapping };
     return this.instantiateSyntaxTreeRecurse(syntaxTree, this.instantiateTerm, context);
   }
 
-  private instantiateSyntaxTreeRecurse = (
+  private readonly instantiateSyntaxTreeRecurse = (
     syntaxTree: SparqlQuery,
     termCallback: TermCallback,
-    context: Record<string, any>
+    context: Record<string, any>,
   ): SelectQuery => {
     // Only allow SELECT queries
     const variableMapping: Record<string, RDF.Term> = context.variableMapping;
-    if (!variableMapping){
-      throw new Error("Instantiation of syntax tree failed due to missing variableMapping in context");
+    if (!variableMapping) {
+      throw new Error('Instantiation of syntax tree failed due to missing variableMapping in context');
     }
 
     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
@@ -86,7 +84,12 @@ export class QueryTemplate {
     // Apply expressions in variables
     syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
       if ('expression' in variable) {
-        variable.expression = recurseExpression(variable.expression, termCallback, context, this.instantiateSyntaxTreeRecurse);
+        variable.expression = recurseExpression(
+          variable.expression,
+          termCallback,
+          context,
+          this.instantiateSyntaxTreeRecurse,
+        );
       }
       return variable;
     });
@@ -97,24 +100,27 @@ export class QueryTemplate {
     // Handle GROUP BY
     if (syntaxTree.group) {
       syntaxTree.group = syntaxTree.group
-        .map(group => ({ expression: recurseExpression(group.expression, termCallback, context, this.instantiateSyntaxTreeRecurse) }));
+        .map(group => (
+          {
+            expression: recurseExpression(group.expression, termCallback, context, this.instantiateSyntaxTreeRecurse),
+          }
+        ));
     }
 
     return syntaxTree;
-  }
+  };
 
-  private instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
+  private readonly instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
     term: T,
     context: Record<string, any>,
   ): T | RDF.Term => {
     if (term && typeof term === 'object' && 'termType' in term && (<RDF.Term>term).termType === 'Variable') {
       const variableName = (<VariableTerm>term).value;
-      const variableValue = context.variableMapping[variableName];
+      const variableValue: RDF.Term = context.variableMapping[variableName];
       if (variableValue) {
         return variableValue;
       }
     }
     return term;
   };
-
 }

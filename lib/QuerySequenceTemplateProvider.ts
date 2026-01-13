@@ -39,7 +39,8 @@ export class QuerySequenceTemplateProvider {
   /**
    * @param baseProbabilityTemplate - Probability of starting new session with this template @range {float}
    * @param nextTemplateProbabilities - Probability of selecting each next template @range {float}
-   * @param instantiationVariableTypeMap - Mapping from instantiation variable in template to the type of instantiation @range {json}
+   * @param instantiationVariableTypeMap - Mapping from instantiation variable in template
+   * to the type of instantiation @range {json}
    * @param outputVariableTypeMap - Mapping from variable in output of the template to the type of entity @range {json}
    */
   public constructor(
@@ -100,7 +101,7 @@ export class QuerySequenceTemplateProvider {
         typeof substitutionProvider.getValuesProbabilities === 'function') {
         const logits = await substitutionProvider.getValuesProbabilities();
         // Apply the variable template to the entities in the logits
-        for (const [ user, similarities ] of Object.entries(logits)) {
+        for (const [ , similarities ] of Object.entries(logits)) {
           for (const similarityObject of similarities) {
             similarityObject.entity = variableTemplate.createTerm(<RawTerm>similarityObject.entity).value;
           }
