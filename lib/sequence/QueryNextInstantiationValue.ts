@@ -7,6 +7,7 @@ import { Generator } from 'sparqljs';
 import type { ValueTransformerCsvMap } from '../valuetransformer/ValueTransformerCsvMap';
 import type { TermCallback } from './../utils/SyntaxTreeUtils';
 import { recurseExpression, recursePatterns } from './../utils/SyntaxTreeUtils';
+import { QLeverQueryInstantiator } from './QueryQLever';
 
 export class QueryNextInstantiatorValue {
   protected readonly dataLocations: string[];
@@ -21,6 +22,8 @@ export class QueryNextInstantiatorValue {
 
   protected DF = new DataFactory();
 
+  protected QLever: QLeverQueryInstantiator;
+
   public constructor(args: IQueryNextInstantiatorValueArgs) {
     this.dataLocations = args.dataLocations;
     this.termMappingTransformerFragmentedToOrginal = args.termMappingTransformerFragmentedToOriginal;
@@ -29,6 +32,8 @@ export class QueryNextInstantiatorValue {
 
     this.engine = new QueryEngine();
     this.timeout = args.timeout;
+
+    this.QLever = new QLeverQueryInstantiator(args);
   }
 
   /**
@@ -46,6 +51,7 @@ export class QueryNextInstantiatorValue {
     // Transform query to original centralized data and ensure that the required variables for
     // next query are present in the SELECT clause
     const transformedQuery = this.transformQuery(query, Object.keys(outputToInstantiationVariables));
+    await this.QLever.executeQuery(new Generator().stringify(transformedQuery));
     const { message, results } = await this.executeQuery(
       new Generator().stringify(transformedQuery),
     );

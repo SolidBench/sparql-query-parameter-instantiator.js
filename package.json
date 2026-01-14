@@ -55,12 +55,14 @@
     "@types/sparqljs": "*",
     "componentsjs": "^6.0.0",
     "csv-parser": "^3.0.0",
+    "dockerode": "^4.0.9",
     "lodash": "^4.17.21",
     "seedrandom": "^3.0.5",
     "sparqljs": "^3.7.0"
   },
   "devDependencies": {
     "@rubensworks/eslint-config": "^3.0.0",
+    "@types/dockerode": "^4.0.0",
     "@types/jest": "^29.0.0",
     "@types/lodash": "^4.17.20",
     "@types/seedrandom": "^3.0.8",
