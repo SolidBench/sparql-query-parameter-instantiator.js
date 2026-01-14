@@ -19,7 +19,7 @@ export class QueryNextInstantiatorValue {
 
   protected indexedFiles = false;
 
-  protected DF = new DataFactory()
+  protected DF = new DataFactory();
 
   public constructor(args: IQueryNextInstantiatorValueArgs) {
     this.dataLocations = args.dataLocations;
@@ -31,28 +31,32 @@ export class QueryNextInstantiatorValue {
     this.timeout = args.timeout;
   }
 
-
   /**
    * Query the centralized data to find possible next instantiation values given
    * the previous query
    * @param query Previous query's AST
    * @param outputToInstantiationVariables Mapping mapping output variables of previous queries
-   * to the variables that need to be instantiated in the next query 
-   * @returns 
+   * to the variables that need to be instantiated in the next query
+   * @returns
    */
   public async getNextQueryInstantiationValues(
     query: SelectQuery,
-    outputToInstantiationVariables: Record<string, string[]>
+    outputToInstantiationVariables: Record<string, string[]>,
   ): Promise<Record<string, RDF.Term[]>> {
     // Transform query to original centralized data and ensure that the required variables for
     // next query are present in the SELECT clause
-    const transformedQuery = this.transformQuery(query, [...Object.keys(outputToInstantiationVariables)]);
+    const transformedQuery = this.transformQuery(query, Object.keys(outputToInstantiationVariables));
     const { message, results } = await this.executeQuery(
       new Generator().stringify(transformedQuery),
     );
+    if (message === 'TIMEOUT'){
+      console.log("Timeout");
+      console.log(new Generator().stringify(transformedQuery));
+      console.log(`Got ${results.length} results`);
+    }
     // Record mapping variables that should be instantiated to possible values
-    const instantiationValues: Record<string, RDF.Term[]> = {}
-    Object.entries(outputToInstantiationVariables).forEach(([outputVariable, instantiationVariables]) => {
+    const instantiationValues: Record<string, RDF.Term[]> = {};
+    for (const [ outputVariable, instantiationVariables ] of Object.entries(outputToInstantiationVariables)) {
       // Get all bindings that have a result for this variable and convert them to fragmented version
       const resultsForVariable = results.reduce<RDF.Term[]>((acc, binding) => {
         let value = binding.get(outputVariable);
@@ -65,10 +69,10 @@ export class QueryNextInstantiatorValue {
         }
         return acc;
       }, []);
-      for (const instantiationVariable of instantiationVariables){
+      for (const instantiationVariable of instantiationVariables) {
         instantiationValues[instantiationVariable] = resultsForVariable;
       }
-    });
+    }
     return instantiationValues;
   }
 
@@ -76,7 +80,7 @@ export class QueryNextInstantiatorValue {
     const transformedQuery = this.transformSyntaxTreeRecurse(
       query,
       this.transformTerm,
-      { requiredSelectVariables }
+      { requiredSelectVariables },
     );
     return transformedQuery;
   }
@@ -151,15 +155,13 @@ export class QueryNextInstantiatorValue {
     const requiredSelectVariables: string[] = context.requiredSelectVariables;
 
     // If wildcard no action is required
-    const isWildcard = syntaxTree.variables.length === 1 && 
+    const isWildcard = syntaxTree.variables.length === 1 &&
     ('termType' in syntaxTree.variables[0] && (syntaxTree.variables[0] as any).termType === 'Wildcard');
 
     if (!isWildcard) {
-      const currentVariables = <Variable[]> syntaxTree.variables
+      const currentVariables = <Variable[]> syntaxTree.variables;
 
-      const existingNames = new Set(currentVariables.map(v => {
-        return 'variable' in v ? v.variable.value : v.value;
-      }));
+      const existingNames = new Set(currentVariables.map(v => 'variable' in v ? v.variable.value : v.value));
 
       for (const reqVar of requiredSelectVariables) {
         if (!existingNames.has(reqVar)) {
@@ -288,7 +290,7 @@ export interface IQueryNextInstantiatorValueArgs {
   termMappingTransformerOriginalToFragmented: ValueTransformerCsvMap;
   /**
    * Transformers mapping (parts) of IRIs from fragmented to centralized and back.
-   * Note that the order matters, as one transformer might be a more specific case of 
+   * Note that the order matters, as one transformer might be a more specific case of
    * another transformer. Thus, it should always go from specific to general.
    */
   transformers: TermTransformerBiDirectional[];

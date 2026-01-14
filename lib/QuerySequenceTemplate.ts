@@ -115,7 +115,10 @@ export class QuerySequenceTemplate {
    * When passed a previous query result, the query will be instantiated with one of these values
    * instead. This is to simulate 'click through' behavior of a user.
    * @param counter The current counter value.
-   * @param
+   * @param instantiateRefinementPattern Whether a refinement pattern should be simulated
+   * @param previousQueryResult Preceding query results if not empty this will be 
+   * used as instantiation value
+   * @param user The user who the simulated sequence belongs to
    */
   public instantiate(
     counter: number,
@@ -124,12 +127,11 @@ export class QuerySequenceTemplate {
     user?: string,
   ):
     { queries: string[]; patternMetadata: Record<string, any>[]; ast: SelectQuery } {
-      
     // Determine variables to instantiate with
     const { variableMapping, alternativeMapping } = this.getVariableMapping(
       previousQueryResult,
-      counter, 
-      user
+      counter,
+      user,
     );
     const instantiatedSyntaxTree = this.instantiateSyntaxTreeWrap(this.syntaxTree, variableMapping);
 
@@ -160,27 +162,29 @@ export class QuerySequenceTemplate {
     };
   }
 
-  private getVariableMapping(previousQueryResult: Record<string, RDF.Term[]>, counter: number, user?: string){
+  private getVariableMapping(
+    previousQueryResult: Record<string, RDF.Term[]>,
+    counter: number,
+    user?: string
+  ) {
     const variableMapping: Record<string, RDF.Term> = {};
     const alternativeMapping: Record<string, RDF.Term> = {};
 
     for (const variable of Object.keys(this.variableMappings)) {
-      if (variable in previousQueryResult && previousQueryResult[variable].length > 0){
+      if (variable in previousQueryResult && previousQueryResult[variable].length > 0) {
         const values = previousQueryResult[variable];
         variableMapping[variable] = values[counter % values.length];
         alternativeMapping[variable] = values[(counter + 1) % values.length];
-        if (user){
+        if (user) {
           this.updateCounter(user, variable, values[counter % values.length].value);
         }
-      }
-      else {
+      } else {
         const values = this.variableMappings[variable];
         // When no probabilities and rng is given, we simply cycle through the provided
         // values to instantiate queries in the sequence.
         if (!this.variableProbabilities[variable]) {
           variableMapping[variable] = values[counter % values.length];
           alternativeMapping[variable] = values[(counter + 1) % values.length];
-
         } else if (Object.keys(this.variableProbabilities).length > 0 && user) {
           const sampledValues: RDF.Term[] = this.sampleVariableTerm(variable, user, 2);
           variableMapping[variable] = sampledValues[0];
@@ -196,7 +200,7 @@ export class QuerySequenceTemplate {
         }
       }
     }
-    return { variableMapping, alternativeMapping}
+    return { variableMapping, alternativeMapping };
   }
 
   // TODO: This has complete overlap with QueryTemplate functions. When we're happy with the benchmark

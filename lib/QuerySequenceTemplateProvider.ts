@@ -24,10 +24,7 @@ export class QuerySequenceTemplateProvider {
   // Mapping from output query variable usable for next query instantiation to the type
   // of instantiator
   public readonly outputVariableTypeMap: Record<string, string>;
-  // When starting a new session, what is the probability of choosing this template
-  // This is used to ensure that number of occurrences templates in sequences is
-  // expected to be equal
-  public readonly baseProbabilityTemplate: number;
+
   private readonly nextTemplates: INextTemplate[];
 
   private readonly iriTransformer?: IValueTransformer;
@@ -58,7 +55,6 @@ export class QuerySequenceTemplateProvider {
     minRefinementLength: number,
     maxRefinementLength: number,
     maxLogits: number,
-    baseProbabilityTemplate: number,
     iriTransformer?: IValueTransformer,
     refinementPatternsFilePath?: string,
     nextTemplateProbabilities?: number[],
@@ -73,7 +69,6 @@ export class QuerySequenceTemplateProvider {
 
     // Validate input json from config to be a valid nextTemplate interface with valid probability values
     this.nextTemplates = this.validateNextTemplates(nextTemplates, nextTemplateProbabilities);
-    this.baseProbabilityTemplate = baseProbabilityTemplate;
 
     this.iriTransformer = iriTransformer;
 
@@ -94,6 +89,7 @@ export class QuerySequenceTemplateProvider {
   ): Promise<QuerySequenceTemplate> {
     const sparqlString = await fs.promises.readFile(this.templateFilePath, 'utf8');
     const syntaxTree = this.parser.parse(sparqlString);
+
     const variableMappings: Record<string, RDF.Term[]> = {};
     const variableProbabilityMappings: Record<string, Record<string, IEntityLogits[]>> = {};
     for (const variableTemplate of this.variables) {

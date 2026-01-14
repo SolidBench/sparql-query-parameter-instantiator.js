@@ -17,6 +17,8 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
   private readonly columnNameSimilarities: string = 'similarities';
   private readonly separator: string;
 
+  protected valuesProbabilitiesCache: Record<string, Record<string, number>[]> | undefined;
+
   public constructor(
     csvFilePath: string | undefined,
     columnName: string,
@@ -54,6 +56,9 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
   }
 
   public getValuesProbabilities(): Promise<Record<string, Record<string, number>[]>> {
+    if (this.valuesProbabilitiesCache){
+      return Promise.resolve(this.valuesProbabilitiesCache);
+    }
     return new Promise<Record<string, Record<string, number>[]>>((resolve, reject) => {
       const results: Record<string, Record<string, number>[]> = {};
       fs.createReadStream(this.csvFilePathSimilarities)
@@ -72,7 +77,10 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
             throw new Error('Failed');
           }
         })
-        .on('end', () => resolve(results));
+        .on('end', () => {
+          resolve(results);
+          this.valuesProbabilitiesCache = results;
+        });
     });
   }
 }

@@ -26,7 +26,7 @@ export class ValueTransformerCsvMap implements IValueTransformer {
     for (const line of lines) {
       const [ key, value ] = line.split(',');
       if (key && value) {
-        if (this.invertMapping){
+        if (this.invertMapping) {
           mapping[value.trim()] = key.trim();
         } else {
           mapping[key.trim()] = value.trim();

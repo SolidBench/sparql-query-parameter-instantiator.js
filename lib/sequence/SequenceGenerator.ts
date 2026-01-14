@@ -1,5 +1,5 @@
-import type * as seedrandom from 'seedrandom';
 import type * as RDF from '@rdfjs/types';
+import type * as seedrandom from 'seedrandom';
 
 import type { SelectQuery } from 'sparqljs';
 import type { QuerySequenceTemplate } from '../QuerySequenceTemplate';
@@ -63,7 +63,7 @@ export class SequenceGenerator {
       user: { user, transitionProbability: sessionTransitionProbability },
       sequenceElements: [],
       sequenceLength,
-      sequenceInstantiationCounts: {}
+      sequenceInstantiationCounts: {},
     };
 
     console.log(`Instantiating sequence ${n} with length ${sequenceLength} 
@@ -80,10 +80,7 @@ export class SequenceGenerator {
     templates: IQuerySequenceElementTemplate[],
     nSessions: number,
   ): IQuerySession {
-    const templateWithProbability = templates.map(
-      t => ({ entity: t, probability: t.baseProbabilityTemplate }),
-    );
-    const startQuery = sampleProbability(rng, templateWithProbability);
+    const startQuery = sampleRandom(rng, templates);
     const newSession = {
       sessionId: nSessions,
       templates: [ startQuery ],
@@ -173,7 +170,6 @@ export class SequenceGenerator {
       providers.map(async provider => ({
         task: provider.queryTask,
         name: provider.getTemplateName(),
-        baseProbabilityTemplate: provider.baseProbabilityTemplate,
         nextFilePaths: provider.getNextTemplates(),
         template: await provider.createTemplate(rng, this.temperature),
       })),
@@ -251,8 +247,8 @@ export class SequenceGenerator {
         sequenceMetadata,
       );
     }
-    for (const template of templates){
-      sequenceMetadata.sequenceInstantiationCounts[template.name] = 
+    for (const template of templates) {
+      sequenceMetadata.sequenceInstantiationCounts[template.name] =
         template.template.getInstantiationCounts();
     }
     return { querySequence, sequenceMetadata };
@@ -396,7 +392,6 @@ export interface IQuerySequenceElementTemplate {
   task: string;
   name: string;
   nextFilePaths: INextTemplate[];
-  baseProbabilityTemplate: number;
   template: QuerySequenceTemplate;
 }
 
@@ -420,7 +415,7 @@ export interface IUserMetadata {
 }
 
 /**
- * Counter mapping: 
+ * Counter mapping:
  * template -> user -> variable -> instatiation value -> # of instantiations with that value
  */
 export type InstantiationCounts = Record<string, Record<string, Record<string, Record<string, number>>>>;
