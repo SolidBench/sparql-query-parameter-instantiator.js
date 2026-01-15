@@ -1,5 +1,6 @@
 export * from './sequence/SequenceGenerator';
 export * from './sequence/QueryNextInstantiationValue';
+export * from './sequence/QLeverInstance';
 export * from './substitution/ISubstitutionProvider';
 export * from './substitution/SubstitutionProviderCsv';
 export * from './substitution/SubstitutionProviderShuffle';

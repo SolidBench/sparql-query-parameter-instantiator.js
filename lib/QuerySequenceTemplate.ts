@@ -69,7 +69,7 @@ export class QuerySequenceTemplate {
   private readonly minRefinementLength: number;
   private readonly maxRefinementLength: number;
 
-  public readonly instantiationCounts: Record<string, Record<string, Record<string, number>>> = {};
+  public readonly instantiationCounts: Record<string, Record<string, number>> = {};
 
   public constructor(
     syntaxTree: SparqlQuery,
@@ -1192,19 +1192,16 @@ export class QuerySequenceTemplate {
   }
 
   public updateCounter(user: string, variable: string, value: string): void {
-    if (!this.instantiationCounts[user]) {
-      this.instantiationCounts[user] = {};
+    if (!this.instantiationCounts[variable]) {
+      this.instantiationCounts[variable] = {};
     }
-    if (!this.instantiationCounts[user][variable]) {
-      this.instantiationCounts[user][variable] = {};
+    if (!this.instantiationCounts[variable][value]) {
+      this.instantiationCounts[variable][value] = 0;
     }
-    if (!this.instantiationCounts[user][variable][value]) {
-      this.instantiationCounts[user][variable][value] = 0;
-    }
-    this.instantiationCounts[user][variable][value]++;
+    this.instantiationCounts[variable][value]++;
   }
 
-  public getInstantiationCounts(): Record<string, Record<string, Record<string, number>>> {
+  public getInstantiationCounts(): Record<string, Record<string, number>> {
     return this.instantiationCounts;
   }
 

@@ -160,6 +160,9 @@ export class SequenceGenerator {
     user: string,
     n: number,
   ) {
+    // Ensure QLever has finished setting up before generating the sequence
+    await this.findNextInstantiationValue.getQLeverReadyStatus();
+
     const {
       sequenceLength,
       sessionTransitionProbability,
@@ -418,4 +421,4 @@ export interface IUserMetadata {
  * Counter mapping:
  * template -> user -> variable -> instatiation value -> # of instantiations with that value
  */
-export type InstantiationCounts = Record<string, Record<string, Record<string, Record<string, number>>>>;
+export type InstantiationCounts = Record<string, Record<string, Record<string, number>>>;

@@ -7,33 +7,25 @@ import { Generator } from 'sparqljs';
 import type { ValueTransformerCsvMap } from '../valuetransformer/ValueTransformerCsvMap';
 import type { TermCallback } from './../utils/SyntaxTreeUtils';
 import { recurseExpression, recursePatterns } from './../utils/SyntaxTreeUtils';
-import { QLeverQueryInstantiator } from './QueryQLever';
+import { QLeverInstance } from './QLeverInstance';
 
 export class QueryNextInstantiatorValue {
-  protected readonly dataLocations: string[];
   protected readonly termMappingTransformerFragmentedToOrginal: ValueTransformerCsvMap;
   protected readonly termMappingTransformerOriginalToFragmented: ValueTransformerCsvMap;
   protected readonly transformers: TermTransformerBiDirectional[];
-
-  protected readonly engine: QueryEngine;
-  protected readonly timeout: number;
 
   protected indexedFiles = false;
 
   protected DF = new DataFactory();
 
-  protected QLever: QLeverQueryInstantiator;
+  protected QLever: QLeverInstance;
 
   public constructor(args: IQueryNextInstantiatorValueArgs) {
-    this.dataLocations = args.dataLocations;
     this.termMappingTransformerFragmentedToOrginal = args.termMappingTransformerFragmentedToOriginal;
     this.termMappingTransformerOriginalToFragmented = args.termMappingTransformerOriginalToFragmented;
     this.transformers = args.transformers;
 
-    this.engine = new QueryEngine();
-    this.timeout = args.timeout;
-
-    this.QLever = new QLeverQueryInstantiator(args);
+    this.QLever = args.QLever;
   }
 
   /**
@@ -51,14 +43,9 @@ export class QueryNextInstantiatorValue {
     // Transform query to original centralized data and ensure that the required variables for
     // next query are present in the SELECT clause
     const transformedQuery = this.transformQuery(query, Object.keys(outputToInstantiationVariables));
-    await this.QLever.executeQuery(new Generator().stringify(transformedQuery));
-    const { message, results } = await this.executeQuery(
-      new Generator().stringify(transformedQuery),
-    );
+    const { message, results } = await this.QLever.executeQuery(new Generator().stringify(transformedQuery));
     if (message === 'TIMEOUT'){
-      console.log("Timeout");
-      console.log(new Generator().stringify(transformedQuery));
-      console.log(`Got ${results.length} results`);
+      console.log("Query timed out.");
     }
     // Record mapping variables that should be instantiated to possible values
     const instantiationValues: Record<string, RDF.Term[]> = {};
@@ -195,47 +182,8 @@ export class QueryNextInstantiatorValue {
     return syntaxTree;
   };
 
-  protected async executeQuery(query: string): Promise<IQueryExecutionResult> {
-    let bindingsStream: BindingsStream;
-    let timeoutHandle: NodeJS.Timeout;
-
-    const results: RDF.Bindings[] = [];
-    const timeoutPromise = new Promise<'TIMEOUT'>((resolve, _) => {
-      timeoutHandle = setTimeout(() => {
-        if (bindingsStream) {
-          bindingsStream.destroy();
-        }
-        resolve('TIMEOUT');
-      }, this.timeout * 1000);
-    });
-
-    const queryResults = new Promise<'END'>(async(resolve, reject) => {
-      try {
-        bindingsStream = await this.engine.queryBindings(query, {
-          sources: this.dataLocations,
-        });
-        bindingsStream.on('data', (data: RDF.Bindings) => {
-          results.push(data);
-        });
-        bindingsStream.on('end', () => {
-          resolve('END');
-        });
-        bindingsStream.on('error', () => {
-          reject(new Error(`Error execution query`));
-        });
-      } catch (error) {
-        reject(error);
-      }
-    });
-
-    try {
-      const message = await Promise.race([ queryResults, timeoutPromise ]);
-      return { message, results };
-    } catch (error) {
-      throw error;
-    } finally {
-      clearTimeout(timeoutHandle!);
-    }
+  public getQLeverReadyStatus(): Promise<void>{
+    return this.QLever.getReadyStatus();
   }
 }
 
@@ -282,10 +230,6 @@ export class TermTransformerBiDirectional {
 
 export interface IQueryNextInstantiatorValueArgs {
   /**
-   * File location of the original data files
-   */
-  dataLocations: string[];
-  /**
    * Mapper transforming terms which are not simple IRI replacements
    * In SolidBench these are posts / comments as the fragmentation applied determines the transformed URI)
    */
@@ -301,9 +245,10 @@ export interface IQueryNextInstantiatorValueArgs {
    */
   transformers: TermTransformerBiDirectional[];
   /**
-   * Timeout for query execution in seconds
+   * A helper class for starting, querying, and stopping a QLever instance using
+   * docker
    */
-  timeout: number;
+  QLever: QLeverInstance;
 }
 
 export interface ITermTransformerArgs {
