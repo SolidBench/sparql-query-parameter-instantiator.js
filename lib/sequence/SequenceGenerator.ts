@@ -74,13 +74,28 @@ export class SequenceGenerator {
       sequenceMetadata,
     };
   }
-
   public startNewSession(
     rng: seedrandom.PRNG,
     templates: IQuerySequenceElementTemplate[],
     nSessions: number,
+    templateCounts: Record<string, number>, // Add this parameter!
   ): IQuerySession {
-    const startQuery = sampleRandom(rng, templates);
+    
+    // Calculate raw weights penalized by how often the template was used
+    let totalWeight = 0;
+    const rawWeights = templates.map(t => {
+      const currentCount = templateCounts[t.name] || 0;
+      const weight = 1.0 / (currentCount*2 + 1);
+      totalWeight += weight;
+      return { entity: t, weight };
+    });
+
+    // Normalize into valid probabilities and sample
+    const startQuery = sampleProbability(rng, rawWeights.map(rw => ({
+      entity: rw.entity,
+      probability: rw.weight / totalWeight,
+    })));
+
     const newSession = {
       sessionId: nSessions,
       templates: [ startQuery ],
@@ -94,6 +109,25 @@ export class SequenceGenerator {
     };
     return newSession;
   }
+  // public startNewSession(
+  //   rng: seedrandom.PRNG,
+  //   templates: IQuerySequenceElementTemplate[],
+  //   nSessions: number,
+  // ): IQuerySession {
+  //   const startQuery = sampleRandom(rng, templates);
+  //   const newSession = {
+  //     sessionId: nSessions,
+  //     templates: [ startQuery ],
+  //     task: startQuery.task,
+  //     sessionLength: logNormalRoundedUp(
+  //       rng,
+  //       this.meanLogSessionLength,
+  //       this.stdLogSessionLength,
+  //     ),
+  //     ended: false,
+  //   };
+  //   return newSession;
+  // }
 
   public async addTemplateToSequence(
     rng: seedrandom.PRNG,
@@ -156,6 +190,7 @@ export class SequenceGenerator {
   public async generateSequence(
     rng: seedrandom.PRNG,
     providers: QuerySequenceTemplateProvider[],
+    templateCounts: Record<string,number>,
     // Templates: QuerySequenceTemplate[],
     user: string,
     n: number,
@@ -178,15 +213,11 @@ export class SequenceGenerator {
       })),
     );
 
-    const templateCounts: Record<string, number> = Object.fromEntries(
-      providers.map(p => [ p.getTemplateName(), 0 ]),
-    );
-
     const sequenceSessions: IQuerySession[] = [];
     const querySequence: string[] = [];
 
     const createAndRegisterNewSession = async() => {
-      const session = this.startNewSession(rng, templates, sequenceSessions.length);
+      const session = this.startNewSession(rng, templates, sequenceSessions.length, templateCounts);
       sequenceSessions.push(session);
       // Add query to the sequence and sessions and return the ast of the last query.
       const ast = await this.addTemplateToSequence(
@@ -229,10 +260,24 @@ export class SequenceGenerator {
         continue;
       }
 
-      const choice = sampleProbability(rng, nextOptions.map(t => ({
-        entity: t,
-        probability: t.probability!,
+      // Weight according to the number of occurrences already in previous sequences
+      // to ensure all queries are represented
+      let totalWeight = 0;
+      const rawWeights = nextOptions.map(t => {
+        const currentCount = templateCounts[t.template] || 0;
+        const weight = t.probability! / (currentCount*2 + 1);
+        totalWeight += weight;
+        return { entity: t, weight };
+      });
+
+      const choice = sampleProbability(rng, rawWeights.map(rw => ({
+        entity: rw.entity,
+        probability: rw.weight / totalWeight,
       })));
+      // const choice = sampleProbability(rng, nextOptions.map(t => ({
+      //   entity: t,
+      //   probability: t.probability!,
+      // })));
 
       const nextQuery = templates.find(t => t.name === choice.template);
       if (!nextQuery) {

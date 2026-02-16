@@ -20,6 +20,7 @@ export class QuerySequenceInstantiator {
   private readonly destinationFilePath: string;
   private readonly metadataDestinationFilePath: string;
 
+  private readonly templateCounts: Record<string, number>;
   public constructor(args: IQuerySequenceInstantiatorArgs) {
     this.providers = args.providers;
     this.personProvider = args.personProvider;
@@ -31,11 +32,19 @@ export class QuerySequenceInstantiator {
 
     this.destinationFilePath = args.destinationFilePath;
     this.metadataDestinationFilePath = args.metadataDestinationFilePath ?? this.destinationFilePath;
+    this.templateCounts = Object.fromEntries(this.providers.map(p => [ p.getTemplateName(), 0 ]),);
   }
 
   public async instantiateProviderSequence(n: number, user: string): Promise<void> {
+    console.log(this.templateCounts);
     const { querySequence, sequenceMetadata } =
-      await this.sequenceGenerator.generateSequence(this.rngSeeded, this.providers, user, n);
+      await this.sequenceGenerator.generateSequence(
+        this.rngSeeded,
+        this.providers,
+        this.templateCounts,
+        user,
+        n
+      );
     const sequenceFile = querySequence.join('\n\n');
     await this.saveSequenceToFile(`sequence_${n}.sparql`, sequenceFile);
     await this.saveMetadataToFile(`sequence_${n}.metadata.json`, sequenceMetadata);
