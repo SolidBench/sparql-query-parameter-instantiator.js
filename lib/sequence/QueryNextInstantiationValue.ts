@@ -1,5 +1,3 @@
-import { QueryEngine } from '@comunica/query-sparql-file';
-import type { BindingsStream } from '@comunica/types';
 import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
 import type { SelectQuery, SparqlQuery, VariableTerm, IriTerm, BlankTerm, QuadTerm, PropertyPath, Variable } from 'sparqljs';

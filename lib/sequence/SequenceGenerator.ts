@@ -109,25 +109,6 @@ export class SequenceGenerator {
     };
     return newSession;
   }
-  // public startNewSession(
-  //   rng: seedrandom.PRNG,
-  //   templates: IQuerySequenceElementTemplate[],
-  //   nSessions: number,
-  // ): IQuerySession {
-  //   const startQuery = sampleRandom(rng, templates);
-  //   const newSession = {
-  //     sessionId: nSessions,
-  //     templates: [ startQuery ],
-  //     task: startQuery.task,
-  //     sessionLength: logNormalRoundedUp(
-  //       rng,
-  //       this.meanLogSessionLength,
-  //       this.stdLogSessionLength,
-  //     ),
-  //     ended: false,
-  //   };
-  //   return newSession;
-  // }
 
   public async addTemplateToSequence(
     rng: seedrandom.PRNG,
@@ -237,7 +218,7 @@ export class SequenceGenerator {
 
     for (let i = 0; i < sequenceLength - 1; i++) {
       // Random chance of switching session
-      const shouldSwitch = sampleHit(rng, sessionTransitionProbability * 2);
+      const shouldSwitch = sampleHit(rng, sessionTransitionProbability);
       const openExtraSessions = sequenceSessions.filter(s => !s.ended && s !== currentSession);
 
       if (shouldSwitch || currentSession.ended) {
