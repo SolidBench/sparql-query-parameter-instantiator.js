@@ -116,7 +116,7 @@ export class QuerySequenceTemplate {
    * instead. This is to simulate 'click through' behavior of a user.
    * @param counter The current counter value.
    * @param instantiateRefinementPattern Whether a refinement pattern should be simulated
-   * @param previousQueryResult Preceding query results if not empty this will be 
+   * @param previousQueryResult Preceding query results if not empty this will be
    * used as instantiation value
    * @param user The user who the simulated sequence belongs to
    */
@@ -126,7 +126,7 @@ export class QuerySequenceTemplate {
     previousQueryResult: Record<string, RDF.Term[]>,
     user?: string,
   ):
-    { queries: string[]; patternMetadata: Record<string, any>[]; ast: SelectQuery } {
+    { queries: string[]; patternMetadata: Record<string, any>[]; asts: SelectQuery[] } {
     // Determine variables to instantiate with
     const { variableMapping, alternativeMapping } = this.getVariableMapping(
       previousQueryResult,
@@ -150,14 +150,14 @@ export class QuerySequenceTemplate {
       );
       return {
         queries: queries.map(query => new Generator().stringify(query)),
-        ast: queries[0],
+        asts: queries,
         patternMetadata: metadata,
       };
     }
     // Instantiate syntax tree
     return {
       queries: [ new Generator().stringify(instantiatedSyntaxTree) ],
-      ast: instantiatedSyntaxTree,
+      asts: [ instantiatedSyntaxTree ],
       patternMetadata: [{}],
     };
   }
@@ -165,7 +165,7 @@ export class QuerySequenceTemplate {
   private getVariableMapping(
     previousQueryResult: Record<string, RDF.Term[]>,
     counter: number,
-    user?: string
+    user?: string,
   ) {
     const variableMapping: Record<string, RDF.Term> = {};
     const alternativeMapping: Record<string, RDF.Term> = {};

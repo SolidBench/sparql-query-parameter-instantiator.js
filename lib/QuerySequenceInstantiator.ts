@@ -32,7 +32,7 @@ export class QuerySequenceInstantiator {
 
     this.destinationFilePath = args.destinationFilePath;
     this.metadataDestinationFilePath = args.metadataDestinationFilePath ?? this.destinationFilePath;
-    this.templateCounts = Object.fromEntries(this.providers.map(p => [ p.getTemplateName(), 0 ]),);
+    this.templateCounts = Object.fromEntries(this.providers.map(p => [ p.getTemplateName(), 0 ]));
   }
 
   public async instantiateProviderSequence(n: number, user: string): Promise<void> {
@@ -43,7 +43,7 @@ export class QuerySequenceInstantiator {
         this.providers,
         this.templateCounts,
         user,
-        n
+        n,
       );
     const sequenceFile = querySequence.join('\n\n');
     await this.saveSequenceToFile(`sequence_${n}.sparql`, sequenceFile);

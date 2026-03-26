@@ -56,7 +56,7 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
   }
 
   public getValuesProbabilities(): Promise<Record<string, Record<string, number>[]>> {
-    if (this.valuesProbabilitiesCache){
+    if (this.valuesProbabilitiesCache) {
       return Promise.resolve(this.valuesProbabilitiesCache);
     }
     return new Promise<Record<string, Record<string, number>[]>>((resolve, reject) => {

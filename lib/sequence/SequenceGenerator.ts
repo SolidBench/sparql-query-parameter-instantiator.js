@@ -5,60 +5,40 @@ import type { SelectQuery } from 'sparqljs';
 import type { QuerySequenceTemplate } from '../QuerySequenceTemplate';
 import type { INextTemplate, QuerySequenceTemplateProvider } from '../QuerySequenceTemplateProvider';
 import { calculateExpectedMeanLogNormal, logNormal, logNormalRoundedUp, sampleHit, sampleProbability, sampleRandom } from '../utils/RandomUtils';
+import type { IJoinTreeNode } from './QLeverInstance';
 import type { QueryNextInstantiatorValue } from './QueryNextInstantiationValue';
 
 export class SequenceGenerator {
   private readonly meanLogSequenceLength: number;
   private readonly stdLogSequenceLength: number;
-
   private readonly meanLogSessionLength: number;
   private readonly stdLogSessionLength: number;
-
   private readonly meanLogTransitionProbability: number;
   private readonly stdLogTransitionProbability: number;
-
   private readonly refinementPatternProbability: number;
   private readonly temperature: number;
-
   private readonly findNextInstantiationValue: QueryNextInstantiatorValue;
 
   public constructor(args: ISequenceGeneratorArgs) {
     this.meanLogSequenceLength = args.meanLogSequenceLength;
     this.stdLogSequenceLength = args.stdLogSequenceLength;
-    console.log(`Expected sequence length: ${
-        calculateExpectedMeanLogNormal(this.meanLogSequenceLength, this.stdLogSequenceLength)
-        }`);
-    // The mean and std of the distribution determining the simulated session length within sequences
     this.meanLogSessionLength = args.meanLogSessionLength;
     this.stdLogSessionLength = args.stdLogSessionLength;
-    console.log(`Expected session length: ${
-        calculateExpectedMeanLogNormal(this.meanLogSessionLength, this.stdLogSessionLength)
-        }`);
-    // The mean and std of the distribution determining the simulated probability of switching between
-    // sessions within a sequence
     this.meanLogTransitionProbability = args.meanLogTransitionProbability;
     this.stdLogTransitionProbability = args.stdLogTransitionProbability;
-    console.log(`Expected transition probability: ${
-        calculateExpectedMeanLogNormal(
-            this.meanLogTransitionProbability,
-            this.stdLogTransitionProbability,
-        )}`);
     this.refinementPatternProbability = args.refinementPatternProbability;
     this.temperature = args.temperature;
     this.findNextInstantiationValue = args.findNextInstantiationValue;
+
+    console.log(`Expected sequence length: ${calculateExpectedMeanLogNormal(this.meanLogSequenceLength, this.stdLogSequenceLength)}`);
+    console.log(`Expected session length: ${calculateExpectedMeanLogNormal(this.meanLogSessionLength, this.stdLogSessionLength)}`);
+    console.log(`Expected transition probability: ${calculateExpectedMeanLogNormal(this.meanLogTransitionProbability, this.stdLogTransitionProbability)}`);
   }
 
   public initSequence(rng: seedrandom.PRNG, user: string, n: number): ISequenceInit {
-    const sequenceLength = logNormalRoundedUp(
-      rng,
-      this.meanLogSequenceLength,
-      this.stdLogSequenceLength,
-    );
-    const sessionTransitionProbability = logNormal(
-      rng,
-      this.meanLogTransitionProbability,
-      this.stdLogTransitionProbability,
-    );
+    const sequenceLength = logNormalRoundedUp(rng, this.meanLogSequenceLength, this.stdLogSequenceLength);
+    const sessionTransitionProbability = logNormal(rng, this.meanLogTransitionProbability, this.stdLogTransitionProbability);
+
     const sequenceMetadata: IQuerySequenceMetadata = {
       user: { user, transitionProbability: sessionTransitionProbability },
       sequenceElements: [],
@@ -66,48 +46,37 @@ export class SequenceGenerator {
       sequenceInstantiationCounts: {},
     };
 
-    console.log(`Instantiating sequence ${n} with length ${sequenceLength} 
-            for user ${user} with session transition probability ${sessionTransitionProbability.toFixed(2)}`);
-    return {
-      sequenceLength,
-      sessionTransitionProbability,
-      sequenceMetadata,
-    };
+    console.log(`Instantiating sequence ${n} with length ${sequenceLength} for user ${user} with session transition probability ${sessionTransitionProbability.toFixed(2)}`);
+    return { sequenceLength, sessionTransitionProbability, sequenceMetadata };
   }
+
   public startNewSession(
     rng: seedrandom.PRNG,
     templates: IQuerySequenceElementTemplate[],
     nSessions: number,
-    templateCounts: Record<string, number>, // Add this parameter!
+    templateCounts: Record<string, number>,
   ): IQuerySession {
-    
-    // Calculate raw weights penalized by how often the template was used
     let totalWeight = 0;
-    const rawWeights = templates.map(t => {
+    const rawWeights = templates.map((t) => {
       const currentCount = templateCounts[t.name] || 0;
-      const weight = 1.0 / (currentCount*2 + 1);
+      const weight = 1 / (currentCount * 2 + 1);
       totalWeight += weight;
       return { entity: t, weight };
     });
 
-    // Normalize into valid probabilities and sample
     const startQuery = sampleProbability(rng, rawWeights.map(rw => ({
       entity: rw.entity,
       probability: rw.weight / totalWeight,
     })));
 
-    const newSession = {
+    return {
       sessionId: nSessions,
       templates: [ startQuery ],
       task: startQuery.task,
-      sessionLength: logNormalRoundedUp(
-        rng,
-        this.meanLogSessionLength,
-        this.stdLogSessionLength,
-      ),
+      sessionLength: logNormalRoundedUp(rng, this.meanLogSessionLength, this.stdLogSessionLength),
+      queryCount: 0,
       ended: false,
     };
-    return newSession;
   }
 
   public async addTemplateToSequence(
@@ -119,39 +88,58 @@ export class SequenceGenerator {
     user: string,
     templateCounts: Record<string, number>,
     sequenceMetadata: IQuerySequenceMetadata,
-  ): Promise<SelectQuery> {
-    let instantiateRefinementPattern = false;
-    if (rng() < this.refinementPatternProbability) {
-      instantiateRefinementPattern = true;
-    }
-    // Last ast is only defined if a previous query has been instantiated in the query
-    // thus this can serve as starting point to determine next instantiation
+  ): Promise<{ ast: SelectQuery; queriesAdded: number }> {
+    const instantiateRefinementPattern = rng() < this.refinementPatternProbability;
     let nextInstantiators: Record<string, RDF.Term[]> = {};
+
+    // 1. Fetch instantiation values for the NEW queries using the PREVIOUS query's AST
     if (session.lastAst) {
-      nextInstantiators = await this.determineNextInstantiator(
+      const previousTemplate = session.templates.at(-1)!;
+      const { instantiationValues } = await this.determineNextInstantiator(
         session.lastAst,
-        session.templates.at(-1)!.template,
+        previousTemplate.template,
         query.template,
       );
+      nextInstantiators = instantiationValues;
     }
-    // Add template to session
-    const { queries, patternMetadata, ast } = query.template.instantiate(
-      templateCounts[query.name],
+
+    // 2. Instantiate the new queries (expecting an array of ASTs now)
+    const currentCount = templateCounts[query.name] || 0;
+    const { queries, patternMetadata, asts } = query.template.instantiate(
+      currentCount,
       instantiateRefinementPattern,
       nextInstantiators,
       user,
     );
-    sequence.push(...queries);
-    session.templates.push(query);
-    session.lastAst = ast;
 
-    // Update template counts
-    templateCounts[query.name] += 1;
-    // Close session if it is full
-    if (session.templates.length >= session.sessionLength) {
+    sequence.push(...queries);
+
+    if (session.templates.at(-1)?.name !== query.name) {
+      session.templates.push(query);
+    }
+
+    session.lastAst = asts.at(-1)!;
+    session.queryCount += queries.length;
+    templateCounts[query.name] = currentCount + 1;
+
+    if (session.queryCount >= session.sessionLength) {
       session.ended = true;
     }
-    for (const metadata of patternMetadata) {
+
+    const nOpenSessions = sequenceSessions.filter(x => !x.ended).length;
+
+    // 3. Process metadata and compute Join Plans for ALL generated queries immediately
+    for (let i = 0; i < queries.length; i++) {
+      const currentAst = asts[i];
+
+      // Fetch the join plan for this specific query.
+      // Passing the current template twice safely executes the query without side-effects on external mappings.
+      const { joinPlan } = await this.determineNextInstantiator(
+        currentAst,
+        query.template,
+        query.template,
+      );
+
       sequenceMetadata.sequenceElements.push({
         session: {
           task: session.task,
@@ -159,31 +147,25 @@ export class SequenceGenerator {
           sessionId: session.sessionId,
         },
         template: query.name,
-        nOpenSessions: sequenceSessions.filter(x => !x.ended).length,
-        refinementMetadata: metadata,
+        nOpenSessions,
+        refinementMetadata: patternMetadata[i],
+        joinPlanCentralized: joinPlan,
       });
     }
 
-    // Return the last template in the session
-    return ast;
+    return { ast: session.lastAst, queriesAdded: queries.length };
   }
 
   public async generateSequence(
     rng: seedrandom.PRNG,
     providers: QuerySequenceTemplateProvider[],
-    templateCounts: Record<string,number>,
-    // Templates: QuerySequenceTemplate[],
+    templateCounts: Record<string, number>,
     user: string,
     n: number,
   ) {
-    // Ensure QLever has finished setting up before generating the sequence
     await this.findNextInstantiationValue.getQLeverReadyStatus();
 
-    const {
-      sequenceLength,
-      sessionTransitionProbability,
-      sequenceMetadata,
-    } = this.initSequence(rng, user, n);
+    const { sequenceLength, sessionTransitionProbability, sequenceMetadata } = this.initSequence(rng, user, n);
 
     const templates: IQuerySequenceElementTemplate[] = await Promise.all(
       providers.map(async provider => ({
@@ -200,8 +182,7 @@ export class SequenceGenerator {
     const createAndRegisterNewSession = async() => {
       const session = this.startNewSession(rng, templates, sequenceSessions.length, templateCounts);
       sequenceSessions.push(session);
-      // Add query to the sequence and sessions and return the ast of the last query.
-      const ast = await this.addTemplateToSequence(
+      const result = await this.addTemplateToSequence(
         rng,
         session.templates[0],
         session,
@@ -211,23 +192,25 @@ export class SequenceGenerator {
         templateCounts,
         sequenceMetadata,
       );
-      return { session, ast };
+      return { session, ...result };
     };
 
-    let { session: currentSession, ast: lastAst } = await createAndRegisterNewSession();
+    let { session: currentSession, queriesAdded } = await createAndRegisterNewSession();
+    let totalQueriesGenerated = queriesAdded;
 
-    for (let i = 0; i < sequenceLength - 1; i++) {
-      // Random chance of switching session
-      const shouldSwitch = sampleHit(rng, sessionTransitionProbability);
+    // Control execution loop using total queries to properly handle batch refinement generation
+    while (totalQueriesGenerated < sequenceLength) {
       const openExtraSessions = sequenceSessions.filter(s => !s.ended && s !== currentSession);
+      const shouldSwitch = sampleHit(rng, sessionTransitionProbability);
 
       if (shouldSwitch || currentSession.ended) {
-        if (openExtraSessions.length > 1 && sampleHit(rng, 0.5)) {
-          // Switch to an existing open session
+        if (openExtraSessions.length > 0 && sampleHit(rng, 0.5)) {
           currentSession = sampleRandom(rng, openExtraSessions);
+          continue;
         } else {
-          // Start a new session
-          ({ session: currentSession, ast: lastAst } = await createAndRegisterNewSession());
+          const res = await createAndRegisterNewSession();
+          currentSession = res.session;
+          totalQueriesGenerated += res.queriesAdded;
           continue;
         }
       }
@@ -237,16 +220,16 @@ export class SequenceGenerator {
 
       if (nextOptions.length === 0) {
         currentSession.ended = true;
-        ({ session: currentSession, ast: lastAst } = await createAndRegisterNewSession());
+        const res = await createAndRegisterNewSession();
+        currentSession = res.session;
+        totalQueriesGenerated += res.queriesAdded;
         continue;
       }
 
-      // Weight according to the number of occurrences already in previous sequences
-      // to ensure all queries are represented
       let totalWeight = 0;
-      const rawWeights = nextOptions.map(t => {
+      const rawWeights = nextOptions.map((t) => {
         const currentCount = templateCounts[t.template] || 0;
-        const weight = t.probability! / (currentCount*2 + 1);
+        const weight = t.probability! / (currentCount * 2 + 1);
         totalWeight += weight;
         return { entity: t, weight };
       });
@@ -255,17 +238,13 @@ export class SequenceGenerator {
         entity: rw.entity,
         probability: rw.weight / totalWeight,
       })));
-      // const choice = sampleProbability(rng, nextOptions.map(t => ({
-      //   entity: t,
-      //   probability: t.probability!,
-      // })));
 
       const nextQuery = templates.find(t => t.name === choice.template);
       if (!nextQuery) {
         throw new Error(`Template not found: ${choice.template}`);
       }
 
-      lastAst = await this.addTemplateToSequence(
+      const res = await this.addTemplateToSequence(
         rng,
         nextQuery,
         currentSession,
@@ -275,11 +254,15 @@ export class SequenceGenerator {
         templateCounts,
         sequenceMetadata,
       );
+      totalQueriesGenerated += res.queriesAdded;
     }
+
+    // Update metadata counts and correct the sequence length parameter
     for (const template of templates) {
-      sequenceMetadata.sequenceInstantiationCounts[template.name] =
-        template.template.getInstantiationCounts();
+      sequenceMetadata.sequenceInstantiationCounts[template.name] = template.template.getInstantiationCounts();
     }
+    sequenceMetadata.sequenceLength = totalQueriesGenerated;
+
     return { querySequence, sequenceMetadata };
   }
 
@@ -287,13 +270,8 @@ export class SequenceGenerator {
     ast: SelectQuery,
     lastTemplate: QuerySequenceTemplate,
     nextTemplate: QuerySequenceTemplate,
-  ): Promise<Record<string, RDF.Term[]>> {
-    // Determine what query output variables should be used as possible values for instantiation
-    // of the next template
-    const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(
-      lastTemplate,
-      nextTemplate,
-    );
+  ): Promise<{ instantiationValues: Record<string, RDF.Term[]>; joinPlan?: IJoinTreeNode }> {
+    const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(lastTemplate, nextTemplate);
     return await this.findNextInstantiationValue.getNextQueryInstantiationValues(ast, mapping);
   }
 
@@ -302,7 +280,6 @@ export class SequenceGenerator {
     nextTemplate: QuerySequenceTemplate,
   ) {
     const typeToInstVars: Record<string, string[]> = {};
-
     for (const [ instVar, type ] of Object.entries(nextTemplate.instantiationVariableTypeMap)) {
       if (!typeToInstVars[type]) {
         typeToInstVars[type] = [];
@@ -318,25 +295,9 @@ export class SequenceGenerator {
     }
     return mapping;
   }
-  // Private validateNoDangling(){
-  //     const instantiatorTypes: Set<string> = new Set();
-  //     const outputTypes: Set<string> = new Set();
-
-  //     for (const template of this.templates){
-  //         [...Object.values(template.instantiationVariableToType)].forEach(
-  //             (type) => instantiatorTypes.add(type)
-  //         );
-  //         [...Object.values(template.outputPossibleInstantiationValue)].forEach(
-  //             (type) => outputTypes.add(type)
-  //         );
-  //     }
-
-  //     if (instantiatorTypes.size !== outputTypes.size){
-  //         throw new Error(`Found differing number of instantiator and output types.`)
-  //     }
-  // }
 }
 
+// Interfaces remain the same as previously defined, with `queryCount: number` added to `IQuerySession`.
 export interface ISequenceInit {
   sequenceLength: number;
   sessionTransitionProbability: number;
@@ -409,6 +370,7 @@ export interface IQuerySession extends IQuerySessionMetadata {
   templates: IQuerySequenceElementTemplate[];
   ended: boolean;
   lastAst?: SelectQuery;
+  queryCount: number;
 }
 
 export interface IQuerySessionMetadata {
@@ -429,6 +391,7 @@ export interface IQuerySequenceElementMetadata {
   template: string;
   nOpenSessions: number;
   refinementMetadata: Record<string, any>;
+  joinPlanCentralized?: IJoinTreeNode;
 }
 
 export interface IQuerySequenceMetadata {
