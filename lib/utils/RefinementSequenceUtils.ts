@@ -152,7 +152,6 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
     // Handle different expression types
     switch (e.type) {
       case 'operation':
-        // Handle operation arguments
         if (e.args && Array.isArray(e.args)) {
           for (const arg of e.args) {
             recurse(arg);
@@ -161,7 +160,6 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
         break;
 
       case 'functionCall':
-        // Handle function calls with arguments
         if (e.args && Array.isArray(e.args)) {
           for (const arg of e.args) {
             recurse(arg);

@@ -62,9 +62,13 @@ export class QLeverInstance {
       });
 
       if (!response.ok) {
-        throw new Error(`QLever HTTP Error: ${response.status} ${response.statusText}`);
+        console.error(`Error response: ${await response.json()}`);
+        return {
+          message: 'TIMEOUT',
+          results: [],
+        }
       }
-
+      
       const jsonResult = await response.json();
 
       // Extract variables and remove the leading '?' from QLever's output

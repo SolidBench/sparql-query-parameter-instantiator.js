@@ -117,10 +117,27 @@ export class QuerySequenceTemplate {
           pattern.target[0].map(triple => targetToTriple(triple, this.DF)),
           pattern.target[1].map(triple => targetToTriple(triple, this.DF)),
         ];
-      } else if (pattern.type !== 'FILTER' && pattern.type !== 'SUB') {
+      } else if (pattern.type === 'FILTER') {
+        // Deeply map raw JSON terms within filter expressions to valid RDFJS objects
+        pattern.target = pattern.target.map(expr => 
+          recurseExpression(
+            expr,
+            (term: any) => {
+              if (term && typeof term === 'object' && typeof term.termType === 'string') {
+                const type = term.termType.toLowerCase();
+                if (type === 'variable') return this.DF.variable(term.value);
+                if (type === 'namednode') return this.DF.namedNode(term.value);
+                if (type === 'literal') return this.DF.literal(term.value);
+              }
+              return term;
+            },
+            {},
+            this.instantiateSyntaxTreeRecurse
+          )
+        );
+      } else if (pattern.type !== 'SUB') {
         pattern.target = pattern.target.map(triple => targetToTriple(triple, this.DF));
       }
-      // Filters don't need mapping, as no functions are defined in the object interface.
       return pattern;
     });
   }
