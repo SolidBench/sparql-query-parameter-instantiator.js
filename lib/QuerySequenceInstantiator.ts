@@ -1,6 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { Logger } from 'pino';
 import * as seedrandom from 'seedrandom';
+import { logger } from './logging/logger';
 import type { QuerySequenceTemplateProvider } from './QuerySequenceTemplateProvider';
 import type { IQuerySequenceMetadata, SequenceGenerator } from './sequence/SequenceGenerator';
 import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
@@ -21,6 +23,9 @@ export class QuerySequenceInstantiator {
   private readonly metadataDestinationFilePath: string;
 
   private readonly templateCounts: Record<string, number>;
+
+  private readonly log: Logger;
+
   public constructor(args: IQuerySequenceInstantiatorArgs) {
     this.providers = args.providers;
     this.personProvider = args.personProvider;
@@ -33,10 +38,12 @@ export class QuerySequenceInstantiator {
     this.destinationFilePath = args.destinationFilePath;
     this.metadataDestinationFilePath = args.metadataDestinationFilePath ?? this.destinationFilePath;
     this.templateCounts = Object.fromEntries(this.providers.map(p => [ p.getTemplateName(), 0 ]));
+
+    this.log = logger.child({ module: 'QuerySequenceInstantiator' });
   }
 
   public async instantiateProviderSequence(n: number, user: string): Promise<void> {
-    console.log(this.templateCounts);
+    this.log.info(this.templateCounts, 'Current template counts in all generated sequences');
     const { querySequence, sequenceMetadata } =
       await this.sequenceGenerator.generateSequence(
         this.rngSeeded,

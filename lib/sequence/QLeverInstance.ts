@@ -85,12 +85,13 @@ export class QLeverInstance {
         return BF.fromRecord(resultRecord);
       });
 
-      const joinPlan = <IJoinTreeNode> QLeverInstance.extractJoinTree(jsonResult.runtimeInformation.query_execution_tree);
+      const joinPlan = <IJoinTreeNode> QLeverInstance.extractJoinTree(
+        jsonResult.runtimeInformation.query_execution_tree,
+      );
       return {
         message: 'END',
         results: result,
         joinPlan,
-        // RuntimeInformation: jsonResult.runtimeInformation // Retain join plan for query hint injection
       };
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -107,7 +108,7 @@ export class QLeverInstance {
    */
   private parseQLeverTerm(value: string): RDF.Term {
     if (value.startsWith('<') && value.endsWith('>')) {
-      return DF.namedNode(value.substring(1, value.length - 1));
+      return DF.namedNode(value.slice(1, -1));
     }
 
     if (value.startsWith('_:')) {
@@ -117,7 +118,7 @@ export class QLeverInstance {
     if (value.startsWith('"')) {
       // Matches "lexicalForm", capturing optional @language or ^^<datatype>
       // [\s\S]* handles potential newlines inside the literal string
-      const match = /^"([\S\s]*)"(?:@([\dA-Za-z-]+)|\^\^<([^>]+)>)?$/.exec(value);
+      const match = /^"([\S\s]*)"(?:@([\dA-Za-z-]+)|\^\^<([^>]+)>)?$/u.exec(value);
 
       if (match) {
         const [ , lexicalForm, language, datatype ] = match;
@@ -163,7 +164,8 @@ ACCESS_TOKEN = test
 
       fs.writeFileSync(path.join(this.runDir, 'Qleverfile'), qleverfileContent);
 
-      const volumes = this.dataLocations.map((loc, idx) => `${path.resolve(loc)}:/input/file_${idx}.ttl:ro`);
+      const volumes = this.dataLocations.map((loc, idx) =>
+        `${path.resolve(loc)}:/input/file_${idx}.ttl:ro`);
       volumes.push(`./Qleverfile:/data/Qleverfile:ro`);
       volumes.push(`${this.volumeName}:/data`);
 

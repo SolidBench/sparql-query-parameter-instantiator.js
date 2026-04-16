@@ -166,7 +166,7 @@ export class QuerySequenceTemplate {
     previousQueryResult: Record<string, RDF.Term[]>,
     counter: number,
     user?: string,
-  ) {
+  ): IAlternativeVariableMappings {
     const variableMapping: Record<string, RDF.Term> = {};
     const alternativeMapping: Record<string, RDF.Term> = {};
 
@@ -1234,6 +1234,11 @@ export interface IOperatorStateSub {
   original: RDF.Term;
   nCalls: number;
   active: boolean;
+}
+
+export interface IAlternativeVariableMappings {
+  variableMapping: Record<string, RDF.Term>;
+  alternativeMapping: Record<string, RDF.Term>;
 }
 
 const typeToKeyMap = <const> {

@@ -38,6 +38,16 @@ export class QuerySequenceTemplateProvider {
   private readonly parser: SparqlParser;
 
   /**
+   * @param templateFilePath - Path to the SPARQL template file
+   * @param variables - Collection of variable definitions for instantiation
+   * @param name - Unique identifier for the template
+   * @param queryTask - Description of the specific query objective
+   * @param nextTemplates - Identifiers of valid subsequent templates in a sequence
+   * @param minRefinementLength - Minimum number of refinement steps allowed
+   * @param maxRefinementLength - Maximum number of refinement steps allowed
+   * @param maxLogits - Upper bound for logit values in selection logic
+   * @param iriTransformer - Optional utility to transform IRIs during instantiation
+   * @param refinementPatternsFilePath - Path to optional refinement pattern definitions
    * @param baseProbabilityTemplate - Probability of starting new session with this template @range {float}
    * @param nextTemplateProbabilities - Probability of selecting each next template @range {float}
    * @param instantiationVariableTypeMap - Mapping from instantiation variable in template

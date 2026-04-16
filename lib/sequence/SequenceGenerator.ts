@@ -1,7 +1,9 @@
 import type * as RDF from '@rdfjs/types';
+import type { Logger } from 'pino';
 import type * as seedrandom from 'seedrandom';
 
 import type { SelectQuery } from 'sparqljs';
+import { logger } from '../logging/logger';
 import type { QuerySequenceTemplate } from '../QuerySequenceTemplate';
 import type { INextTemplate, QuerySequenceTemplateProvider } from '../QuerySequenceTemplateProvider';
 import { calculateExpectedMeanLogNormal, logNormal, logNormalRoundedUp, sampleHit, sampleProbability, sampleRandom } from '../utils/RandomUtils';
@@ -19,6 +21,8 @@ export class SequenceGenerator {
   private readonly temperature: number;
   private readonly findNextInstantiationValue: QueryNextInstantiatorValue;
 
+  private readonly log: Logger;
+
   public constructor(args: ISequenceGeneratorArgs) {
     this.meanLogSequenceLength = args.meanLogSequenceLength;
     this.stdLogSequenceLength = args.stdLogSequenceLength;
@@ -30,9 +34,12 @@ export class SequenceGenerator {
     this.temperature = args.temperature;
     this.findNextInstantiationValue = args.findNextInstantiationValue;
 
-    console.log(`Expected sequence length: ${calculateExpectedMeanLogNormal(this.meanLogSequenceLength, this.stdLogSequenceLength)}`);
-    console.log(`Expected session length: ${calculateExpectedMeanLogNormal(this.meanLogSessionLength, this.stdLogSessionLength)}`);
-    console.log(`Expected transition probability: ${calculateExpectedMeanLogNormal(this.meanLogTransitionProbability, this.stdLogTransitionProbability)}`);
+    this.log = logger.child({ module: 'SequenceGenerator' });
+    this.log.info({
+      expectedSequenceLength: calculateExpectedMeanLogNormal(this.meanLogSequenceLength, this.stdLogSequenceLength),
+      expectedSessionLength: calculateExpectedMeanLogNormal(this.meanLogSessionLength, this.stdLogSessionLength),
+      expectedTransitionProbability: calculateExpectedMeanLogNormal(this.meanLogTransitionProbability, this.stdLogTransitionProbability),
+    }, 'Sequence generation parameters initialized');
   }
 
   public initSequence(rng: seedrandom.PRNG, user: string, n: number): ISequenceInit {
@@ -46,7 +53,15 @@ export class SequenceGenerator {
       sequenceInstantiationCounts: {},
     };
 
-    console.log(`Instantiating sequence ${n} with length ${sequenceLength} for user ${user} with session transition probability ${sessionTransitionProbability.toFixed(2)}`);
+    this.log.debug(
+      {
+        n,
+        sequenceLength,
+        user,
+        sessionTransitionProbability: sessionTransitionProbability.toFixed(2),
+      },
+      'Instantiating sequence',
+    );
     return { sequenceLength, sessionTransitionProbability, sequenceMetadata };
   }
 
