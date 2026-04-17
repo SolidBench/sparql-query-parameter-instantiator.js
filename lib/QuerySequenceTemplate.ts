@@ -34,6 +34,7 @@ import type {
   ITargetTriplePatternTerm,
   IOtherRefinementPattern,
   IUnionRefinementPattern,
+  ISubRefinementPattern,
 } from './QuerySequenceTemplateProvider';
 import { randomIntFromInterval, sampleRandom, sampleVariableTerm } from './utils/RandomUtils';
 import {
@@ -405,262 +406,309 @@ export class QuerySequenceTemplate {
     refinementState: IRefinementState,
   ): SelectQuery {
     if (pattern.location === undefined) {
-      throw new Error(`Location for addition refinement pattern ${pattern.description} is not defined`);
+      throw new Error(`Location for refinement pattern ${pattern.description} is not defined`);
     }
-    const patternType = pattern.type;
-    // Extract BGPs. We can probably use this as a function parameter and not use the Triple[][]
-    // representation, but we'll have to change some tests (AGAIN).
+
+    // Get query operator elements
     const operatorToBgp: Record<string, BgpPattern[]> = {};
     const operatorToExpression: Record<string, Expression[]> = {};
     extractBgpPerOperator(query.where!, operatorToBgp, 'bgp');
     extractExpressionPerOperator(query.where!, operatorToExpression, 'filter');
-    const state = refinementState[typeToKeyMap[patternType]];
+
+    const context: IRefinementContext = {
+      query,
+      pattern,
+      variableMapping,
+      alternativeMapping,
+      operatorToBgp,
+      operatorToExpression,
+      state: refinementState[typeToKeyMap[pattern.type]],
+    };
+
     if (pattern.operation === 'addition') {
-      const groupPattern = operatorToBgp[patternType.toLowerCase()];
-      switch (patternType) {
-        case 'OPTIONAL': {
-          let toRefineOptional: BgpPattern;
-          if (!groupPattern || groupPattern.length === 0) {
-            // If no optionals are present, add a new optional pattern
-            const optionalBgp: BgpPattern = { type: 'bgp', triples: []};
-
-            const optionalBlock: OptionalPattern = { type: 'optional', patterns: [ optionalBgp ]};
-            query.where!.push(optionalBlock);
-
-            toRefineOptional = <BgpPattern> optionalBlock.patterns[pattern.location];
-          } else {
-            toRefineOptional = operatorToBgp[patternType.toLowerCase()][pattern.location];
-          }
-          if (!toRefineOptional) {
-            throw new Error(`BGP Doesn't exist at index ${pattern.location} 
-              for optional operator with ${JSON.stringify(operatorToBgp[patternType], null, 2)} BGPs`);
-          }
-          this.addTargetToBgp(
-            toRefineOptional,
-            pattern.target,
-            query,
-            variableMapping,
-            (<IOperatorState> state),
-          );
-          break;
-        }
-        case 'UNION': {
-          let toRefineUnionLeft: BgpPattern;
-          let toRefineUnionRight: BgpPattern;
-          if (!groupPattern || groupPattern.length === 0) {
-            // If no UNIONs are present, add a new optional pattern
-            const leftUnion: BgpPattern = { type: 'bgp', triples: []};
-            const rightUnion: BgpPattern = { type: 'bgp', triples: []};
-
-            const unionBlock: UnionPattern = { type: 'union', patterns: [ leftUnion, rightUnion ]};
-            query.where!.push(unionBlock);
-
-            toRefineUnionLeft = <BgpPattern> unionBlock.patterns[0];
-            toRefineUnionRight = <BgpPattern> unionBlock.patterns[1];
-          } else {
-            // Each union has two bgps in operatorToBgp record. So to extract start bgp of union
-            // at given location we do * 2.
-            const unionLeftBgpIndex = pattern.location * 2;
-            toRefineUnionLeft = operatorToBgp[patternType.toLowerCase()][unionLeftBgpIndex];
-            toRefineUnionRight = operatorToBgp[patternType.toLowerCase()][unionLeftBgpIndex + 1];
-          }
-          // It is possible to add to a partial union if the target for that part of the union is empty
-          // otherwise there should be a BGP there.
-          if (!toRefineUnionLeft && pattern.target[0].length > 0) {
-            throw new Error(`BGP Doesn't exist for left union for union at ${pattern.location},
-              while target is defined.`);
-          }
-          if (!toRefineUnionRight && pattern.target[1].length > 0) {
-            throw new Error(`BGP Doesn't exist for right union for union at ${pattern.location},
-              while target is defined.`);
-          }
-
-          this.addTargetToBgp(
-            toRefineUnionLeft,
-            pattern.target[0],
-            query,
-            variableMapping,
-            (<IOperatorState> state),
-          );
-          this.addTargetToBgp(
-            toRefineUnionRight,
-            pattern.target[1],
-            query,
-            variableMapping,
-            (<IOperatorState> state),
-          );
-
-          break;
-        }
-        case 'FILTER': {
-          // Targets are instantiated and then evaluated
-          let targetFilters: Expression[] = pattern.target.map(
-            t => recurseExpression(t, this.instantiateTerm, { variableMapping }, this.instantiateSyntaxTreeRecurse),
-          );
-
-          // Add back a triple when no target is specified
-          // const state = refinementState[typeToKeyMap[patternType]];
-          if (targetFilters.length === 0) {
-            targetFilters = [ sampleRandom(this.rng, (<IOperatorState>state).removedExp) ];
-          }
-
-          // The triple pattern is no longer a 'removed' pattern
-          (<IOperatorState>state).removedExp = (<IOperatorState>state).removedExp.filter(
-            exp => targetFilters.some(targetExp => !this.expressionEquals(exp, targetExp)),
-          );
-
-          // Add added filter to state and query
-          for (const filterExpr of targetFilters) {
-            query.where!.push({ type: 'filter', expression: filterExpr });
-            (<IOperatorState>state).addedExp.push(filterExpr);
-          }
-          break;
-        }
-        case 'BGP': {
-          const bgpToRefine = operatorToBgp[patternType.toLowerCase()][pattern.location];
-          if (!bgpToRefine) {
-            throw new Error(`BGP Doesn't exist at index ${pattern.location} 
-              for query bgp operator with ${JSON.stringify(operatorToBgp[patternType], null, 2)} BGPs`);
-          }
-
-          let targetTriples: (ITargetTriplePattern | Triple)[] = pattern.target;
-
-          // Add back a triple when no target is specified
-          const state = refinementState[typeToKeyMap[patternType]];
-          if (pattern.target.length === 0) {
-            targetTriples = [ sampleRandom(this.rng, state.removedTps) ];
-          }
-
-          // The triple patterns are no longer a removed pattern
-          state.removedTps.filter(
-            tp => !targetTriples.some(triple => tripleEquals(tp, targetToTriple(triple, this.DF))),
-          );
-
-          this.addTargetToBgp(
-            bgpToRefine,
-            targetTriples,
-            query,
-            variableMapping,
-            state,
-          );
-          break;
-        }
-        case 'SUB': {
-          const toReplace: string = variableMapping[pattern.target.value].value;
-          const toReplaceWith: string = alternativeMapping[pattern.target.value].value;
-          query.where = substitutePatterns(query.where!, toReplace, toReplaceWith);
-          const subStateTarget = (<Record<string, IOperatorStateSub>> state)[pattern.target.value];
-          subStateTarget.active = true;
-          subStateTarget.nCalls++;
-          break;
-        }
-      }
+      this.handleAddition(context);
     } else if (pattern.operation === 'removal') {
-      switch (patternType) {
-        case 'SUB': {
-          const toReplaceWith: string = variableMapping[pattern.target.value].value;
-          const toReplace: string = alternativeMapping[pattern.target.value].value;
-          query.where = substitutePatterns(query.where!, toReplace, toReplaceWith);
-          const subStateTarget = (<Record<string, IOperatorStateSub>> state)[pattern.target.value];
-          subStateTarget.active = false;
-          subStateTarget.nCalls++;
-          break;
-        }
-        case 'FILTER': {
-          // Filters to remove are instantiated versions of target
-          let filtersToRemove = pattern.target.map(
-            t => recurseExpression(t, this.instantiateTerm, { variableMapping }, this.instantiateSyntaxTreeRecurse),
-          );
-          if (filtersToRemove.length === 0) {
-            // Randomly select a filter to remove
-            filtersToRemove = [ sampleRandom(
-              this.rng,
-              query.where!.filter(queryPattern => queryPattern.type === 'filter'),
-            ).expression ];
-          }
-          (<IOperatorState>state).removedExp.push(...filtersToRemove);
-          query.where = query.where!.filter((queryPattern: Pattern) => queryPattern.type !== 'filter' ||
-            !filtersToRemove.some(t => this.expressionEquals(queryPattern.expression, t)));
-          break;
-        }
-        case 'OPTIONAL':
-        case 'BGP': {
-          const bgpToRefine = operatorToBgp[patternType.toLowerCase()][pattern.location];
-          if (!bgpToRefine) {
-            throw new Error(`BGP Doesn't exist at index ${pattern.location} 
-              for query bgp operator with ${JSON.stringify(operatorToBgp[patternType], null, 2)} BGPs`);
-          }
-          let triplesToRemove = pattern.target.map(x => targetToTriple(x, this.DF));
-          if (triplesToRemove.length === 0) {
-            triplesToRemove = [ sampleRandom(this.rng, bgpToRefine.triples) ];
-          }
-          const removed = this.removeTargetFromBgp(bgpToRefine, triplesToRemove, variableMapping);
-          const triplePatternsLeft = Object.values(operatorToBgp).map(bgps => bgps.map(bgp => bgp.triples)).flat(2);
-          const variablesLeftInQuery = this.getAllVariables(triplePatternsLeft);
-          if (!this.hasWildCard(query.variables)) {
-            query.variables = query.variables.filter((x) => {
-              if ('expression' in x) {
-                const varsInExpression = getVariablesInExpression(x.expression);
-                for (const v of varsInExpression) {
-                  if (!variablesLeftInQuery.has(v)) {
-                    return false;
-                  }
-                }
-              }
-              return true;
-            });
-          }
-          (<IOperatorState>state).removedTps.push(...removed);
-          break;
-        }
-        case 'UNION': {
-          const unionLeftBgpIndex = pattern.location * 2;
-          const bgpToRefineLeft = operatorToBgp[patternType.toLowerCase()][unionLeftBgpIndex];
-          const bgpToRefineRight = operatorToBgp[patternType.toLowerCase()][unionLeftBgpIndex + 1];
-          const bgps = [ bgpToRefineLeft, bgpToRefineRight ];
-
-          if (!bgpToRefineLeft && !bgpToRefineRight) {
-            throw new Error(`BGP Doesn't exist at index ${unionLeftBgpIndex} and ${unionLeftBgpIndex + 1}
-              for query bgp operator with ${JSON.stringify(operatorToBgp[patternType], null, 2)} BGPs`);
-          }
-
-          let triplesToRemove: Triple[][] = pattern.target.map(triples => 
-            triples.map(triple => targetToTriple(triple, this.DF))
-          );
-
-          if (triplesToRemove.length === 0) {
-            const tripleToRemove = [
-              sampleRandom(this.rng, [ ...bgpToRefineLeft.triples, ...bgpToRefineRight.triples ]),
-            ];
-            triplesToRemove = [ tripleToRemove, tripleToRemove ];
-          }
-
-          for (let i = 0; i < 2; i++) {
-            const removed = this.removeTargetFromBgp(bgps[i], triplesToRemove[i], variableMapping);
-            const triplePatternsLeft = Object.values(operatorToBgp).map(bgps => bgps.map(bgp => bgp.triples)).flat(2);
-            const variablesLeftInQuery = this.getAllVariables(triplePatternsLeft);
-            if (!this.hasWildCard(query.variables)) {
-              query.variables = query.variables.filter((x) => {
-                if ('expression' in x) {
-                  const varsInExpression = getVariablesInExpression(x.expression);
-                  for (const v of varsInExpression) {
-                    if (!variablesLeftInQuery.has(v)) {
-                      return false;
-                    }
-                  }
-                }
-                return true;
-              });
-            }
-            (<IOperatorState>state).removedTps.push(...removed);
-          }
-          break;
-        }
-      }
+      this.handleRemoval(context);
     } else {
-      throw new Error(`Unknown operation type '${String(pattern.operation)}' in refinement pattern ${pattern.description}`);
+      throw new Error(`Unknown operation type '${String(pattern.operation)}'`);
     }
+
     return query;
+  }
+
+  private handleAddition(context: IRefinementContext): void {
+    switch (context.pattern.type) {
+      case 'OPTIONAL': this.addOptional(context); break;
+      case 'UNION':    this.addUnion(context); break;
+      case 'FILTER':   this.addFilter(context); break;
+      case 'BGP':      this.addBgp(context); break;
+      case 'SUB':      this.addSub(context); break;
+      default: throw new Error(`Unsupported addition type: 
+        ${(<any> context.pattern).type}`);
+    }
+  }
+
+  private handleRemoval(context: IRefinementContext): void {
+    switch (context.pattern.type) {
+      case 'OPTIONAL': 
+      case 'BGP':      this.removeBgpOrOptional(context); break;
+      case 'UNION':    this.removeUnion(context); break;
+      case 'FILTER':   this.removeFilter(context); break;
+      case 'SUB':      this.removeSub(context); break;
+
+      default: throw new Error(`Unsupported removal type: 
+        ${(<any> context.pattern).type}`);
+    }
+  }
+
+  private addOptional(context: IRefinementContext): void {
+    const groupPattern = context.operatorToBgp['optional'];
+
+    // As the checks were done before, we can explicitly cast the pattern type
+    context.pattern = <IOtherRefinementPattern> context.pattern;
+
+    let toRefineOptional: BgpPattern;
+    if (!groupPattern || groupPattern.length === 0) {
+      const optionalBgp: BgpPattern = { type: 'bgp', triples: [] };
+      const optionalBlock: OptionalPattern = { type: 'optional', patterns: [optionalBgp] };
+      context.query.where!.push(optionalBlock);
+      toRefineOptional = <BgpPattern>optionalBlock.patterns[context.pattern.location];
+    } else {
+      toRefineOptional = groupPattern[context.pattern.location];
+    }
+
+    if (!toRefineOptional) {
+      throw new Error(`BGP Doesn't exist at index ${context.pattern.location}`);
+    }
+
+    this.addTargetToBgp(toRefineOptional, context.pattern.target, context.query, context.variableMapping, <IOperatorState>context.state);
+  }
+
+  private removeBgpOrOptional(context: IRefinementContext): void {
+    // As the checks were done before, we can explicitly cast the pattern type
+    context.pattern = <IOtherRefinementPattern> context.pattern;
+
+    const bgpToRefine = this.getBgpSafely(context, context.pattern.type.toLowerCase(), context.pattern.location);
+    
+    let triplesToRemove = context.pattern.target.map(x => targetToTriple(x, this.DF));
+    if (triplesToRemove.length === 0) {
+      triplesToRemove = [sampleRandom(this.rng, bgpToRefine.triples)];
+    }
+
+    const removed = this.removeTargetFromBgp(bgpToRefine, triplesToRemove, context.variableMapping);
+    this.cleanUpUnusedVariables(context);
+    
+    (<IOperatorState>context.state).removedTps.push(...removed);
+  }
+
+  private addUnion(context: IRefinementContext){
+    const groupPattern = context.operatorToBgp['union'];
+
+    context.pattern = <IUnionRefinementPattern> context.pattern;
+    
+    let toRefineUnionLeft: BgpPattern;
+    let toRefineUnionRight: BgpPattern;
+    if (!groupPattern || groupPattern.length === 0) {
+      // If no UNIONs are present, add a new optional pattern
+      const leftUnion: BgpPattern = { type: 'bgp', triples: []};
+      const rightUnion: BgpPattern = { type: 'bgp', triples: []};
+
+      const unionBlock: UnionPattern = { type: 'union', patterns: [ leftUnion, rightUnion ]};
+      context.query.where!.push(unionBlock);
+
+      toRefineUnionLeft = <BgpPattern> unionBlock.patterns[0];
+      toRefineUnionRight = <BgpPattern> unionBlock.patterns[1];
+    } else {
+      // Each union has two bgps in operatorToBgp record. So to extract start bgp of union
+      // at given location we do * 2.
+      const unionLeftBgpIndex = context.pattern.location * 2;
+      groupPattern[unionLeftBgpIndex]
+      toRefineUnionLeft = groupPattern[unionLeftBgpIndex];
+      toRefineUnionRight = groupPattern[unionLeftBgpIndex+1];
+    }
+    // It is possible to add to a partial union if the target for that part of the union is empty
+    // otherwise there should be a BGP there.
+    if (!toRefineUnionLeft && context.pattern.target[0].length > 0) {
+      throw new Error(`BGP Doesn't exist for left union for union at ${context.pattern.location},
+        while target is defined.`);
+    }
+    if (!toRefineUnionRight && context.pattern.target[1].length > 0) {
+      throw new Error(`BGP Doesn't exist for right union for union at ${context.pattern.location},
+        while target is defined.`);
+    }
+
+    this.addTargetToBgp(
+      toRefineUnionLeft,
+      context.pattern.target[0],
+      context.query,
+      context.variableMapping,
+      (<IOperatorState> context.state),
+    );
+    this.addTargetToBgp(
+      toRefineUnionRight,
+      context.pattern.target[1],
+      context.query,
+      context.variableMapping,
+      (<IOperatorState> context.state),
+    );
+  }
+
+  private removeUnion(context: IRefinementContext){
+    context.pattern = <IUnionRefinementPattern> context.pattern;
+
+    const unionLeftBgpIndex =context.pattern.location * 2;
+    
+    const bgpToRefineLeft = this.getBgpSafely(context, context.pattern.type.toLowerCase(), unionLeftBgpIndex);
+    const bgpToRefineRight = this.getBgpSafely(context, context.pattern.type.toLowerCase(), unionLeftBgpIndex + 1);
+    const bgps = [ bgpToRefineLeft, bgpToRefineRight ];
+
+    let triplesToRemove: Triple[][] = context.pattern.target.map(triples => 
+      triples.map(triple => targetToTriple(triple, this.DF))
+    );
+
+    if (triplesToRemove.length === 0) {
+      const tripleToRemove = [
+        sampleRandom(this.rng, [ ...bgpToRefineLeft.triples, ...bgpToRefineRight.triples ]),
+      ];
+      triplesToRemove = [ tripleToRemove, tripleToRemove ];
+    }
+    for (let i = 0; i < 2; i++) {
+      const removed = this.removeTargetFromBgp(bgps[i], triplesToRemove[i], context.variableMapping);
+      (<IOperatorState>context.state).removedTps.push(...removed);
+    }
+    this.cleanUpUnusedVariables(context);
+  }
+
+  private addFilter(context: IRefinementContext){
+    context.pattern = <IFilterRefinementPattern> context.pattern;
+    // Targets are instantiated and then evaluated
+    let targetFilters: Expression[] = context.pattern.target.map(
+      t => recurseExpression(t, 
+        this.instantiateTerm, { variableMapping: context.variableMapping }, this.instantiateSyntaxTreeRecurse
+      ),
+    );
+    const state = context.state;
+    // Add back a filter when no target is specified
+    if (targetFilters.length === 0) {
+      targetFilters = [ sampleRandom(this.rng, (<IOperatorState>state).removedExp) ];
+    }
+
+    // The filter is no longer a 'removed' filter
+    (<IOperatorState>state).removedExp = (<IOperatorState>state).removedExp.filter(
+      exp => targetFilters.some(targetExp => !this.expressionEquals(exp, targetExp)),
+    );
+
+    // Add added filter to state and query
+    for (const filterExpr of targetFilters) {
+      context.query.where!.push({ type: 'filter', expression: filterExpr });
+      (<IOperatorState>state).addedExp.push(filterExpr);
+    }
+  }
+
+  private removeFilter(context: IRefinementContext){
+    context.pattern = <IFilterRefinementPattern> context.pattern;
+    // Filters to remove are instantiated versions of target
+    let filtersToRemove = context.pattern.target.map(
+      t => recurseExpression(t, 
+        this.instantiateTerm, { variableMapping: context.variableMapping }, this.instantiateSyntaxTreeRecurse
+      ),
+    );
+    if (filtersToRemove.length === 0) {
+      // Randomly select a filter to remove
+      filtersToRemove = [ 
+        sampleRandom(
+          this.rng,
+          context.query.where!.filter(queryPattern => queryPattern.type === 'filter'),
+        ).expression 
+      ];
+    }
+    (<IOperatorState>context.state).removedExp.push(...filtersToRemove);
+    context.query.where = context.query.where!.filter(
+      (queryPattern: Pattern) => queryPattern.type !== 'filter' ||
+      !filtersToRemove.some(t => this.expressionEquals(queryPattern.expression, t))
+    );
+  }
+
+  private addBgp(context: IRefinementContext){
+    context.pattern = <IOtherRefinementPattern> context.pattern;
+    const bgpToRefine = this.getBgpSafely(
+      context, 
+      context.pattern.type.toLowerCase(), 
+      context.pattern.location
+    );
+
+    let targetTriples: (ITargetTriplePattern | Triple)[] = context.pattern.target;
+    const state = <IOperatorState> context.state;
+
+    // Add back a triple when no target is specified
+    if (context.pattern.target.length === 0) {
+      targetTriples = [ sampleRandom(this.rng, state.removedTps) ];
+    }
+
+    // The triple patterns are no longer a removed pattern
+    state.removedTps = state.removedTps.filter(
+      tp => !targetTriples.some(triple => tripleEquals(tp, targetToTriple(triple, this.DF))),
+    );
+
+    this.addTargetToBgp(
+      bgpToRefine,
+      targetTriples,
+      context.query,
+      context.variableMapping,
+      state,
+    );
+  }
+
+  private addSub(context: IRefinementContext){
+    const pattern = <ISubRefinementPattern> context.pattern;
+
+    const toReplace: string = context.variableMapping[pattern.target.value].value;
+    const toReplaceWith: string = context.alternativeMapping[pattern.target.value].value;
+
+    context.query.where = substitutePatterns(context.query.where!, toReplace, toReplaceWith);
+
+    const subStateTarget = (<Record<string, IOperatorStateSub>> context.state)[pattern.target.value];
+    subStateTarget.active = true;
+    subStateTarget.nCalls++;
+  }
+
+  private removeSub(context: IRefinementContext){
+    const pattern = <ISubRefinementPattern> context.pattern;
+
+    const toReplaceWith: string = context.variableMapping[pattern.target.value].value;
+    const toReplace: string = context.alternativeMapping[pattern.target.value].value;
+
+    context.query.where = substitutePatterns(context.query.where!, toReplace, toReplaceWith);
+
+    const subStateTarget = (<Record<string, IOperatorStateSub>> context.state)[pattern.target.value];
+    subStateTarget.active = false;
+    subStateTarget.nCalls++;
+  }
+
+  private getBgpSafely(context: IRefinementContext, operatorType: string, location: number): BgpPattern {
+    const bgp = context.operatorToBgp[operatorType]?.[location];
+    if (!bgp) {
+      throw new Error(`BGP Doesn't exist at index ${location} for query operator ${operatorType}`);
+    }
+    return bgp;
+  }
+
+  private cleanUpUnusedVariables(context: IRefinementContext): void {
+    if (this.hasWildCard(context.query.variables)) return;
+
+    const triplePatternsLeft = Object.values(context.operatorToBgp)
+      .map(bgps => bgps.map(bgp => bgp.triples))
+      .flat(2);
+    const variablesLeftInQuery = this.getAllVariables(triplePatternsLeft);
+
+    context.query.variables = context.query.variables.filter((x) => {
+      if ('expression' in x) {
+        const varsInExpression = getVariablesInExpression(x.expression);
+        // Convert Set to Array to utilize .every()
+        return [...varsInExpression].every(v => variablesLeftInQuery.has(v));
+      }
+      return true;
+    });
   }
 
   public findValidRefinementPatterns(
@@ -1025,6 +1073,43 @@ export interface IAlternativeVariableMappings {
   variableMapping: Record<string, RDF.Term>;
   alternativeMapping: Record<string, RDF.Term>;
 }
+
+/**
+ * Interface holding parameters required to apply refinement pattern
+ */
+export interface IRefinementContext {
+  /**
+   * The original query
+   */
+  query: SelectQuery;
+  /**
+   * The refinement pattern to apply
+   */
+  pattern: IQueryRefinementPattern;
+  /**
+   * Mapping of variable to possible instantiation values
+   */
+  variableMapping: Record<string, RDF.Term>;
+  /**
+   * Alternative mapping of variable to possible instantiation values,
+   * used to substitute the instantiation value
+   */
+  alternativeMapping: Record<string, RDF.Term>;
+  /**
+   * Mapping operators to their associated BGP
+   */
+  operatorToBgp: Record<string, BgpPattern[]>;
+  /**
+   * Mapping operators to their associated Expression
+   */
+  operatorToExpression: Record<string, Expression[]>;
+  /**
+   * State object of refinement sequence. Specifically what
+   * refinement patterns were applied before it
+   */
+  state: IOperatorState | Record<string, IOperatorStateSub>;
+}
+
 
 export const typeToKeyMap = <const> {
   // eslint-disable-next-line ts/naming-convention
