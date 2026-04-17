@@ -37,14 +37,22 @@ import type {
 } from './QuerySequenceTemplateProvider';
 import { randomIntFromInterval, sampleRandom } from './utils/RandomUtils';
 import {
+  countFlattened,
   extractBgpPerOperator,
   extractExpressionPerOperator,
   extractTriplePatternsPerOperator,
+  flattenOperators,
   getVariablesInExpression,
+  hasTriple,
+  isRDFTerm,
+  targetToTriple,
+  toTermNoLiteral,
+  tripleEquals,
 } from './utils/RefinementSequenceUtils';
 import type { TermCallback } from './utils/SyntaxTreeUtils';
 import { processTriple, recurseExpression, recursePatterns } from './utils/SyntaxTreeUtils';
 import type { IValueTransformer } from './valuetransformer/IValueTransformer';
+import { substitutePatterns } from './utils/SubstitutionUtils';
 
 /**
  * Data object for a query template.
@@ -89,24 +97,30 @@ export class QuerySequenceTemplate {
     this.instantiationVariableTypeMap = instantiationVariableToType;
     this.outputVariableTypeMap = outputPossibleInstantiationValue;
     this.rng = rng;
-    this.refinementPatterns = refinementPatterns?.map((pattern) => {
+    if (refinementPatterns){
+      this.refinementPatterns = this.mapRefinementConfigToSparqlJs(refinementPatterns);
+    }
+    this.minRefinementLength = minRefinementLength;
+    this.maxRefinementLength = maxRefinementLength;
+    this.iriTransformer = iriTransformer;
+  }
+
+  public mapRefinementConfigToSparqlJs(refinementPatterns: IQueryRefinementPattern[]){
+    return refinementPatterns.map((pattern) => {
       // Map config representation of target of substitution to a RDF.Variable object
       if (pattern.type === 'SUB' && !this.isVariable(pattern.target)) {
-        pattern.target = <RDF.Variable> this.toTermNoLiteral(pattern.target);
+        pattern.target = <RDF.Variable> toTermNoLiteral(pattern.target, this.DF);
       } else if (pattern.type === 'UNION') {
         pattern.target = [
-          pattern.target[0].map(triple => this.targetToTriple(triple)),
-          pattern.target[1].map(triple => this.targetToTriple(triple)),
+          pattern.target[0].map(triple => targetToTriple(triple, this.DF)),
+          pattern.target[1].map(triple => targetToTriple(triple, this.DF)),
         ];
       } else if (pattern.type !== 'FILTER' && pattern.type !== 'SUB') {
-        pattern.target = pattern.target.map(triple => this.targetToTriple(triple));
+        pattern.target = pattern.target.map(triple => targetToTriple(triple, this.DF));
       }
       // Filters don't need mapping, as no functions are defined in the object interface.
       return pattern;
     });
-    this.minRefinementLength = minRefinementLength;
-    this.maxRefinementLength = maxRefinementLength;
-    this.iriTransformer = iriTransformer;
   }
 
   /**
@@ -481,6 +495,7 @@ export class QuerySequenceTemplate {
           let targetFilters: Expression[] = pattern.target.map(
             t => recurseExpression(t, this.instantiateTerm, { variableMapping }, this.instantiateSyntaxTreeRecurse),
           );
+
           // Add back a triple when no target is specified
           // const state = refinementState[typeToKeyMap[patternType]];
           if (targetFilters.length === 0) {
@@ -489,7 +504,7 @@ export class QuerySequenceTemplate {
 
           // The triple pattern is no longer a 'removed' pattern
           (<IOperatorState>state).removedExp = (<IOperatorState>state).removedExp.filter(
-            exp => targetFilters.some(x => !this.expressionEquals(exp, x)),
+            exp => targetFilters.some(targetExp => !this.expressionEquals(exp, targetExp)),
           );
 
           // Add added filter to state and query
@@ -516,7 +531,7 @@ export class QuerySequenceTemplate {
 
           // The triple patterns are no longer a removed pattern
           state.removedTps.filter(
-            tp => !targetTriples.some(x => this.tripleEquals(tp, this.targetToTriple(x))),
+            tp => !targetTriples.some(triple => tripleEquals(tp, targetToTriple(triple, this.DF))),
           );
 
           this.addTargetToBgp(
@@ -531,7 +546,7 @@ export class QuerySequenceTemplate {
         case 'SUB': {
           const toReplace: string = variableMapping[pattern.target.value].value;
           const toReplaceWith: string = alternativeMapping[pattern.target.value].value;
-          query.where = this.substitutePatterns(query.where!, toReplace, toReplaceWith);
+          query.where = substitutePatterns(query.where!, toReplace, toReplaceWith);
           const subStateTarget = (<Record<string, IOperatorStateSub>> state)[pattern.target.value];
           subStateTarget.active = true;
           subStateTarget.nCalls++;
@@ -543,7 +558,7 @@ export class QuerySequenceTemplate {
         case 'SUB': {
           const toReplaceWith: string = variableMapping[pattern.target.value].value;
           const toReplace: string = alternativeMapping[pattern.target.value].value;
-          query.where = this.substitutePatterns(query.where!, toReplace, toReplaceWith);
+          query.where = substitutePatterns(query.where!, toReplace, toReplaceWith);
           const subStateTarget = (<Record<string, IOperatorStateSub>> state)[pattern.target.value];
           subStateTarget.active = false;
           subStateTarget.nCalls++;
@@ -573,7 +588,7 @@ export class QuerySequenceTemplate {
             throw new Error(`BGP Doesn't exist at index ${pattern.location} 
               for query bgp operator with ${JSON.stringify(operatorToBgp[patternType], null, 2)} BGPs`);
           }
-          let triplesToRemove = pattern.target.map(x => this.targetToTriple(x));
+          let triplesToRemove = pattern.target.map(x => targetToTriple(x, this.DF));
           if (triplesToRemove.length === 0) {
             triplesToRemove = [ sampleRandom(this.rng, bgpToRefine.triples) ];
           }
@@ -607,13 +622,17 @@ export class QuerySequenceTemplate {
               for query bgp operator with ${JSON.stringify(operatorToBgp[patternType], null, 2)} BGPs`);
           }
 
-          let triplesToRemove: Triple[][] = pattern.target.map(x => x.map(y => this.targetToTriple(y)));
+          let triplesToRemove: Triple[][] = pattern.target.map(triples => 
+            triples.map(triple => targetToTriple(triple, this.DF))
+          );
+
           if (triplesToRemove.length === 0) {
             const tripleToRemove = [
               sampleRandom(this.rng, [ ...bgpToRefineLeft.triples, ...bgpToRefineRight.triples ]),
             ];
             triplesToRemove = [ tripleToRemove, tripleToRemove ];
           }
+
           for (let i = 0; i < 2; i++) {
             const removed = this.removeTargetFromBgp(bgps[i], triplesToRemove[i], variableMapping);
             const triplePatternsLeft = Object.values(operatorToBgp).map(bgps => bgps.map(bgp => bgp.triples)).flat(2);
@@ -649,11 +668,11 @@ export class QuerySequenceTemplate {
     refinementState: IRefinementState,
     variableMapping: Record<string, RDF.Term>,
   ): IQueryRefinementPattern[] {
-    const operatorTriplePatternsFlattened = this.flattenOperators(operatorTriplePatterns);
+    const operatorTriplePatternsFlattened = flattenOperators(operatorTriplePatterns);
     // Const totalTriples = this.countFlattened(operatorTriplePatternsFlattened);
 
-    const operatorExpressionsFlattened = this.flattenOperators(operatorExpressions);
-    const totalExpressions = this.countFlattened(operatorExpressionsFlattened);
+    const operatorExpressionsFlattened = flattenOperators(operatorExpressions);
+    const totalExpressions = countFlattened(operatorExpressionsFlattened);
 
     const queryTriples = Object.values(operatorTriplePatterns).flat(2);
     const queryExpressions = Object.values(operatorExpressions).flat(2);
@@ -699,14 +718,6 @@ export class QuerySequenceTemplate {
         variableMapping,
       });
     });
-  }
-
-  private flattenOperators<T>(ops: Record<string, T[][]>): Record<string, T[]> {
-    return Object.fromEntries(Object.entries(ops).map(([ k, v ]) => [ k, v.flat() ]));
-  }
-
-  private countFlattened<T>(ops: Record<string, T[]>): number {
-    return Object.values(ops).reduce((sum, items) => sum + items.length, 0);
   }
 
   private isValidFilterPattern(
@@ -803,13 +814,13 @@ export class QuerySequenceTemplate {
     }
 
     const targets = pattern.target.map(t =>
-      processTriple(this.targetToTriple(t), this.instantiateTerm, { variableMapping: context.variableMapping }));
+      processTriple(targetToTriple(t, this.DF), this.instantiateTerm, { variableMapping: context.variableMapping }));
 
     // Const targets = pattern.target.map(t =>
     //   this.instantiateTriple(this.targetToTriple(t), context.variableMapping));
 
     const alreadyPresent = targets.length > 0 && targets.every(t =>
-      context.queryTriples.some(q => this.tripleEquals(q, t)));
+      context.queryTriples.some(q => tripleEquals(q, t)));
 
     if (alreadyPresent && pattern.operation === 'addition') {
       return false;
@@ -829,7 +840,7 @@ export class QuerySequenceTemplate {
 
       const opTriples = context.operatorTriplePatternsFlattened[patternType];
       return opTriples && targets.every(t =>
-        opTriples.some(tp => this.tripleEquals(this.targetToTriple(t), tp)));
+        opTriples.some(tp => tripleEquals(targetToTriple(t, this.DF), tp)));
     }
 
     if (targets.length > 0) {
@@ -842,127 +853,8 @@ export class QuerySequenceTemplate {
     return context.refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0;
   }
 
-  public substitutePatterns(patterns: Pattern[], oldValue: string, newValue: string): Pattern[] {
-    // eslint-disable-next-line array-callback-return
-    return patterns.map((pattern) => {
-      pattern = { ...pattern };
-      switch (pattern.type) {
-        case 'query':
-          pattern.where = this.substitutePatterns(pattern.where!, oldValue, newValue);
-          return pattern;
-        case 'bgp':
-        case 'graph':
-          if ('triples' in pattern) {
-            return {
-              type: 'bgp',
-              triples: pattern.triples.map(triple => this.substituteTriple(triple, oldValue, newValue)),
-            };
-          }
-          return {
-            type: 'graph',
-            name: pattern.name,
-            patterns: this.substitutePatterns(pattern.patterns, oldValue, newValue),
-          };
-        case 'union':
-        case 'group':
-        case 'optional':
-        case 'minus':
-        case 'service':
-          return {
-            ...pattern,
-            patterns: this.substitutePatterns(pattern.patterns, oldValue, newValue),
-          };
-        case 'filter':
-        case 'bind':
-          return {
-            ...pattern,
-            expression: this.substituteExpression(pattern.expression, oldValue, newValue),
-          };
-        case 'values':
-          return pattern;
-      }
-    });
-  }
-
-  public substituteExpression(expression: Expression, oldValue: string, newValue: string): Expression {
-    if ('type' in expression) {
-      switch (expression.type) {
-        case 'group':
-        case 'graph':
-          return <Expression> {
-            ...expression,
-            patterns: this.substitutePatterns(expression.patterns, oldValue, newValue),
-          };
-        case 'bgp':
-          return <Expression> {
-            ...expression,
-            triples: expression.triples.map(triple => this.substituteTriple(triple, oldValue, newValue)),
-          };
-        case 'operation':
-        case 'functionCall':
-          return {
-            ...expression,
-            args: expression.args.map(arg => this.substituteExpression(arg, oldValue, newValue)),
-          };
-        case 'aggregate':
-          return {
-            ...expression,
-            expression: this.substituteExpression(expression.expression, oldValue, newValue),
-          };
-      }
-    } else {
-      return <Expression> this.substituteTerm(<Term> expression, oldValue, newValue);
-    }
-  }
-
-  public substituteTriple(triple: Triple, oldValue: string, newValue: string): Triple {
-    return {
-      subject: <any> this.substituteTerm(triple.subject, oldValue, newValue),
-      predicate: <any> this.substituteTerm(triple.predicate, oldValue, newValue),
-      object: <any> this.substituteTerm(triple.object, oldValue, newValue),
-    };
-  }
-
-  public substituteTerm<T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
-    term: T,
-    oldValue: string,
-    newValue: string,
-  ): T | RDF.Term {
-    if ('termType' in term && (<RDF.Term> term).termType === 'NamedNode') {
-      const termValue = (<VariableTerm> term).value;
-      if (termValue === oldValue) {
-        term.value = newValue;
-      }
-    }
-    return term;
-  }
-
-  private targetToTriple(target: ITargetTriplePattern | Triple): Triple {
-    if (this.isRdfJsTriple(target)) {
-      return target;
-    }
-
-    if (target.subject.termType === 'literal') {
-      throw new Error('Literal subject is invalid');
-    }
-    if (target.predicate.termType === 'literal') {
-      throw new Error('Literal predicate is invalid');
-    }
-    return {
-      subject: this.toTermNoLiteral(target.subject),
-      predicate: this.toTermNoLiteral(target.predicate),
-      object: this.toTerm(target.object),
-    };
-  }
-
-  private isRDFTerm(term: any): term is Term {
-    // eslint-disable-next-line ts/no-unsafe-return
-    return term && typeof term.termType === 'string' && typeof term.value === 'string' &&
-    'equals' in term;
-  }
-
   private isVariable(term: any): term is VariableTerm {
-    return this.isRDFTerm(term) && term.termType === 'Variable';
+    return isRDFTerm(term) && term.termType === 'Variable';
   }
 
   private hasWildCard(variables: Variable[] | [Wildcard]): variables is [Wildcard] {
@@ -1035,8 +927,8 @@ export class QuerySequenceTemplate {
     state: IOperatorState,
   ): void {
     for (const target of targets) {
-      const targetTriple = this.targetToTriple(target);
-      if (!this.hasTriple(bgp, targetTriple)) {
+      const targetTriple = targetToTriple(target, this.DF);
+      if (!hasTriple(bgp, targetTriple)) {
         const instantiatedTriple = processTriple(
           targetTriple,
           this.instantiateTerm,
@@ -1059,92 +951,18 @@ export class QuerySequenceTemplate {
       // Instantiate the triple to map variables to terms (as is also done in the query)
       const instantiatedTriple = processTriple(target, this.instantiateTerm, { variableMapping });
       // Check if the target triple pattern is already added
-      if (this.hasTriple(bgp, instantiatedTriple)) {
+      if (hasTriple(bgp, instantiatedTriple)) {
         // If it is, remove the triple from the BGP
         bgp.triples = bgp.triples.filter(t =>
-          !this.tripleEquals(t, instantiatedTriple));
+          !tripleEquals(t, instantiatedTriple));
         removedTriplePatterns.push(instantiatedTriple);
       }
     }
     return removedTriplePatterns;
   }
 
-  private toTerm(value: ITargetTriplePatternTerm): RDF.Variable | RDF.NamedNode | RDF.Literal {
-    if (value.termType === 'variable') {
-      return this.DF.variable(value.value);
-    }
-    if (value.termType === 'namedNode') {
-      return this.DF.namedNode(value.value);
-    }
-    return this.DF.literal(value.value);
-  }
-
-  private toTermNoLiteral(value: ITargetTriplePatternTerm): RDF.Variable | RDF.NamedNode {
-    const termType = value.termType.toLowerCase();
-    if (termType === 'variable') {
-      return this.DF.variable(value.value);
-    }
-    return this.DF.namedNode(value.value);
-  }
-
-  private tripleEquals(a: Triple, b: Triple): boolean {
-    return this.rdfTermEquals(a.subject, b.subject) &&
-           this.rdfTermEquals(a.predicate, b.predicate) &&
-           this.rdfTermEquals(a.object, b.object);
-  }
-
-  // PropertyPath equality function (from previous example)
-  private propertyPathEquals(a: PropertyPath, b: PropertyPath): boolean {
-    if (a.type !== b.type) {
-      return false;
-    }
-    if (a.pathType !== b.pathType) {
-      return false;
-    }
-    if (a.items.length !== b.items.length) {
-      return false;
-    }
-
-    return a.items.every((item, index) => {
-      const otherItem = b.items[index];
-      const hasEqualsI = this.hasEquals(item);
-      const hasEqualsOI = this.hasEquals(otherItem);
-      if (hasEqualsI && hasEqualsOI) {
-        return item.equals(otherItem);
-      }
-      if (!hasEqualsI && !hasEqualsOI) {
-        return this.propertyPathEquals(item, otherItem);
-      }
-      return false;
-    });
-  }
-
-  // Main equality function for the union type
-  private rdfTermEquals(a: Term | PropertyPath, b: Term | PropertyPath): boolean {
-    // Both are Terms and can be compared
-    if (this.hasEquals(a) && this.hasEquals(b)) {
-      return a.equals(b);
-    }
-    if (!this.hasEquals(a) && !this.hasEquals(b)) {
-      return this.propertyPathEquals(a, b);
-    }
-    // Different types are never equal
-    return false;
-  }
-
-  private hasEquals(item: any): item is Term {
-    return 'equals' in item;
-  }
-
   private expressionEquals(a: Expression, b: Expression): boolean {
     return JSON.stringify(a) === JSON.stringify(b);
-  }
-
-  private hasTriple(bgp: BgpPattern, triple: Triple): boolean {
-    if (bgp.type !== 'bgp') {
-      throw new Error(`Expected a BGP pattern, but got ${String(bgp.type)}`);
-    }
-    return bgp.triples.some(t => this.tripleEquals(t, triple));
   }
 
   private initializeEmptyOperatorState(): IOperatorState {
@@ -1241,7 +1059,7 @@ export interface IAlternativeVariableMappings {
   alternativeMapping: Record<string, RDF.Term>;
 }
 
-const typeToKeyMap = <const> {
+export const typeToKeyMap = <const> {
   // eslint-disable-next-line ts/naming-convention
   BGP: 'stateQuery',
   // eslint-disable-next-line ts/naming-convention

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Logger } from 'pino';
-import * as seedrandom from 'seedrandom';
+import seedrandom from 'seedrandom';
 import { logger } from './logging/logger';
 import type { QuerySequenceTemplateProvider } from './QuerySequenceTemplateProvider';
 import type { IQuerySequenceMetadata, SequenceGenerator } from './sequence/SequenceGenerator';
