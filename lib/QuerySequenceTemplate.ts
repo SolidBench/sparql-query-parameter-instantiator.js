@@ -35,7 +35,7 @@ import type {
   IOtherRefinementPattern,
   IUnionRefinementPattern,
 } from './QuerySequenceTemplateProvider';
-import { randomIntFromInterval, sampleRandom } from './utils/RandomUtils';
+import { randomIntFromInterval, sampleRandom, sampleVariableTerm } from './utils/RandomUtils';
 import {
   countFlattened,
   extractBgpPerOperator,
@@ -190,7 +190,7 @@ export class QuerySequenceTemplate {
         variableMapping[variable] = values[counter % values.length];
         alternativeMapping[variable] = values[(counter + 1) % values.length];
         if (user) {
-          this.updateCounter(user, variable, values[counter % values.length].value);
+          this.updateCounter(variable, values[counter % values.length].value);
         }
       } else {
         const values = this.variableMappings[variable];
@@ -200,12 +200,14 @@ export class QuerySequenceTemplate {
           variableMapping[variable] = values[counter % values.length];
           alternativeMapping[variable] = values[(counter + 1) % values.length];
         } else if (Object.keys(this.variableProbabilities).length > 0 && user) {
-          const sampledValues: RDF.Term[] = this.sampleVariableTerm(variable, user, 2);
+          const sampledValues: RDF.Term[] = sampleVariableTerm(
+            variable, user, 2, this.variableProbabilities, this.DF, this.rng
+          );
           variableMapping[variable] = sampledValues[0];
           alternativeMapping[variable] = sampledValues[1];
 
           // Track instantiation counts for the variable and user
-          this.updateCounter(user, variable, sampledValues[0].value);
+          this.updateCounter(variable, sampledValues[0].value);
         } else {
           throw new Error(
             `Either probabilities (${Object.keys(this.variableProbabilities).length > 0 ? 'defined' : 'undefined'}), ` +
@@ -974,42 +976,7 @@ export class QuerySequenceTemplate {
     };
   }
 
-  public sampleVariableTerm(variable: string, user: string, nSamples: number): RDF.Term[] {
-    if (Object.keys(this.variableProbabilities[variable]).length <= nSamples) {
-      throw new Error('Trying to sample more values than there are elements');
-    }
-    const probabilities = this.variableProbabilities[variable];
-    if (!probabilities) {
-      throw new Error(`No probabilities found for variable '${variable}'`);
-    }
-    const logits = probabilities[user];
-    if (!logits) {
-      throw new Error(`No logits found for user '${user}' for variable '${variable}'`);
-    }
-    const sampled: string[] = [];
-    while (sampled.length < nSamples) {
-      const newSample = this.sampleTerm(logits);
-      if (!sampled.includes(newSample)) {
-        sampled.push(newSample);
-      }
-    }
-    return sampled.map(sample => this.DF.namedNode(sample));
-  }
-
-  public sampleTerm(logits: IEntityLogits[]): string {
-    const r = this.rng();
-    let cumulative = 0;
-
-    for (const item of logits) {
-      cumulative += item.similarity;
-      if (r < cumulative) {
-        return item.entity;
-      }
-    }
-    throw new Error('Failed sampling, likely due to probabilities not summing to 1.');
-  }
-
-  public updateCounter(user: string, variable: string, value: string): void {
+  public updateCounter(variable: string, value: string): void {
     if (!this.instantiationCounts[variable]) {
       this.instantiationCounts[variable] = {};
     }
