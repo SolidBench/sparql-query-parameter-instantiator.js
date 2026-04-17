@@ -40,6 +40,8 @@ describe('QueryTemplate', () => {
         new Parser().parse(queryString),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
+        {},
+        {},
         rng,
         2,
         5,
@@ -2707,7 +2709,9 @@ describe('QueryTemplate', () => {
  * @param query Query string
  * @param variableMappings Mapping variable names to potential values, only first will be picked for
  * instantiation
+ * @param variableMappingsAlternative Mapping of alternative values, used for substitutions.
  * @param refinementPattern The refinement pattern used to create alternative version of query
+ * @param rngParam Optional rng parameter to control deterministic sampling in tests
  * @returns input data required to apply refinement
  */
 function createRefinementInput(
@@ -2721,9 +2725,12 @@ function createRefinementInput(
     new Parser().parse(query),
     variableMappings,
     {},
+    {},
+    {},
     rngParam ?? rng,
     2,
     5,
+    undefined,
     [ refinementPattern ],
   );
 
@@ -2739,7 +2746,10 @@ function createRefinementInput(
       .map(([ key, arr ]) => [ key, arr[0] ]),
   );
 
-  const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTree(new Parser().parse(query), singleVariableMapping);
+  const syntaxTreeQuery: SelectQuery = template.instantiateSyntaxTreeWrap(
+    new Parser().parse(query),
+    singleVariableMapping,
+  );
   return {
     query: syntaxTreeQuery,
     variableMapping: singleVariableMapping,
