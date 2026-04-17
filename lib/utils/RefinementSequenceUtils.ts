@@ -300,6 +300,9 @@ export function toTermNoLiteral(value: ITargetTriplePatternTerm, DF: DataFactory
   if (termType === 'variable') {
     return DF.variable(value.value);
   }
+  if (termType === 'literal') {
+    throw new Error('Literal term is invalid');
+  }
   return DF.namedNode(value.value);
 }
 
