@@ -370,3 +370,7 @@ export function flattenOperators<T>(ops: Record<string, T[][]>): Record<string, 
 export function countFlattened<T>(ops: Record<string, T[]>): number {
   return Object.values(ops).reduce((sum, items) => sum + items.length, 0);
 }
+
+export function expressionEquals(a: Expression, b: Expression): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}

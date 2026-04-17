@@ -39,6 +39,7 @@ import type {
 import { randomIntFromInterval, sampleRandom, sampleVariableTerm } from './utils/RandomUtils';
 import {
   countFlattened,
+  expressionEquals,
   extractBgpPerOperator,
   extractExpressionPerOperator,
   extractTriplePatternsPerOperator,
@@ -595,7 +596,7 @@ export class QuerySequenceTemplate {
 
     // The filter is no longer a 'removed' filter
     (<IOperatorState>state).removedExp = (<IOperatorState>state).removedExp.filter(
-      exp => targetFilters.some(targetExp => !this.expressionEquals(exp, targetExp)),
+      exp => targetFilters.some(targetExp => !expressionEquals(exp, targetExp)),
     );
 
     // Add added filter to state and query
@@ -625,7 +626,7 @@ export class QuerySequenceTemplate {
     (<IOperatorState>context.state).removedExp.push(...filtersToRemove);
     context.query.where = context.query.where!.filter(
       (queryPattern: Pattern) => queryPattern.type !== 'filter' ||
-      !filtersToRemove.some(t => this.expressionEquals(queryPattern.expression, t))
+      !filtersToRemove.some(t => expressionEquals(queryPattern.expression, t))
     );
   }
 
@@ -792,7 +793,8 @@ export class QuerySequenceTemplate {
     );
 
     const alreadyPresent = targets.length > 0 && targets.every(t =>
-      context.queryExpressions.some(q => this.expressionEquals(t, q)));
+      context.queryExpressions.some(q => expressionEquals(t, q)));
+
     // Duplicate expressions cannot be added
     if (alreadyPresent && pattern.operation === 'addition') {
       return false;
@@ -811,11 +813,9 @@ export class QuerySequenceTemplate {
       if (targets.length === 0) {
         return context.operatorExpressionsFlattened[patternType]?.length > 1;
       }
-      // If (context.totalExpressions - Math.max(targets.length, 1) <= 0)
-      //   return false;
       // Require all expressions in target to be present in query
       const opExps = context.operatorExpressionsFlattened[patternType];
-      return opExps && targets.every(t => opExps.some(e => this.expressionEquals(t, e)));
+      return opExps && targets.every(t => opExps.some(e => expressionEquals(t, e)));
     }
 
     // If not already present and we have a target we can always add the filter
@@ -926,19 +926,6 @@ export class QuerySequenceTemplate {
     return variables;
   }
 
-  // Helper type guard
-  private isRdfJsTriple(obj: any): obj is Triple {
-    // eslint-disable-next-line ts/no-unsafe-return
-    return obj &&
-      typeof obj === 'object' &&
-      obj.subject?.termType !== undefined &&
-      obj.subject?.equals !== undefined &&
-      obj.predicate?.termType !== undefined &&
-      obj.predicate?.equals !== undefined &&
-      obj.object?.termType !== undefined &&
-      obj.object?.equals !== undefined;
-  }
-
   private hasVariable(variables: Variable[] | [Wildcard], variable: VariableTerm): boolean {
     return variables.some(bgpVariable => 'termType' in bgpVariable &&
       bgpVariable.termType === 'Variable' && variable.value === bgpVariable.value);
@@ -1009,10 +996,6 @@ export class QuerySequenceTemplate {
       }
     }
     return removedTriplePatterns;
-  }
-
-  private expressionEquals(a: Expression, b: Expression): boolean {
-    return JSON.stringify(a) === JSON.stringify(b);
   }
 
   private initializeEmptyOperatorState(): IOperatorState {
