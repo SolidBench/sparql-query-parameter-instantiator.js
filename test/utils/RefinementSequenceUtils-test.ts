@@ -264,6 +264,7 @@ describe('RefinementSequenceUtils', () => {
 
       expect(toTermNoLiteral({ termType: 'VARIABLE', value: 'x' } as any, DF)).toEqual(DF.variable('x'));
       expect(toTermNoLiteral({ termType: 'namedNode', value: 'ex:x' } as any, DF)).toEqual(DF.namedNode('ex:x'));
+      expect(() => toTermNoLiteral({ termType: 'literal', value: 'x' } as any, DF)).toThrow('Literal term is invalid');
     });
   });
 
@@ -302,6 +303,31 @@ describe('RefinementSequenceUtils', () => {
     });
 
     it('checks property path equality variants', () => {
+      const allPathTypes = [ '/', '|', '^', '!', '?', '*', '+' ];
+      for (const pathType of allPathTypes) {
+        const left = path([ DF.namedNode('ex:a') ], pathType);
+        const right = path([ DF.namedNode('ex:a') ], pathType);
+        expect(rdfTermEquals(left, right)).toBe(true);
+        expect(propertyPathEquals(left, right)).toBe(true);
+      }
+
+      const byPathType = Object.fromEntries(allPathTypes.map(pathType => [ pathType, path([ DF.namedNode('ex:a') ], pathType) ]));
+      const chainPath = byPathType['/'];
+      const altPath = byPathType['|'];
+      const inversePath = byPathType['^'];
+      const negatedPath = byPathType['!'];
+      const zeroOrOnePath = byPathType['?'];
+      const zeroOrMorePath = byPathType['*'];
+      const oneOrMorePath = byPathType['+'];
+      negatedPath.items.push(DF.namedNode('ex:b'));
+      chainPath.items.push(DF.namedNode('ex:b'));
+      altPath.items.push(DF.namedNode('ex:b'));
+
+      expect(rdfTermEquals(chainPath, altPath)).toBe(false);
+      expect(rdfTermEquals(inversePath, negatedPath)).toBe(false);
+      expect(rdfTermEquals(zeroOrOnePath, zeroOrMorePath)).toBe(false);
+      expect(rdfTermEquals(zeroOrMorePath, oneOrMorePath)).toBe(false);
+
       expect(propertyPathEquals(
         { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a') ]} as any,
         { type: 'other', pathType: '/', items: [ DF.namedNode('ex:a') ]} as any,
@@ -349,6 +375,11 @@ describe('RefinementSequenceUtils', () => {
         subject: DF.variable('x'),
         predicate: DF.namedNode('ex:p'),
         object: DF.literal('o'),
+      })).toBe(false);
+      expect(hasTriple(bgp, {
+        subject: DF.variable('s'),
+        predicate: DF.namedNode('ex:p'),
+        object: DF.namedNode('o'),
       })).toBe(false);
       expect(() => hasTriple({ type: 'optional', patterns: [] } as any, bgp.triples[0])).toThrow(
         'Expected a BGP pattern, but got optional',
