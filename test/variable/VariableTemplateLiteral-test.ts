@@ -1,7 +1,7 @@
 import 'jest-rdf';
 import { DataFactory } from 'rdf-data-factory';
 import type { ISubstitutionProvider } from '../../lib/substitution/ISubstitutionProvider';
-import { ValueTransformerReplaceIri } from '../../lib/valuetransformer/ValueTransformerReplaceIri';
+import { ValueTransformerIri } from '../../lib/valuetransformer/ValueTransformerIri';
 import { VariableTemplateLiteral } from '../../lib/variable/VariableTemplateLiteral';
 
 const DF = new DataFactory();
@@ -49,8 +49,8 @@ describe('VariableTemplateLiteral', () => {
     beforeEach(() => {
       substitutionProvider = <any> {};
       variable = new VariableTemplateLiteral('varName', substitutionProvider, [
-        new ValueTransformerReplaceIri('a', 'b'),
-        new ValueTransformerReplaceIri('b', 'c'),
+        new ValueTransformerIri('a', 'b'),
+        new ValueTransformerIri('b', 'c'),
       ]);
     });
 

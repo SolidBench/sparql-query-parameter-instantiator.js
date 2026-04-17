@@ -1,14 +1,14 @@
 import { DataFactory } from 'rdf-data-factory';
 import type { IValueTransformer } from '../../lib/valuetransformer/IValueTransformer';
-import { ValueTransformerReplaceIri } from '../../lib/valuetransformer/ValueTransformerReplaceIri';
+import { ValueTransformerIri } from '../../lib/valuetransformer/ValueTransformerIri';
 
 const DF = new DataFactory();
 
-describe('ValueTransformerReplaceIri', () => {
+describe('ValueTransformerIri', () => {
   let transformer: IValueTransformer;
 
   beforeEach(() => {
-    transformer = new ValueTransformerReplaceIri('^http://www.ldbc.eu', 'http://localhost:3000/www.ldbc.eu');
+    transformer = new ValueTransformerIri('^http://www.ldbc.eu', 'http://localhost:3000/www.ldbc.eu');
   });
 
   describe('transform', () => {
