@@ -64,4 +64,36 @@ a3,b3,c3`;
       });
     });
   });
+
+  describe('for a semicolon-separated CSV file', () => {
+    beforeEach(() => {
+      provider = new SubstitutionProviderCsv('file.csv', 'col2', ';');
+      files['file.csv'] = `col1;col2;col3
+a1;b1;c1
+a2;b2;c2
+a3;b3;c3`;
+    });
+
+    describe('getValues', () => {
+      it('returns the rows of the configured column using the custom separator', async() => {
+        await expect(provider.getValues()).resolves.toEqual([ 'b1', 'b2', 'b3' ]);
+      });
+    });
+  });
+
+  describe('for a CSV file with duplicate values and uniqueValues=true', () => {
+    beforeEach(() => {
+      provider = new SubstitutionProviderCsv('file.csv', 'col1', ',', true);
+      files['file.csv'] = `col1,col2
+dup,x
+dup,y
+unique,z`;
+    });
+
+    describe('getValues', () => {
+      it('returns only unique values', async() => {
+        await expect(provider.getValues()).resolves.toEqual([ 'dup', 'unique' ]);
+      });
+    });
+  });
 });
