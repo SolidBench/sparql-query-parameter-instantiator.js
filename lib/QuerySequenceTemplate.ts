@@ -1026,7 +1026,7 @@ export class QuerySequenceTemplate {
   }
 }
 
-export interface IRefinementOutput {
+export interface IRefinementOutput { 
   query: SelectQuery;
   removedTriplePatterns: Triple[];
   removedExpressions: Expression[];

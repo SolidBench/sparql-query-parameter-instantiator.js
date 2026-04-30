@@ -1,6 +1,6 @@
 {
   "name": "@rubeneschauzier/sparql-query-parameter-instantiator",
-  "version": "2.9.3",
+  "version": "2.9.7",
   "packageManager": "yarn@1.22.22",
   "description": "Instantiate SPARQL query templates based on given substitution parameters",
   "author": "Ruben Taelman <rubensworks@gmail.com>",
@@ -59,6 +59,7 @@
     "js-yaml": "^4.1.1",
     "lodash": "^4.17.21",
     "pino": "^10.3.1",
+    "pino-pretty": "^10.0.0",
     "seedrandom": "^3.0.5",
     "sparqljs": "^3.7.0"
   },

@@ -10,7 +10,7 @@ export * from './valuetransformer/IValueTransformer';
 export * from './valuetransformer/ValueTransformerPad';
 export * from './valuetransformer/ValueTransformerDistributeIri';
 export * from './valuetransformer/ValueTransformerCsvMap';
-export * from './valuetransformer/ValueTransformerIri';
+export * from './valuetransformer/ValueTransformerReplaceIri';
 export * from './variable/IVariableTemplate';
 export * from './variable/VariableTemplateAdapter';
 export * from './variable/VariableTemplateList';
