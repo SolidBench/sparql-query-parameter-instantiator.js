@@ -685,9 +685,14 @@ export class QuerySequenceTemplate {
 
     context.query.where = substitutePatterns(context.query.where!, toReplace, toReplaceWith);
 
+    const temp = context.variableMapping[pattern.target.value];
+    context.variableMapping[pattern.target.value] = context.alternativeMapping[pattern.target.value];
+    context.alternativeMapping[pattern.target.value] = temp;
+
     const subStateTarget = (<Record<string, IOperatorStateSub>> context.state)[pattern.target.value];
     subStateTarget.active = true;
     subStateTarget.nCalls++;
+
   }
 
   private removeSub(context: IRefinementContext){
@@ -697,10 +702,16 @@ export class QuerySequenceTemplate {
     const toReplace: string = context.alternativeMapping[pattern.target.value].value;
 
     context.query.where = substitutePatterns(context.query.where!, toReplace, toReplaceWith);
+    
+    // Swap them back to original
+    const temp = context.variableMapping[pattern.target.value];
+    context.variableMapping[pattern.target.value] = context.alternativeMapping[pattern.target.value];
+    context.alternativeMapping[pattern.target.value] = temp;
 
     const subStateTarget = (<Record<string, IOperatorStateSub>> context.state)[pattern.target.value];
     subStateTarget.active = false;
     subStateTarget.nCalls++;
+
   }
 
   private getBgpSafely(context: IRefinementContext, operatorType: string, location: number): BgpPattern {
@@ -872,19 +883,15 @@ export class QuerySequenceTemplate {
       operatorTriplePatternsFlattened: Record<string, Triple[]>;
       refinementState: IRefinementState;
       variableMapping: Record<string, RDF.Term>;
-      patternTypeOverride?: string;
+      patternTypeOverride?: keyof typeof typeToKeyMap;
     },
   ): boolean {
-    let patternType = pattern.type.toLowerCase();
-    if (context.patternTypeOverride) {
-      patternType = context.patternTypeOverride.toLowerCase();
-    }
+    const effectiveType = context.patternTypeOverride ?? <keyof typeof typeToKeyMap> pattern.type;
+    let patternType = effectiveType.toLowerCase();
+    let stateKey = typeToKeyMap[effectiveType];
 
     const targets = pattern.target.map(t =>
       processTriple(targetToTriple(t, this.DF), this.instantiateTerm, { variableMapping: context.variableMapping }));
-
-    // Const targets = pattern.target.map(t =>
-    //   this.instantiateTriple(this.targetToTriple(t), context.variableMapping));
 
     const alreadyPresent = targets.length > 0 && targets.every(t =>
       context.queryTriples.some(q => tripleEquals(q, t)));
@@ -913,11 +920,13 @@ export class QuerySequenceTemplate {
     if (targets.length > 0) {
       return true;
     }
+
     // UNION targets can be empty to allow updates to only one part of the union operator
     if (targets.length === 0 && patternType === 'union') {
       return true;
     }
-    return context.refinementState[typeToKeyMap[pattern.type]].removedTps.length > 0;
+    const targetState = <IOperatorState> context.refinementState[stateKey];
+    return targetState.removedTps.length > 0;
   }
 
   private isVariable(term: any): term is VariableTerm {
