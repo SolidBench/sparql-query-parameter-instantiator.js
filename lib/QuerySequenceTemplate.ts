@@ -123,11 +123,20 @@ export class QuerySequenceTemplate {
           recurseExpression(
             expr,
             (term: any) => {
-              if (term && typeof term === 'object' && typeof term.termType === 'string') {
+              if (this.isValidTermConfig(term)) {
                 const type = term.termType.toLowerCase();
                 if (type === 'variable') return this.DF.variable(term.value);
                 if (type === 'namednode') return this.DF.namedNode(term.value);
-                if (type === 'literal') return this.DF.literal(term.value);
+                if (type === 'literal') {
+                  let languageOrDatatype: string | RDF.NamedNode | undefined = term.language;
+              
+                  // We can safely access term.datatype.value because of our interface
+                  if (!languageOrDatatype && term.datatype && term.datatype.value) {
+                    languageOrDatatype = this.DF.namedNode(term.datatype.value);
+                  }
+
+                  return this.DF.literal(term.value, languageOrDatatype );
+                }
               }
               return term;
             },
@@ -140,6 +149,17 @@ export class QuerySequenceTemplate {
       }
       return pattern;
     });
+  }
+
+  public isValidTermConfig(term: unknown): term is ISerializedRDFTerm{
+    return (
+      typeof term === 'object' &&
+      term !== null &&
+      'termType' in term &&
+      typeof (<Record<string, unknown>> term).termType === 'string' &&
+      'value' in term &&
+      typeof (<Record<string, unknown>> term).value === 'string'
+    )
   }
 
   /**
@@ -1050,6 +1070,16 @@ export class QuerySequenceTemplate {
   public getVariableProbabilities(): Record<string, Record<string, IEntityLogits[]>> {
     return this.variableProbabilities;
   }
+}
+
+interface ISerializedRDFTerm {
+  termType: string;
+  value: string;
+  language?: string;
+  datatype?: {
+    termType: string;
+    value: string;
+  };
 }
 
 export interface IRefinementOutput { 
