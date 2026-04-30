@@ -1,25 +1,15 @@
+import type * as RDF from '@rdfjs/types';
 import type {
   BlankTerm,
   IriTerm,
   Pattern,
   QuadTerm,
-  SparqlQuery,
   Triple,
-  Variable,
-  VariableExpression,
   VariableTerm,
-  SelectQuery,
   PropertyPath,
   Term,
   Expression,
-  BgpPattern,
-  OptionalPattern,
-  UnionPattern,
 } from 'sparqljs';
-import type * as RDF from '@rdfjs/types';
-import { ITargetTriplePattern, ITargetTriplePatternTerm } from '../QuerySequenceTemplateProvider';
-import { DataFactory } from 'rdf-data-factory';
-import { getTerms, getVariables } from 'rdf-terms';
 
 export function substitutePatterns(patterns: Pattern[], oldValue: string, newValue: string): Pattern[] {
   // eslint-disable-next-line array-callback-return

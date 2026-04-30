@@ -39,33 +39,33 @@ describe('RefinementSequenceUtils', () => {
       const where = (parsed as any).where as Pattern[];
       expect(extractTriplePatternsPerOperator(where)).toEqual({
         bgp: [
-          [ {
+          [{
             subject: DF.variable('s'),
             predicate: DF.variable('p'),
             object: DF.variable('o'),
-          } ],
-          [ {
+          }],
+          [{
             subject: DF.variable('q'),
             predicate: DF.variable('r'),
             object: DF.variable('t'),
-          } ],
+          }],
         ],
-        optional: [[ {
+        optional: [[{
           subject: DF.variable('o'),
           predicate: DF.variable('p2'),
           object: DF.variable('x'),
-        } ]],
+        }]],
         union: [
-          [ {
+          [{
             subject: DF.variable('a'),
             predicate: DF.variable('b'),
             object: DF.variable('c'),
-          } ],
-          [ {
+          }],
+          [{
             subject: DF.variable('d'),
             predicate: DF.variable('e'),
             object: DF.variable('f'),
-          } ],
+          }],
         ],
       });
     });
@@ -74,28 +74,28 @@ describe('RefinementSequenceUtils', () => {
       const patterns: Pattern[] = [ {
         type: 'union',
         patterns: [
-          { type: 'union', patterns: [] } as any,
-          { type: 'group', patterns: [] } as any,
-          { type: 'bgp', triples: [ {
+          { type: 'union', patterns: []} as any,
+          { type: 'group', patterns: []} as any,
+          { type: 'bgp', triples: [{
             subject: DF.variable('x'),
             predicate: DF.variable('y'),
             object: DF.variable('z'),
-          } ]} as any,
+          }]} as any,
         ],
       } as any ];
 
       const out: Record<string, any[]> = {};
       extractBgpPerOperator(patterns, out as any, 'bgp');
       expect(out.union).toEqual([
-        { type: 'bgp', triples: [] },
-        { type: 'bgp', triples: [] },
+        { type: 'bgp', triples: []},
+        { type: 'bgp', triples: []},
         {
           type: 'bgp',
-          triples: [ {
+          triples: [{
             subject: DF.variable('x'),
             predicate: DF.variable('y'),
             object: DF.variable('z'),
-          } ],
+          }],
         },
       ]);
     });
@@ -160,7 +160,7 @@ describe('RefinementSequenceUtils', () => {
         type: 'operation',
         args: [
           { type: 'variable', value: 'fromOperation' },
-          { type: 'functionCall', args: [ { type: 'variable', value: 'fromFunction' } ]},
+          { type: 'functionCall', args: [{ type: 'variable', value: 'fromFunction' }]},
           { type: 'term', term: DF.variable('fromTerm') },
           { type: 'aggregate', expression: { type: 'variable', value: 'fromAggregate' }, separator: { type: 'variable', value: 'fromSep' }},
           { type: 'namedExpression', expression: { type: 'variable', value: 'fromNamed' }},
@@ -172,7 +172,7 @@ describe('RefinementSequenceUtils', () => {
             left: { type: 'variable', value: 'fromLeft' },
             right: { type: 'variable', value: 'fromRight' },
             expression: { type: 'variable', value: 'fromNestedExpression' },
-            args: [ { type: 'variable', value: 'fromDefaultArgs' }],
+            args: [{ type: 'variable', value: 'fromDefaultArgs' }],
           },
         ],
       } as any;
@@ -197,7 +197,7 @@ describe('RefinementSequenceUtils', () => {
       expect(getVariablesInExpression({ termType: 'Variable', value: '?fromPrefixedDefault' } as any))
         .toEqual(new Set([ 'fromPrefixedDefault' ]));
       expect(getVariablesInExpression(undefined as any)).toEqual(new Set());
-      expect(getVariablesInExpression([ { type: 'variable', value: 'fromArray' } ] as any)).toEqual(new Set([ 'fromArray' ]));
+      expect(getVariablesInExpression([{ type: 'variable', value: 'fromArray' }] as any)).toEqual(new Set([ 'fromArray' ]));
     });
   });
 
@@ -256,7 +256,7 @@ describe('RefinementSequenceUtils', () => {
         object: DF.literal('o'),
       };
       expect(isRdfJsTriple(triple)).toBe(true);
-      expect(isRdfJsTriple({ subject: {}, predicate: {}, object: {} })).toBe(false);
+      expect(isRdfJsTriple({ subject: {}, predicate: {}, object: {}})).toBe(false);
 
       expect(toTerm({ termType: 'variable', value: 'x' } as any, DF)).toEqual(DF.variable('x'));
       expect(toTerm({ termType: 'namedNode', value: 'ex:x' } as any, DF)).toEqual(DF.namedNode('ex:x'));
@@ -360,11 +360,11 @@ describe('RefinementSequenceUtils', () => {
 
       const bgp = {
         type: 'bgp',
-        triples: [ {
+        triples: [{
           subject: DF.variable('s'),
           predicate: DF.namedNode('ex:p'),
           object: DF.literal('o'),
-        } ],
+        }],
       } as any;
       expect(hasTriple(bgp, {
         subject: DF.variable('s'),
@@ -381,7 +381,7 @@ describe('RefinementSequenceUtils', () => {
         predicate: DF.namedNode('ex:p'),
         object: DF.namedNode('o'),
       })).toBe(false);
-      expect(() => hasTriple({ type: 'optional', patterns: [] } as any, bgp.triples[0])).toThrow(
+      expect(() => hasTriple({ type: 'optional', patterns: []} as any, bgp.triples[0])).toThrow(
         'Expected a BGP pattern, but got optional',
       );
     });
@@ -393,7 +393,7 @@ describe('RefinementSequenceUtils', () => {
         bgp: [[ 1, 2 ], [ 3 ]],
         optional: [[]],
       });
-      expect(flattened).toEqual({ bgp: [ 1, 2, 3 ], optional: [] });
+      expect(flattened).toEqual({ bgp: [ 1, 2, 3 ], optional: []});
       expect(countFlattened(flattened)).toBe(3);
       expect(countFlattened({})).toBe(0);
     });

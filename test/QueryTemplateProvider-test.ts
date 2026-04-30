@@ -45,7 +45,6 @@ jest.mock('node:fs', () => ({
 
 describe('QueryTemplateProvider', () => {
   let provider: QueryTemplateProvider;
-  let provider2: QueryTemplateProvider;
   beforeEach(() => {
     provider = new QueryTemplateProvider(
       'template1',

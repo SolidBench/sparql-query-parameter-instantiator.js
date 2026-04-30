@@ -1,11 +1,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+import { QuerySequenceInstantiator } from '../lib/QuerySequenceInstantiator';
+
 jest.mock('../lib/logging/logger', () => ({
   logger: {
     child: () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }),
   },
 }));
-import { QuerySequenceInstantiator } from '../lib/QuerySequenceInstantiator';
 
 describe('QuerySequenceInstantiator', () => {
   afterEach(() => {
@@ -14,20 +16,20 @@ describe('QuerySequenceInstantiator', () => {
 
   const getBaseArgs = () => ({
     providers: [
-      { getTemplateName: () => 'templateA' } as any,
-      { getTemplateName: () => 'templateB' } as any,
+      <any> { getTemplateName: () => 'templateA' },
+      <any> { getTemplateName: () => 'templateB' },
     ],
-    personProvider: {
-      getSubstitutionProvider: () => ({ getValues: async() => [ 'alice', 'bob' ] }),
-    } as any,
+    personProvider: <any> {
+      getSubstitutionProvider: () => ({ getValues: async() => [ 'alice', 'bob' ]}),
+    },
     count: 2,
     seed: 123,
-    sequenceGenerator: {
+    sequenceGenerator: <any> {
       generateSequence: jest.fn(async() => ({
         querySequence: [ 'SELECT * WHERE { ?s ?p ?o }' ],
         sequenceMetadata: { a: 1 },
       })),
-    } as any,
+    },
     destinationFilePath: '/tmp/sequences',
     metadataDestinationFilePath: '/tmp/metadata',
   });
@@ -74,7 +76,7 @@ describe('QuerySequenceInstantiator', () => {
 
   it('getPeople throws when substitution provider is missing', async() => {
     const args = getBaseArgs();
-    args.personProvider = { getSubstitutionProvider: () => undefined } as any;
+    args.personProvider = <any> { getSubstitutionProvider: () => undefined };
     const instantiator = new QuerySequenceInstantiator(args);
 
     await expect(instantiator.getPeople())
@@ -84,10 +86,10 @@ describe('QuerySequenceInstantiator', () => {
   it('saveMetadataToFile falls back to destination path when metadata destination is not set', async() => {
     const writeSpy = jest.spyOn(fs.promises, 'writeFile').mockResolvedValue(undefined);
     const args = getBaseArgs();
-    delete (args as any).metadataDestinationFilePath;
+    delete (<any> args).metadataDestinationFilePath;
     const instantiator = new QuerySequenceInstantiator(args);
 
-    await instantiator.saveMetadataToFile('x.json', { ok: true } as any);
+    await instantiator.saveMetadataToFile('x.json', <any> { ok: true });
 
     expect(writeSpy).toHaveBeenCalledWith(
       path.join('/tmp/sequences', 'x.json'),
