@@ -5,6 +5,7 @@ import type seedrandom from 'seedrandom';
 import type { Expression, SparqlParser, Triple } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QuerySequenceTemplate } from './QuerySequenceTemplate';
+import type { IEntityLogits } from './substitution/ISubstitutionProvider';
 import type { IValueTransformer } from './valuetransformer/IValueTransformer';
 import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
 
@@ -201,10 +202,7 @@ export class QuerySequenceTemplateProvider {
   }
 }
 
-export interface IEntityLogits {
-  entity: string;
-  similarity: number;
-}
+export type { IEntityLogits } from './substitution/ISubstitutionProvider';
 
 export interface INextTemplate {
   template: string;

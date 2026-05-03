@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 
-import type { ISubstitutionProviderProbabilities } from './ISubstitutionProvider';
+import type { IEntityLogits, ISubstitutionProviderProbabilities } from './ISubstitutionProvider';
 
 // eslint-disable-next-line ts/no-require-imports, ts/no-var-requires
 const csvParser = require('csv-parser');
@@ -17,7 +17,7 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
   private readonly columnNameSimilarities: string = 'similarities';
   private readonly separator: string;
 
-  protected valuesProbabilitiesCache: Record<string, Record<string, number>[]> | undefined;
+  protected valuesProbabilitiesCache: Record<string, IEntityLogits[]> | undefined;
 
   public constructor(
     csvFilePath: string | undefined,
@@ -55,12 +55,12 @@ export class SubstitutionProviderCsvSimilarityBasedProbability implements ISubst
     });
   }
 
-  public getValuesProbabilities(): Promise<Record<string, Record<string, number>[]>> {
+  public getValuesProbabilities(): Promise<Record<string, IEntityLogits[]>> {
     if (this.valuesProbabilitiesCache) {
       return Promise.resolve(this.valuesProbabilitiesCache);
     }
-    return new Promise<Record<string, Record<string, number>[]>>((resolve, reject) => {
-      const results: Record<string, Record<string, number>[]> = {};
+    return new Promise<Record<string, IEntityLogits[]>>((resolve, reject) => {
+      const results: Record<string, IEntityLogits[]> = {};
       fs.createReadStream(this.csvFilePathSimilarities)
         .on('error', reject)
         .pipe(csvParser({ separator: this.separator }))
