@@ -2,8 +2,7 @@ import type * as RDF from '@rdfjs/types';
 import { cloneDeep } from 'lodash';
 import { DataFactory } from 'rdf-data-factory';
 
-// eslint-disable-next-line ts/no-require-imports
-import seedrandom = require('seedrandom');
+import type seedrandom from 'seedrandom';
 import type {
   BlankTerm,
   IriTerm,
@@ -31,7 +30,6 @@ import type {
   IEntityLogits,
   IQueryRefinementPattern,
   ITargetTriplePattern,
-  ITargetTriplePatternTerm,
   IOtherRefinementPattern,
   IUnionRefinementPattern,
   ISubRefinementPattern,
@@ -51,13 +49,13 @@ import {
   toTermNoLiteral,
   tripleEquals,
 } from './utils/RefinementSequenceUtils';
+import { substitutePatterns } from './utils/SubstitutionUtils';
 import type { TermCallback } from './utils/SyntaxTreeUtils';
 import { processTriple, recurseExpression, recursePatterns } from './utils/SyntaxTreeUtils';
 import type { IValueTransformer } from './valuetransformer/IValueTransformer';
-import { substitutePatterns } from './utils/SubstitutionUtils';
 
 /**
- * Data object for a query template.
+ * Data object for a query sequence template.
  */
 export class QuerySequenceTemplate {
   private readonly syntaxTree: SparqlQuery;
@@ -70,8 +68,7 @@ export class QuerySequenceTemplate {
   public readonly outputVariableTypeMap: Record<string, string>;
 
   private readonly rng: seedrandom.PRNG;
-  // eslint-disable-next-line ts/naming-convention
-  private readonly DF: DataFactory = new DataFactory();
+  private readonly dataFactory: DataFactory = new DataFactory();
 
   private readonly iriTransformer?: IValueTransformer;
 
@@ -99,7 +96,7 @@ export class QuerySequenceTemplate {
     this.instantiationVariableTypeMap = instantiationVariableToType;
     this.outputVariableTypeMap = outputPossibleInstantiationValue;
     this.rng = rng;
-    if (refinementPatterns){
+    if (refinementPatterns) {
       this.refinementPatterns = this.mapRefinementConfigToSparqlJs(refinementPatterns);
     }
     this.minRefinementLength = minRefinementLength;
@@ -107,51 +104,55 @@ export class QuerySequenceTemplate {
     this.iriTransformer = iriTransformer;
   }
 
-  public mapRefinementConfigToSparqlJs(refinementPatterns: IQueryRefinementPattern[]){
+  public mapRefinementConfigToSparqlJs(refinementPatterns: IQueryRefinementPattern[]):
+  IQueryRefinementPattern[] {
     return refinementPatterns.map((pattern) => {
       // Map config representation of target of substitution to a RDF.Variable object
       if (pattern.type === 'SUB' && !this.isVariable(pattern.target)) {
-        pattern.target = <RDF.Variable> toTermNoLiteral(pattern.target, this.DF);
+        pattern.target = <RDF.Variable> toTermNoLiteral(pattern.target, this.dataFactory);
       } else if (pattern.type === 'UNION') {
         pattern.target = [
-          pattern.target[0].map(triple => targetToTriple(triple, this.DF)),
-          pattern.target[1].map(triple => targetToTriple(triple, this.DF)),
+          pattern.target[0].map(triple => targetToTriple(triple, this.dataFactory)),
+          pattern.target[1].map(triple => targetToTriple(triple, this.dataFactory)),
         ];
       } else if (pattern.type === 'FILTER') {
         // Deeply map raw JSON terms within filter expressions to valid RDFJS objects
-        pattern.target = pattern.target.map(expr => 
+        pattern.target = pattern.target.map(expr =>
           recurseExpression(
             expr,
             (term: any) => {
               if (this.isValidTermConfig(term)) {
                 const type = term.termType.toLowerCase();
-                if (type === 'variable') return this.DF.variable(term.value);
-                if (type === 'namednode') return this.DF.namedNode(term.value);
+                if (type === 'variable') {
+                  return this.dataFactory.variable(term.value);
+                }
+                if (type === 'namednode') {
+                  return this.dataFactory.namedNode(term.value);
+                }
                 if (type === 'literal') {
                   let languageOrDatatype: string | RDF.NamedNode | undefined = term.language;
-              
+
                   // We can safely access term.datatype.value because of our interface
                   if (!languageOrDatatype && term.datatype && term.datatype.value) {
-                    languageOrDatatype = this.DF.namedNode(term.datatype.value);
+                    languageOrDatatype = this.dataFactory.namedNode(term.datatype.value);
                   }
 
-                  return this.DF.literal(term.value, languageOrDatatype );
+                  return this.dataFactory.literal(term.value, languageOrDatatype);
                 }
               }
-              return term;
+              return <Term> term;
             },
             {},
-            this.instantiateSyntaxTreeRecurse
-          )
-        );
+            this.instantiateSyntaxTreeRecurse,
+          ));
       } else if (pattern.type !== 'SUB') {
-        pattern.target = pattern.target.map(triple => targetToTriple(triple, this.DF));
+        pattern.target = pattern.target.map(triple => targetToTriple(triple, this.dataFactory));
       }
       return pattern;
     });
   }
 
-  public isValidTermConfig(term: unknown): term is ISerializedRDFTerm{
+  public isValidTermConfig(term: unknown): term is ISerializedRDFTerm {
     return (
       typeof term === 'object' &&
       term !== null &&
@@ -159,7 +160,7 @@ export class QuerySequenceTemplate {
       typeof (<Record<string, unknown>> term).termType === 'string' &&
       'value' in term &&
       typeof (<Record<string, unknown>> term).value === 'string'
-    )
+    );
   }
 
   /**
@@ -240,7 +241,12 @@ export class QuerySequenceTemplate {
           alternativeMapping[variable] = values[(counter + 1) % values.length];
         } else if (Object.keys(this.variableProbabilities).length > 0 && user) {
           const sampledValues: RDF.Term[] = sampleVariableTerm(
-            variable, user, 2, this.variableProbabilities, this.DF, this.rng
+            variable,
+            user,
+            2,
+            this.variableProbabilities,
+            this.dataFactory,
+            this.rng,
           );
           variableMapping[variable] = sampledValues[0];
           alternativeMapping[variable] = sampledValues[1];
@@ -287,7 +293,7 @@ export class QuerySequenceTemplate {
     if (this.iriTransformer) {
       syntaxTree.prefixes = Object.fromEntries(
         Object.entries(syntaxTree.prefixes).map(([ prefix, iri ]) => {
-          const transformed = this.iriTransformer!.transform(this.DF.namedNode(iri));
+          const transformed = this.iriTransformer!.transform(this.dataFactory.namedNode(iri));
           return [ prefix, transformed.value ];
         }),
       );
@@ -476,11 +482,21 @@ export class QuerySequenceTemplate {
 
   private handleAddition(context: IRefinementContext): void {
     switch (context.pattern.type) {
-      case 'OPTIONAL': this.addOptional(context); break;
-      case 'UNION':    this.addUnion(context); break;
-      case 'FILTER':   this.addFilter(context); break;
-      case 'BGP':      this.addBgp(context); break;
-      case 'SUB':      this.addSub(context); break;
+      case 'OPTIONAL':
+        this.addOptional(context);
+        break;
+      case 'UNION':
+        this.addUnion(context);
+        break;
+      case 'FILTER':
+        this.addFilter(context);
+        break;
+      case 'BGP':
+        this.addBgp(context);
+        break;
+      case 'SUB':
+        this.addSub(context);
+        break;
       default: throw new Error(`Unsupported addition type: 
         ${(<any> context.pattern).type}`);
     }
@@ -488,27 +504,34 @@ export class QuerySequenceTemplate {
 
   private handleRemoval(context: IRefinementContext): void {
     switch (context.pattern.type) {
-      case 'OPTIONAL': 
-      case 'BGP':      this.removeBgpOrOptional(context); break;
-      case 'UNION':    this.removeUnion(context); break;
-      case 'FILTER':   this.removeFilter(context); break;
-      case 'SUB':      this.removeSub(context); break;
-
+      case 'OPTIONAL':
+      case 'BGP':
+        this.removeBgpOrOptional(context);
+        break;
+      case 'UNION':
+        this.removeUnion(context);
+        break;
+      case 'FILTER':
+        this.removeFilter(context);
+        break;
+      case 'SUB':
+        this.removeSub(context);
+        break;
       default: throw new Error(`Unsupported removal type: 
         ${(<any> context.pattern).type}`);
     }
   }
 
   private addOptional(context: IRefinementContext): void {
-    const groupPattern = context.operatorToBgp['optional'];
+    const groupPattern = context.operatorToBgp.optional;
 
     // As the checks were done before, we can explicitly cast the pattern type
     context.pattern = <IOtherRefinementPattern> context.pattern;
 
     let toRefineOptional: BgpPattern;
     if (!groupPattern || groupPattern.length === 0) {
-      const optionalBgp: BgpPattern = { type: 'bgp', triples: [] };
-      const optionalBlock: OptionalPattern = { type: 'optional', patterns: [optionalBgp] };
+      const optionalBgp: BgpPattern = { type: 'bgp', triples: []};
+      const optionalBlock: OptionalPattern = { type: 'optional', patterns: [ optionalBgp ]};
       context.query.where!.push(optionalBlock);
       toRefineOptional = <BgpPattern>optionalBlock.patterns[context.pattern.location];
     } else {
@@ -519,7 +542,13 @@ export class QuerySequenceTemplate {
       throw new Error(`BGP Doesn't exist at index ${context.pattern.location}`);
     }
 
-    this.addTargetToBgp(toRefineOptional, context.pattern.target, context.query, context.variableMapping, <IOperatorState>context.state);
+    this.addTargetToBgp(
+      toRefineOptional,
+      context.pattern.target,
+      context.query,
+      context.variableMapping,
+      <IOperatorState>context.state,
+    );
   }
 
   private removeBgpOrOptional(context: IRefinementContext): void {
@@ -527,23 +556,23 @@ export class QuerySequenceTemplate {
     context.pattern = <IOtherRefinementPattern> context.pattern;
 
     const bgpToRefine = this.getBgpSafely(context, context.pattern.type.toLowerCase(), context.pattern.location);
-    
-    let triplesToRemove = context.pattern.target.map(x => targetToTriple(x, this.DF));
+
+    let triplesToRemove = context.pattern.target.map(x => targetToTriple(x, this.dataFactory));
     if (triplesToRemove.length === 0) {
-      triplesToRemove = [sampleRandom(this.rng, bgpToRefine.triples)];
+      triplesToRemove = [ sampleRandom(this.rng, bgpToRefine.triples) ];
     }
 
     const removed = this.removeTargetFromBgp(bgpToRefine, triplesToRemove, context.variableMapping);
     this.cleanUpUnusedVariables(context);
-    
+
     (<IOperatorState>context.state).removedTps.push(...removed);
   }
 
-  private addUnion(context: IRefinementContext){
-    const groupPattern = context.operatorToBgp['union'];
+  private addUnion(context: IRefinementContext): void {
+    const groupPattern = context.operatorToBgp.union;
 
     context.pattern = <IUnionRefinementPattern> context.pattern;
-    
+
     let toRefineUnionLeft: BgpPattern;
     let toRefineUnionRight: BgpPattern;
     if (!groupPattern || groupPattern.length === 0) {
@@ -560,9 +589,8 @@ export class QuerySequenceTemplate {
       // Each union has two bgps in operatorToBgp record. So to extract start bgp of union
       // at given location we do * 2.
       const unionLeftBgpIndex = context.pattern.location * 2;
-      groupPattern[unionLeftBgpIndex]
       toRefineUnionLeft = groupPattern[unionLeftBgpIndex];
-      toRefineUnionRight = groupPattern[unionLeftBgpIndex+1];
+      toRefineUnionRight = groupPattern[unionLeftBgpIndex + 1];
     }
     // It is possible to add to a partial union if the target for that part of the union is empty
     // otherwise there should be a BGP there.
@@ -591,18 +619,17 @@ export class QuerySequenceTemplate {
     );
   }
 
-  private removeUnion(context: IRefinementContext){
+  private removeUnion(context: IRefinementContext): void {
     context.pattern = <IUnionRefinementPattern> context.pattern;
 
-    const unionLeftBgpIndex =context.pattern.location * 2;
-    
+    const unionLeftBgpIndex = context.pattern.location * 2;
+
     const bgpToRefineLeft = this.getBgpSafely(context, context.pattern.type.toLowerCase(), unionLeftBgpIndex);
     const bgpToRefineRight = this.getBgpSafely(context, context.pattern.type.toLowerCase(), unionLeftBgpIndex + 1);
     const bgps = [ bgpToRefineLeft, bgpToRefineRight ];
 
-    let triplesToRemove: Triple[][] = context.pattern.target.map(triples => 
-      triples.map(triple => targetToTriple(triple, this.DF))
-    );
+    let triplesToRemove: Triple[][] = context.pattern.target.map(triples =>
+      triples.map(triple => targetToTriple(triple, this.dataFactory)));
 
     if (triplesToRemove.length === 0) {
       const tripleToRemove = [
@@ -617,12 +644,15 @@ export class QuerySequenceTemplate {
     this.cleanUpUnusedVariables(context);
   }
 
-  private addFilter(context: IRefinementContext){
+  private addFilter(context: IRefinementContext): void {
     context.pattern = <IFilterRefinementPattern> context.pattern;
     // Targets are instantiated and then evaluated
     let targetFilters: Expression[] = context.pattern.target.map(
-      t => recurseExpression(t, 
-        this.instantiateTerm, { variableMapping: context.variableMapping }, this.instantiateSyntaxTreeRecurse
+      t => recurseExpression(
+        t,
+        this.instantiateTerm,
+        { variableMapping: context.variableMapping },
+        this.instantiateSyntaxTreeRecurse,
       ),
     );
     const state = context.state;
@@ -643,36 +673,39 @@ export class QuerySequenceTemplate {
     }
   }
 
-  private removeFilter(context: IRefinementContext){
+  private removeFilter(context: IRefinementContext): void {
     context.pattern = <IFilterRefinementPattern> context.pattern;
     // Filters to remove are instantiated versions of target
     let filtersToRemove = context.pattern.target.map(
-      t => recurseExpression(t, 
-        this.instantiateTerm, { variableMapping: context.variableMapping }, this.instantiateSyntaxTreeRecurse
+      t => recurseExpression(
+        t,
+        this.instantiateTerm,
+        { variableMapping: context.variableMapping },
+        this.instantiateSyntaxTreeRecurse,
       ),
     );
     if (filtersToRemove.length === 0) {
       // Randomly select a filter to remove
-      filtersToRemove = [ 
+      filtersToRemove = [
         sampleRandom(
           this.rng,
           context.query.where!.filter(queryPattern => queryPattern.type === 'filter'),
-        ).expression 
+        ).expression,
       ];
     }
     (<IOperatorState>context.state).removedExp.push(...filtersToRemove);
     context.query.where = context.query.where!.filter(
       (queryPattern: Pattern) => queryPattern.type !== 'filter' ||
-      !filtersToRemove.some(t => expressionEquals(queryPattern.expression, t))
+      !filtersToRemove.some(t => expressionEquals(queryPattern.expression, t)),
     );
   }
 
-  private addBgp(context: IRefinementContext){
+  private addBgp(context: IRefinementContext): void {
     context.pattern = <IOtherRefinementPattern> context.pattern;
     const bgpToRefine = this.getBgpSafely(
-      context, 
-      context.pattern.type.toLowerCase(), 
-      context.pattern.location
+      context,
+      context.pattern.type.toLowerCase(),
+      context.pattern.location,
     );
 
     let targetTriples: (ITargetTriplePattern | Triple)[] = context.pattern.target;
@@ -685,7 +718,7 @@ export class QuerySequenceTemplate {
 
     // The triple patterns are no longer a removed pattern
     state.removedTps = state.removedTps.filter(
-      tp => !targetTriples.some(triple => tripleEquals(tp, targetToTriple(triple, this.DF))),
+      tp => !targetTriples.some(triple => tripleEquals(tp, targetToTriple(triple, this.dataFactory))),
     );
 
     this.addTargetToBgp(
@@ -697,7 +730,7 @@ export class QuerySequenceTemplate {
     );
   }
 
-  private addSub(context: IRefinementContext){
+  private addSub(context: IRefinementContext): void {
     const pattern = <ISubRefinementPattern> context.pattern;
 
     const toReplace: string = context.variableMapping[pattern.target.value].value;
@@ -712,17 +745,16 @@ export class QuerySequenceTemplate {
     const subStateTarget = (<Record<string, IOperatorStateSub>> context.state)[pattern.target.value];
     subStateTarget.active = true;
     subStateTarget.nCalls++;
-
   }
 
-  private removeSub(context: IRefinementContext){
+  private removeSub(context: IRefinementContext): void {
     const pattern = <ISubRefinementPattern> context.pattern;
 
     const toReplaceWith: string = context.variableMapping[pattern.target.value].value;
     const toReplace: string = context.alternativeMapping[pattern.target.value].value;
 
     context.query.where = substitutePatterns(context.query.where!, toReplace, toReplaceWith);
-    
+
     // Swap them back to original
     const temp = context.variableMapping[pattern.target.value];
     context.variableMapping[pattern.target.value] = context.alternativeMapping[pattern.target.value];
@@ -731,7 +763,6 @@ export class QuerySequenceTemplate {
     const subStateTarget = (<Record<string, IOperatorStateSub>> context.state)[pattern.target.value];
     subStateTarget.active = false;
     subStateTarget.nCalls++;
-
   }
 
   private getBgpSafely(context: IRefinementContext, operatorType: string, location: number): BgpPattern {
@@ -743,7 +774,9 @@ export class QuerySequenceTemplate {
   }
 
   private cleanUpUnusedVariables(context: IRefinementContext): void {
-    if (this.hasWildCard(context.query.variables)) return;
+    if (this.hasWildCard(context.query.variables)) {
+      return;
+    }
 
     const triplePatternsLeft = Object.values(context.operatorToBgp)
       .map(bgps => bgps.map(bgp => bgp.triples))
@@ -754,7 +787,7 @@ export class QuerySequenceTemplate {
       if ('expression' in x) {
         const varsInExpression = getVariablesInExpression(x.expression);
         // Convert Set to Array to utilize .every()
-        return [...varsInExpression].every(v => variablesLeftInQuery.has(v));
+        return [ ...varsInExpression ].every(v => variablesLeftInQuery.has(v));
       }
       return true;
     });
@@ -907,11 +940,15 @@ export class QuerySequenceTemplate {
     },
   ): boolean {
     const effectiveType = context.patternTypeOverride ?? <keyof typeof typeToKeyMap> pattern.type;
-    let patternType = effectiveType.toLowerCase();
-    let stateKey = typeToKeyMap[effectiveType];
+    const patternType = effectiveType.toLowerCase();
+    const stateKey = typeToKeyMap[effectiveType];
 
     const targets = pattern.target.map(t =>
-      processTriple(targetToTriple(t, this.DF), this.instantiateTerm, { variableMapping: context.variableMapping }));
+      processTriple(
+        targetToTriple(t, this.dataFactory),
+        this.instantiateTerm,
+        { variableMapping: context.variableMapping },
+      ));
 
     const alreadyPresent = targets.length > 0 && targets.every(t =>
       context.queryTriples.some(q => tripleEquals(q, t)));
@@ -934,7 +971,7 @@ export class QuerySequenceTemplate {
 
       const opTriples = context.operatorTriplePatternsFlattened[patternType];
       return opTriples && targets.every(t =>
-        opTriples.some(tp => tripleEquals(targetToTriple(t, this.DF), tp)));
+        opTriples.some(tp => tripleEquals(targetToTriple(t, this.dataFactory), tp)));
     }
 
     if (targets.length > 0) {
@@ -1010,7 +1047,7 @@ export class QuerySequenceTemplate {
     state: IOperatorState,
   ): void {
     for (const target of targets) {
-      const targetTriple = targetToTriple(target, this.DF);
+      const targetTriple = targetToTriple(target, this.dataFactory);
       if (!hasTriple(bgp, targetTriple)) {
         const instantiatedTriple = processTriple(
           targetTriple,
@@ -1082,7 +1119,7 @@ interface ISerializedRDFTerm {
   };
 }
 
-export interface IRefinementOutput { 
+export interface IRefinementOutput {
   query: SelectQuery;
   removedTriplePatterns: Triple[];
   removedExpressions: Expression[];
@@ -1148,7 +1185,6 @@ export interface IRefinementContext {
    */
   state: IOperatorState | Record<string, IOperatorStateSub>;
 }
-
 
 export const typeToKeyMap = <const> {
   // eslint-disable-next-line ts/naming-convention

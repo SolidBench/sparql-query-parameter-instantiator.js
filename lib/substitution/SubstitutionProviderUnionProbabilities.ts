@@ -5,7 +5,8 @@ import { SubstitutionProviderUnion } from './SubstitutionProviderUnion';
 /**
  * A substitution provider that takes the union over the values of the given substitution provider.
  */
-export class SubstitutionProviderUnionProbabilities extends SubstitutionProviderUnion implements ISubstitutionProviderProbabilities {
+export class SubstitutionProviderUnionProbabilities
+  extends SubstitutionProviderUnion implements ISubstitutionProviderProbabilities {
   protected readonly substitutionProviders: ISubstitutionProviderProbabilities[];
   /**
    * @param substitutionProviders The substitution provider to union over.

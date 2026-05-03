@@ -6,7 +6,14 @@ import type { SelectQuery } from 'sparqljs';
 import { logger } from '../logging/logger';
 import type { QuerySequenceTemplate } from '../QuerySequenceTemplate';
 import type { INextTemplate, QuerySequenceTemplateProvider } from '../QuerySequenceTemplateProvider';
-import { calculateExpectedMeanLogNormal, logNormal, logNormalRoundedUp, sampleHit, sampleProbability, sampleRandom } from '../utils/RandomUtils';
+import {
+  calculateExpectedMeanLogNormal,
+  logNormal,
+  logNormalRoundedUp,
+  sampleHit,
+  sampleProbability,
+  sampleRandom,
+} from '../utils/RandomUtils';
 import type { IJoinTreeNode } from './QLeverInstance';
 import type { QueryNextInstantiatorValue } from './QueryNextInstantiationValue';
 
@@ -36,15 +43,28 @@ export class SequenceGenerator {
 
     this.log = logger.child({ module: 'SequenceGenerator' });
     this.log.info({
-      expectedSequenceLength: calculateExpectedMeanLogNormal(this.meanLogSequenceLength, this.stdLogSequenceLength),
-      expectedSessionLength: calculateExpectedMeanLogNormal(this.meanLogSessionLength, this.stdLogSessionLength),
-      expectedTransitionProbability: calculateExpectedMeanLogNormal(this.meanLogTransitionProbability, this.stdLogTransitionProbability),
+      expectedSequenceLength: calculateExpectedMeanLogNormal(
+        this.meanLogSequenceLength,
+        this.stdLogSequenceLength,
+      ),
+      expectedSessionLength: calculateExpectedMeanLogNormal(
+        this.meanLogSessionLength,
+        this.stdLogSessionLength,
+      ),
+      expectedTransitionProbability: calculateExpectedMeanLogNormal(
+        this.meanLogTransitionProbability,
+        this.stdLogTransitionProbability,
+      ),
     }, 'Sequence generation parameters initialized');
   }
 
   public initSequence(rng: seedrandom.PRNG, user: string, n: number): ISequenceInit {
     const sequenceLength = logNormalRoundedUp(rng, this.meanLogSequenceLength, this.stdLogSequenceLength);
-    const sessionTransitionProbability = logNormal(rng, this.meanLogTransitionProbability, this.stdLogTransitionProbability);
+    const sessionTransitionProbability = logNormal(
+      rng,
+      this.meanLogTransitionProbability,
+      this.stdLogTransitionProbability,
+    );
 
     const sequenceMetadata: IQuerySequenceMetadata = {
       user: { user, transitionProbability: sessionTransitionProbability },
@@ -71,6 +91,8 @@ export class SequenceGenerator {
     nSessions: number,
     templateCounts: Record<string, number>,
   ): IQuerySession {
+    // Sample start query by these calculated weights based on
+    // occurrences of each query to ensure approximately equal occurrences
     let totalWeight = 0;
     const rawWeights = templates.map((t) => {
       const currentCount = templateCounts[t.name] || 0;
@@ -107,7 +129,8 @@ export class SequenceGenerator {
     const instantiateRefinementPattern = rng() < this.refinementPatternProbability;
     let nextInstantiators: Record<string, RDF.Term[]> = {};
 
-    // 1. Fetch instantiation values for the NEW queries using the PREVIOUS query's AST
+    // Fetch instantiation values for the new query by taking the AST of
+    // the previous query in the session (not always the previous query in whole sequence)
     if (session.lastAst) {
       const previousTemplate = session.templates.at(-1)!;
       const { instantiationValues } = await this.determineNextInstantiator(
@@ -118,7 +141,8 @@ export class SequenceGenerator {
       nextInstantiators = instantiationValues;
     }
 
-    // 2. Instantiate the new queries (expecting an array of ASTs now)
+    // Instantiate the new query, outputs are arrays due to possible
+    // refinement pattern instantiations
     const currentCount = templateCounts[query.name] || 0;
     const { queries, patternMetadata, asts } = query.template.instantiate(
       currentCount,
@@ -143,7 +167,8 @@ export class SequenceGenerator {
 
     const nOpenSessions = sequenceSessions.filter(x => !x.ended).length;
 
-    // 3. Process metadata and compute Join Plans for ALL generated queries immediately
+    // For all generated queries (including refinement patterns), we get
+    // join plans and any additional metadata
     for (let i = 0; i < queries.length; i++) {
       const currentAst = asts[i];
 
@@ -177,7 +202,7 @@ export class SequenceGenerator {
     templateCounts: Record<string, number>,
     user: string,
     n: number,
-  ) {
+  ): Promise<IQuerySequence> {
     await this.findNextInstantiationValue.getQLeverReadyStatus();
 
     const { sequenceLength, sessionTransitionProbability, sequenceMetadata } = this.initSequence(rng, user, n);
@@ -194,7 +219,7 @@ export class SequenceGenerator {
     const sequenceSessions: IQuerySession[] = [];
     const querySequence: string[] = [];
 
-    const createAndRegisterNewSession = async() => {
+    const createAndRegisterNewSession: () => Promise<ISessionStart> = async() => {
       const session = this.startNewSession(rng, templates, sequenceSessions.length, templateCounts);
       sequenceSessions.push(session);
       const result = await this.addTemplateToSequence(
@@ -286,14 +311,17 @@ export class SequenceGenerator {
     lastTemplate: QuerySequenceTemplate,
     nextTemplate: QuerySequenceTemplate,
   ): Promise<{ instantiationValues: Record<string, RDF.Term[]>; joinPlan?: IJoinTreeNode }> {
-    const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(lastTemplate, nextTemplate);
+    const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(
+      lastTemplate,
+      nextTemplate,
+    );
     return await this.findNextInstantiationValue.getNextQueryInstantiationValues(ast, mapping);
   }
 
   private mapOutputVariablesToInstatiationVariables(
     lastTemplate: QuerySequenceTemplate,
     nextTemplate: QuerySequenceTemplate,
-  ) {
+  ): Record<string, string[]> {
     const typeToInstVars: Record<string, string[]> = {};
     for (const [ instVar, type ] of Object.entries(nextTemplate.instantiationVariableTypeMap)) {
       if (!typeToInstVars[type]) {
@@ -374,6 +402,34 @@ export interface ISequenceGeneratorArgs {
    * that session
    */
   findNextInstantiationValue: QueryNextInstantiatorValue;
+}
+
+export interface IQuerySequence {
+  /**
+   * String representing the query sequence
+   */
+  querySequence: string[];
+  /**
+   * Metadata on the generation process underlying the sequence
+   */
+  sequenceMetadata: IQuerySequenceMetadata;
+}
+
+export interface ISessionStart {
+  /**
+   * The started session
+   */
+  session: IQuerySession;
+  /**
+   * Ast of the new query in session
+   */
+  ast: SelectQuery;
+  /**
+   * Queries added to session at start, can be > 1 when
+   * a refinement pattern is instantiated
+   */
+  queriesAdded: number;
+
 }
 
 export interface IProbabilities<T> {

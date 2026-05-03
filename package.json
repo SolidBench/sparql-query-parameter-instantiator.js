@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@comunica/types": "^5.0.0",
+    "@comunica/utils-algebra": "^5.0.3",
     "@comunica/utils-bindings-factory": "^5.0.3",
     "@rdfjs/types": "*",
     "@types/sparqljs": "*",
@@ -60,6 +61,7 @@
     "lodash": "^4.17.21",
     "pino": "^10.3.1",
     "pino-pretty": "^10.0.0",
+    "rdf-terms": "^2.0.0",
     "seedrandom": "^3.0.5",
     "sparqljs": "^3.7.0"
   },

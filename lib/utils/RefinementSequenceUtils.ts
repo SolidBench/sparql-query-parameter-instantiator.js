@@ -126,32 +126,32 @@ export function extractExpressionPerOperator(
 export function getVariablesInExpression(expr: Expression): Set<string> {
   const variables = new Set<string>();
 
-  function recurse(e: Expression | Term | any): void {
-    if (!e) {
+  function recurse(exp: Expression | Term | any): void {
+    if (!exp) {
       return;
     }
 
     // Handle arrays (like args in operations)
-    if (Array.isArray(e)) {
-      for (const item of e) {
+    if (Array.isArray(exp)) {
+      for (const item of exp) {
         recurse(item);
       }
       return;
     }
 
     // Handle different expression types
-    switch (e.type) {
+    switch (exp.type) {
       case 'operation':
-        if (e.args && Array.isArray(e.args)) {
-          for (const arg of e.args) {
+        if (exp.args && Array.isArray(exp.args)) {
+          for (const arg of exp.args) {
             recurse(arg);
           }
         }
         break;
 
       case 'functionCall':
-        if (e.args && Array.isArray(e.args)) {
-          for (const arg of e.args) {
+        if (exp.args && Array.isArray(exp.args)) {
+          for (const arg of exp.args) {
             recurse(arg);
           }
         }
@@ -159,64 +159,64 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
 
       case 'term':
         // Handle term expressions
-        if (e.term) {
-          recurse(e.term);
+        if (exp.term) {
+          recurse(exp.term);
         }
         break;
 
       case 'variable':
         // Direct variable reference
-        if (e.value) {
-          variables.add(e.value.startsWith('?') ? e.value.slice(1) : e.value);
+        if (exp.value) {
+          variables.add(exp.value.startsWith('?') ? exp.value.slice(1) : exp.value);
         }
         break;
 
       case 'aggregate':
         // Handle aggregates (COUNT, SUM, etc.)
-        if (e.expression) {
-          recurse(e.expression);
+        if (exp.expression) {
+          recurse(exp.expression);
         }
-        if (e.separator) {
-          recurse(e.separator);
+        if (exp.separator) {
+          recurse(exp.separator);
         }
         break;
 
       case 'namedExpression':
         // Handle named expressions (AS clauses)
-        if (e.expression) {
-          recurse(e.expression);
+        if (exp.expression) {
+          recurse(exp.expression);
         }
         break;
 
       case 'exists':
       case 'notexists':
         // Handle EXISTS and NOT EXISTS
-        if (e.input) {
+        if (exp.input) {
           // This would need more complex handling for graph patterns
           // For now, just try to recurse if it's an expression
-          recurse(e.input);
+          recurse(exp.input);
         }
         break;
 
       default:
         // Handle direct Term objects (Variable, Literal, NamedNode, etc.)
-        if (e.termType === 'Variable') {
-          const varName = e.value;
+        if (exp.termType === 'Variable') {
+          const varName = exp.value;
           variables.add(varName.startsWith('?') ? varName.slice(1) : varName);
         }
 
         // Handle other potential nested structures
-        if (e.left) {
-          recurse(e.left);
+        if (exp.left) {
+          recurse(exp.left);
         }
-        if (e.right) {
-          recurse(e.right);
+        if (exp.right) {
+          recurse(exp.right);
         }
-        if (e.expression) {
-          recurse(e.expression);
+        if (exp.expression) {
+          recurse(exp.expression);
         }
-        if (e.args) {
-          recurse(e.args);
+        if (exp.args) {
+          recurse(exp.args);
         }
         break;
     }
@@ -226,7 +226,10 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
   return variables;
 }
 
-export function targetToTriple(target: ITargetTriplePattern | Triple, DF: DataFactory): Triple {
+export function targetToTriple(
+  target: ITargetTriplePattern | Triple,
+  dataFactory: DataFactory,
+): Triple {
   if (isRdfJsTriple(target)) {
     return target;
   }
@@ -238,9 +241,9 @@ export function targetToTriple(target: ITargetTriplePattern | Triple, DF: DataFa
     throw new Error('Literal predicate is invalid');
   }
   return {
-    subject: toTermNoLiteral(target.subject, DF),
-    predicate: toTermNoLiteral(target.predicate, DF),
-    object: toTerm(target.object, DF),
+    subject: toTermNoLiteral(target.subject, dataFactory),
+    predicate: toTermNoLiteral(target.predicate, dataFactory),
+    object: toTerm(target.object, dataFactory),
   };
 }
 
@@ -271,25 +274,27 @@ export function isRdfJsTriple(obj: any): obj is Triple {
     obj.object?.equals !== undefined;
 }
 
-export function toTerm(value: ITargetTriplePatternTerm, DF: DataFactory): RDF.Variable | RDF.NamedNode | RDF.Literal {
+export function toTerm(value: ITargetTriplePatternTerm, dataFactory: DataFactory):
+RDF.Variable | RDF.NamedNode | RDF.Literal {
   if (value.termType === 'variable') {
-    return DF.variable(value.value);
+    return dataFactory.variable(value.value);
   }
   if (value.termType === 'namedNode') {
-    return DF.namedNode(value.value);
+    return dataFactory.namedNode(value.value);
   }
-  return DF.literal(value.value);
+  return dataFactory.literal(value.value);
 }
 
-export function toTermNoLiteral(value: ITargetTriplePatternTerm, DF: DataFactory): RDF.Variable | RDF.NamedNode {
+export function toTermNoLiteral(value: ITargetTriplePatternTerm, dataFactory: DataFactory):
+RDF.Variable | RDF.NamedNode {
   const termType = value.termType.toLowerCase();
   if (termType === 'variable') {
-    return DF.variable(value.value);
+    return dataFactory.variable(value.value);
   }
   if (termType === 'literal') {
     throw new Error('Literal term is invalid');
   }
-  return DF.namedNode(value.value);
+  return dataFactory.namedNode(value.value);
 }
 
 export function tripleEquals(a: Triple, b: Triple): boolean {

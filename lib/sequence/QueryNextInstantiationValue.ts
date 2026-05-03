@@ -1,7 +1,18 @@
 import type * as RDF from '@rdfjs/types';
+import type { Logger } from 'pino';
 import { DataFactory } from 'rdf-data-factory';
-import type { SelectQuery, SparqlQuery, VariableTerm, IriTerm, BlankTerm, QuadTerm, PropertyPath, Variable } from 'sparqljs';
+import type {
+  SelectQuery,
+  SparqlQuery,
+  VariableTerm,
+  IriTerm,
+  BlankTerm,
+  QuadTerm,
+  PropertyPath,
+  Variable,
+} from 'sparqljs';
 import { Generator } from 'sparqljs';
+import { logger } from '../logging/logger';
 import type { ValueTransformerCsvMap } from '../valuetransformer/ValueTransformerCsvMap';
 import type { TermCallback } from './../utils/SyntaxTreeUtils';
 import { recurseExpression, recursePatterns } from './../utils/SyntaxTreeUtils';
@@ -14,16 +25,18 @@ export class QueryNextInstantiatorValue {
 
   protected indexedFiles = false;
 
-  protected DF = new DataFactory();
+  protected dataFactory = new DataFactory();
 
-  protected QLever: QLeverInstance;
+  protected qLever: QLeverInstance;
+  private readonly log: Logger;
 
   public constructor(args: IQueryNextInstantiatorValueArgs) {
     this.termMappingTransformerFragmentedToOrginal = args.termMappingTransformerFragmentedToOriginal;
     this.termMappingTransformerOriginalToFragmented = args.termMappingTransformerOriginalToFragmented;
     this.transformers = args.transformers;
 
-    this.QLever = args.QLever;
+    this.qLever = args.qLever;
+    this.log = logger.child({ module: 'QueryNextInstantiatorValue' });
   }
 
   /**
@@ -32,19 +45,19 @@ export class QueryNextInstantiatorValue {
    * @param query Previous query's AST
    * @param outputToInstantiationVariables Mapping mapping output variables of previous queries
    * to the variables that need to be instantiated in the next query
-   * @returns
+   * @returns possible instantiation values and the joinPlan used to execute the query
    */
   public async getNextQueryInstantiationValues(
     query: SelectQuery,
     outputToInstantiationVariables: Record<string, string[]>,
-  ): Promise<{ instantiationValues: Record<string, RDF.Term[]>; joinPlan?: IJoinTreeNode }> {
+  ): Promise<IQueryInstantiationValuesQLever> {
     // Transform query to original centralized data and ensure that the required variables for
     // next query are present in the SELECT clause
     const transformedQuery = this.transformQuery(query, Object.keys(outputToInstantiationVariables));
-    const { message, results, joinPlan } = await this.QLever.executeQuery(new Generator().stringify(transformedQuery));
+    const { message, results, joinPlan } = await this.qLever.executeQuery(new Generator().stringify(transformedQuery));
 
     if (message === 'TIMEOUT') {
-      console.log('Query timed out.');
+      this.log.warn('Query timed out.');
     }
 
     let fragmentedJoinPlan: IJoinTreeNode | undefined;
@@ -154,7 +167,7 @@ export class QueryNextInstantiatorValue {
 
     // If wildcard no action is required
     const isWildcard = syntaxTree.variables.length === 1 &&
-    ('termType' in syntaxTree.variables[0] && (syntaxTree.variables[0] as any).termType === 'Wildcard');
+    ('termType' in syntaxTree.variables[0] && (<any> syntaxTree.variables[0]).termType === 'Wildcard');
 
     if (!isWildcard) {
       const currentVariables = <Variable[]> syntaxTree.variables;
@@ -163,7 +176,7 @@ export class QueryNextInstantiatorValue {
 
       for (const reqVar of requiredSelectVariables) {
         if (!existingNames.has(reqVar)) {
-          currentVariables.push(this.DF.variable(reqVar));
+          currentVariables.push(this.dataFactory.variable(reqVar));
         }
       }
     }
@@ -191,8 +204,8 @@ export class QueryNextInstantiatorValue {
     const newNode: IJoinTreeNode = { ...node, children: []};
 
     // Replace URIs inside < > brackets in the operation string
-    newNode.operation = node.operation.replaceAll(/<([^>]+)>/g, (match, uri) => {
-      let tempTerm: RDF.Term = this.DF.namedNode(uri);
+    newNode.operation = node.operation.replaceAll(/<([^>]+)>/gu, (match, uri) => {
+      let tempTerm: RDF.Term = this.dataFactory.namedNode(uri);
       tempTerm = this.termMappingTransformerOriginalToFragmented.transform(tempTerm);
       let transformedUri = tempTerm.value;
 
@@ -212,7 +225,7 @@ export class QueryNextInstantiatorValue {
   }
 
   public getQLeverReadyStatus(): Promise<void> {
-    return this.QLever.getReadyStatus();
+    return this.qLever.getReadyStatus();
   }
 }
 
@@ -222,8 +235,7 @@ export class TermTransformerBiDirectional {
   private readonly fragmentedExp: RegExp;
   private readonly fragmentedString: string;
 
-  // eslint-disable-next-line ts/naming-convention
-  private readonly DF = new DataFactory();
+  private readonly dataFactory = new DataFactory();
 
   public constructor(args: ITermTransformerArgs) {
     this.originalExp = new RegExp(args.originalRegex, 'u');
@@ -235,7 +247,7 @@ export class TermTransformerBiDirectional {
   public transformOriginalToFragmented(term: RDF.Term): RDF.Term {
     if (term.termType === 'NamedNode') {
       const value = this.transformOriginalToFragmentedRaw(term.value);
-      return this.DF.namedNode(value);
+      return this.dataFactory.namedNode(value);
     }
     return term;
   }
@@ -243,7 +255,7 @@ export class TermTransformerBiDirectional {
   public transformFragmentedToOriginal(term: RDF.Term): RDF.Term {
     if (term.termType === 'NamedNode') {
       const value = this.transformFragmentedToOriginalRaw(term.value);
-      return this.DF.namedNode(value);
+      return this.dataFactory.namedNode(value);
     }
     return term;
   }
@@ -277,7 +289,7 @@ export interface IQueryNextInstantiatorValueArgs {
    * A helper class for starting, querying, and stopping a QLever instance using
    * docker
    */
-  QLever: QLeverInstance;
+  qLever: QLeverInstance;
 }
 
 export interface ITermTransformerArgs {
@@ -290,5 +302,10 @@ export interface ITermTransformerArgs {
 export interface IQueryExecutionResult {
   message: 'TIMEOUT' | 'END';
   results: RDF.Bindings[];
+  joinPlan?: IJoinTreeNode;
+}
+
+export interface IQueryInstantiationValuesQLever {
+  instantiationValues: Record<string, RDF.Term[]>;
   joinPlan?: IJoinTreeNode;
 }

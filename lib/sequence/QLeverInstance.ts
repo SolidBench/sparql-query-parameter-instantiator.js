@@ -5,7 +5,9 @@ import * as path from 'node:path';
 import { BindingsFactory } from '@comunica/utils-bindings-factory';
 import type * as RDF from '@rdfjs/types';
 import * as yaml from 'js-yaml';
+import type { Logger } from 'pino';
 import { DataFactory } from 'rdf-data-factory';
+import { logger } from '../logging/logger';
 import type { IQueryExecutionResult } from './QueryNextInstantiationValue';
 
 const DF = new DataFactory();
@@ -23,7 +25,10 @@ export class QLeverInstance {
 
   private readonly ready: Promise<void>;
 
+  private readonly log: Logger;
+
   public constructor(args: IQLeverInstanceArgs) {
+    this.log = logger.child({ module: 'QLeverInstance' });
     this.imageName = args.imageName;
     this.dataLocations = args.dataLocations;
     this.port = args.port;
@@ -37,8 +42,7 @@ export class QLeverInstance {
 
     // Start the background setup
     this.ready = this.start().catch((err) => {
-      console.error(`[QLever] Fatal startup error:`, err);
-      // Clean up if we failed halfway through
+      this.log.error(err, 'Fatal startup error');
       this.stop().catch(() => {});
       throw err;
     });
@@ -54,7 +58,9 @@ export class QLeverInstance {
       const response = await fetch(`http://localhost:${this.port}`, {
         method: 'POST',
         headers: {
+          // eslint-disable-next-line ts/naming-convention
           'Content-Type': 'application/sparql-query',
+          // eslint-disable-next-line ts/naming-convention
           Accept: 'application/qlever-results+json',
         },
         body: query,
@@ -62,7 +68,7 @@ export class QLeverInstance {
       });
 
       if (!response.ok) {
-        console.error(`Error response: ${await response.json()}`);
+        this.log.error(await response.json(), 'Error response from QLever.');
         return {
           message: 'TIMEOUT',
           results: [],
@@ -140,15 +146,15 @@ export class QLeverInstance {
 
   public async start(): Promise<void> {
     // Create temporary directory for the indexes and data
-    this.runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qlever-run-'));
+    this.runDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'qlever-run-'));
 
     // If the user hits Ctrl+C, we shut down the container before exiting node
-    process.on('SIGINT', this.handleSignal);
-    process.on('SIGTERM', this.handleSignal);
+    process.on('SIGINT', () => this.handleSignal);
+    process.on('SIGTERM', () => this.handleSignal);
 
     try {
       // Generate Qleverfile and write to temporary file path
-      const internalFilePaths = this.dataLocations.map((_, idx) => `../input/file_${idx}.ttl`);
+      const internalFilePaths = this.dataLocations.map((loc, idx) => `../input/file_${idx}.ttl`);
       const qleverfileContent = `
 [data]
 NAME = my-index
@@ -166,7 +172,7 @@ TIMEOUT = 30s
 ACCESS_TOKEN = test
 `.trim();
 
-      fs.writeFileSync(path.join(this.runDir, 'Qleverfile'), qleverfileContent);
+      await fs.promises.writeFile(path.join(this.runDir, 'Qleverfile'), qleverfileContent);
 
       const volumes = this.dataLocations.map((loc, idx) =>
         `${path.resolve(loc)}:/input/file_${idx}.ttl:ro`);
@@ -178,13 +184,13 @@ ACCESS_TOKEN = test
         services: {
           qlever: {
             image: `${this.imageName}`,
+            // eslint-disable-next-line ts/naming-convention
             container_name: `qlever-${this.port}`,
             user: `root`,
             ports: [ `${this.port}:7001` ],
             volumes,
-
+            // eslint-disable-next-line ts/naming-convention
             working_dir: '/data',
-
             entrypoint: [ '/bin/sh', '-c' ],
             command: [
               `
@@ -208,24 +214,27 @@ ACCESS_TOKEN = test
         },
       };
 
-      fs.writeFileSync(path.join(this.runDir, 'docker-compose.yml'), yaml.dump(composeConfig));
+      await fs.promises.writeFile(
+        path.join(this.runDir, 'docker-compose.yml'),
+        yaml.dump(composeConfig),
+      );
 
       await this.ensureVolumeExists(this.volumeName);
 
       try {
         await this.runCommand('docker', [ 'rm', '-f', `qlever-${this.port}` ], this.runDir);
       } catch {}
-      console.log('[QLever] Starting Docker Compose...');
+      this.log.info('Starting Docker Compose...');
 
       // We do NOT use -d (detached) here if we want to pipe logs to the main process,
       // but usually -d is better for stability, so we keep -d and just wait.
       await this.runCommand('docker', [ 'compose', 'up', '-d' ], this.runDir);
 
-      console.log('[QLever] Waiting for server to accept connections...');
+      this.log.info('Waiting for server to accept connections...');
       await this.waitForHealthy();
-      console.log(`[QLever] Ready at http://localhost:${this.port}`);
+      this.log.info(`Ready at http://localhost:${this.port}`);
     } catch (error) {
-      console.error('[QLever] Startup failed. Cleaning up...');
+      this.log.error('Startup failed. Cleaning up...');
       await this.stop();
       throw error;
     }
@@ -240,30 +249,29 @@ ACCESS_TOKEN = test
     }
     this.isShuttingDown = true;
 
-    console.log('[QLever] Shutting down...');
+    this.log.info('Shutting down...');
 
     try {
-      // 1. Stop Docker Compose
-      // We look for the docker-compose.yml in the temp dir we created
+      // First stop the running compose in the temporary directory
       await this.runCommand('docker', [ 'compose', 'down' ], this.runDir);
 
-      // Cleanup Temp Files
-      fs.rmSync(this.runDir, { recursive: true, force: true });
-      console.log('[QLever] Shutdown complete.');
+      // Then clean files
+      await fs.promises.rm(this.runDir, { recursive: true, force: true });
+      this.log.info('Shutdown complete.');
     } catch (e) {
-      console.error('[QLever] Error during shutdown:', e);
+      this.log.error(e, '[QLever] Error during shutdown:');
     } finally {
       this.runDir = null;
-      // Remove listeners so they don't fire again if the process continues
-      process.off('SIGINT', this.handleSignal);
-      process.off('SIGTERM', this.handleSignal);
+      // Remove stop listeners
+      process.off('SIGINT', () => this.handleSignal);
+      process.off('SIGTERM', () => this.handleSignal);
     }
   }
 
   /**
    * Polls the server untill it responds
    * @param timeoutMs How long to keep trying to ping the server
-   * @returns
+   * @returns void
    */
   private async waitForHealthy(timeoutMs = 60000): Promise<void> {
     const start = Date.now();
@@ -282,15 +290,15 @@ ACCESS_TOKEN = test
     throw new Error(`QLever failed to start within ${timeoutMs / 1000} seconds. Check docker logs.`);
   }
 
-  private readonly handleSignal = async() => {
+  private readonly handleSignal: () => Promise<never> = async() => {
     await this.stop();
-    process.exit(0);
+    throw new Error('QLeverInstance stopped due to signal.');
   };
 
-  private async ensureVolumeExists(volName: string) {
+  private async ensureVolumeExists(volName: string): Promise<void> {
     try {
       await this.runCommand('docker', [ 'volume', 'create', volName ], '.');
-    } catch { /* Ignore */ }
+    } catch {}
   }
 
   private runCommand(cmd: string, args: string[], cwd: string): Promise<void> {
@@ -320,9 +328,9 @@ ACCESS_TOKEN = test
     }
 
     // Recursively parse children
-    const children = (node.children || [])
+    const children: IJoinTreeNode[] = (node.children || [])
       .map(QLeverInstance.extractJoinTree)
-      .filter((child: IJoinTreeNode | null) => child !== null) as IJoinTreeNode[];
+      .filter((child: IJoinTreeNode | null) => child !== null);
 
     const description = node.description || '';
     const isJoinOrScan = description.startsWith('Join') || description.includes('Scan');

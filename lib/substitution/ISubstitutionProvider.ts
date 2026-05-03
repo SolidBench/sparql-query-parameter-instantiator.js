@@ -18,5 +18,5 @@ export interface ISubstitutionProviderProbabilities extends ISubstitutionProvide
   /**
    * Provide a record mapping values to logits of selected the value.
    */
-  getValuesProbabilities: () => Promise<Record<string, any>>;
+  getValuesProbabilities: () => Promise<Record<string, Record<string, any>[]>>;
 }

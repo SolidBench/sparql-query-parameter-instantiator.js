@@ -146,7 +146,7 @@ describe('RandomUtils', () => {
         },
         DF,
         makeRng(0.5),
-      )).toThrow("No probabilities found for variable 'unknown_variable'");
+      )).toThrow('No probabilities found for variable \'unknown_variable\'');
     });
 
     it('throws if sampling more values than possible', () => {
@@ -177,7 +177,7 @@ describe('RandomUtils', () => {
         },
         DF,
         makeRng(0.5),
-      )).toThrow("No logits found for user 'unknown' for variable 'person'");
+      )).toThrow('No logits found for user \'unknown\' for variable \'person\'');
     });
   });
 });

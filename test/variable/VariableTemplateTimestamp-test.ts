@@ -27,6 +27,16 @@ describe('VariableTemplateTimestamp', () => {
         expect(variable.createTerm('1354060800000')).toEqualRdfTerm(DF
           .literal('2012-11-28T00:00:00.000Z', DF.namedNode('ex:custom')));
       });
+      it('should produce a literal from an ISO date string', () => {
+        expect(variable.createTerm('2012-11-28T00:00:00.000Z'))
+          .toEqualRdfTerm(DF.literal('2012-11-28T00:00:00.000Z', DF.namedNode('http://www.w3.org/2001/XMLSchema#dateTime')));
+      });
+      it('should throw a RangeError for invalid date strings', () => {
+        expect(() => variable.createTerm('not-a-valid-date'))
+          .toThrow(RangeError);
+        expect(() => variable.createTerm('not-a-valid-date'))
+          .toThrow('Invalid date value provided to VariableTemplateTimestamp: not-a-valid-date');
+      });
     });
 
     describe('getName', () => {
@@ -66,6 +76,23 @@ describe('VariableTemplateTimestamp', () => {
         expect(() => variable.createTerm([ 123 ]))
           .toThrow('Received unsupported array value for the VariableTemplateTimestamp for varName');
       });
+    });
+  });
+  describe('with stripDatatype enabled', () => {
+    beforeEach(() => {
+      substitutionProvider = <any> {};
+      // Initialize with stripDatatype = true
+      variable = new VariableTemplateTimestamp('varName', substitutionProvider, [], undefined, true);
+    });
+
+    it('should correctly strip quotes and datatype from a raw RDF string', () => {
+      expect(variable.createTerm('"2012-11-28T00:00:00.000Z"^^http://www.w3.org/2001/XMLSchema#dateTime'))
+        .toEqualRdfTerm(DF.literal('2012-11-28T00:00:00.000Z', DF.namedNode('http://www.w3.org/2001/XMLSchema#dateTime')));
+    });
+
+    it('should correctly strip quotes even if no datatype is present', () => {
+      expect(variable.createTerm('"2012-11-28T00:00:00.000Z"'))
+        .toEqualRdfTerm(DF.literal('2012-11-28T00:00:00.000Z', DF.namedNode('http://www.w3.org/2001/XMLSchema#dateTime')));
     });
   });
 });

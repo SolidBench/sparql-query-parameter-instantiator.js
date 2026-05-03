@@ -200,7 +200,7 @@ describe('SubstitutionUtils', () => {
       expect(result.args[0].value).toBe('http://ex.org/new');
     });
 
-    it('substitutes inside a group expression (NOT EXISTS)', () => {
+    it('substitutes inside a bgp expression (NOT EXISTS)', () => {
       const patterns = parseWhere(`SELECT * WHERE {
         FILTER NOT EXISTS { <http://ex.org/old> <http://ex.org/p> ?o . }
       }`);
@@ -208,8 +208,30 @@ describe('SubstitutionUtils', () => {
       const filterExpr = (<any> result[0]).expression;
       // The notexists operation wraps a group pattern as its argument
       const groupArg = filterExpr.args[0];
+      expect(groupArg.type).toBe('bgp');
+      expect(groupArg.triples[0].subject.value).toBe('http://ex.org/new');
+    });
+
+    it('substitutes inside a group expression (NOT EXISTS)', () => {
+      // Adding a FILTER prevents the parser from simplifying the block to a bare BGP
+      const patterns = parseWhere(`SELECT * WHERE {
+        FILTER NOT EXISTS { 
+          <http://ex.org/old> <http://ex.org/p> ?o . 
+          FILTER(isIRI(?o))
+        }
+      }`);
+
+      const result = substitutePatterns(patterns, 'http://ex.org/old', 'http://ex.org/new');
+      const filterExpr = (<any> result[0]).expression;
+
+      // The notexists operation now wraps a group pattern as its argument
+      const groupArg = filterExpr.args[0];
       expect(groupArg.type).toBe('group');
-      expect(groupArg.patterns[0].triples[0].subject.value).toBe('http://ex.org/new');
+
+      // The BGP is now the first element inside the group's patterns array
+      const bgpArg = groupArg.patterns[0];
+      expect(bgpArg.type).toBe('bgp');
+      expect(bgpArg.triples[0].subject.value).toBe('http://ex.org/new');
     });
 
     it('substitutes inside a bgp expression (manually constructed)', () => {

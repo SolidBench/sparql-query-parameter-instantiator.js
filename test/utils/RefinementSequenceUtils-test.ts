@@ -36,7 +36,7 @@ describe('RefinementSequenceUtils', () => {
         }
       `);
 
-      const where = (parsed as any).where as Pattern[];
+      const where = (<any> parsed).where as Pattern[];
       expect(extractTriplePatternsPerOperator(where)).toEqual({
         bgp: [
           [{
@@ -71,21 +71,21 @@ describe('RefinementSequenceUtils', () => {
     });
 
     it('handles nested unions and empty union branches', () => {
-      const patterns: Pattern[] = [ {
+      const patterns: Pattern[] = [ <any> {
         type: 'union',
         patterns: [
-          { type: 'union', patterns: []} as any,
-          { type: 'group', patterns: []} as any,
-          { type: 'bgp', triples: [{
+          <any> { type: 'union', patterns: []},
+          <any> { type: 'group', patterns: []},
+          <any> { type: 'bgp', triples: [{
             subject: DF.variable('x'),
             predicate: DF.variable('y'),
             object: DF.variable('z'),
-          }]} as any,
+          }]},
         ],
-      } as any ];
+      } ];
 
       const out: Record<string, any[]> = {};
-      extractBgpPerOperator(patterns, out as any, 'bgp');
+      extractBgpPerOperator(patterns, <any> out, 'bgp');
       expect(out.union).toEqual([
         { type: 'bgp', triples: []},
         { type: 'bgp', triples: []},
@@ -103,52 +103,52 @@ describe('RefinementSequenceUtils', () => {
     it('ignores filter and unsupported pattern types', () => {
       const out: Record<string, any[]> = {};
       extractBgpPerOperator([
-        { type: 'filter', expression: { type: 'variable', value: 'x' }} as any,
-        { type: 'bind' } as any,
-      ], out as any, 'bgp');
+        <any> { type: 'filter', expression: { type: 'variable', value: 'x' }},
+        <any> { type: 'bind' },
+      ], <any> out, 'bgp');
       expect(out).toEqual({});
     });
   });
 
   describe('extractExpressionPerOperator / getVariablesInExpression', () => {
     it('extracts filter expressions through nested blocks', () => {
-      const filterA: Expression = { type: 'variable', value: 'a' } as any;
-      const filterB: Expression = { type: 'variable', value: 'b' } as any;
-      const filterC: Expression = { type: 'variable', value: 'c' } as any;
-      const filterD: Expression = { type: 'variable', value: 'd' } as any;
-      const filterE: Expression = { type: 'variable', value: 'e' } as any;
-      const filterF: Expression = { type: 'variable', value: 'f' } as any;
+      const filterA: Expression = <any> { type: 'variable', value: 'a' };
+      const filterB: Expression = <any> { type: 'variable', value: 'b' };
+      const filterC: Expression = <any> { type: 'variable', value: 'c' };
+      const filterD: Expression = <any> { type: 'variable', value: 'd' };
+      const filterE: Expression = <any> { type: 'variable', value: 'e' };
+      const filterF: Expression = <any> { type: 'variable', value: 'f' };
 
-      const patterns: Pattern[] = [ {
+      const patterns: Pattern[] = [ <any> {
         type: 'query',
         where: [
-          {
+          <any> {
             type: 'group',
-            patterns: [ { type: 'filter', expression: filterA } as any ],
-          } as any,
-          {
+            patterns: [{ type: 'filter', expression: filterA }],
+          },
+          <any> {
             type: 'union',
-            patterns: [ { type: 'filter', expression: filterB } as any ],
-          } as any,
-          {
+            patterns: [{ type: 'filter', expression: filterB }],
+          },
+          <any> {
             type: 'optional',
-            patterns: [ { type: 'filter', expression: filterC } as any ],
-          } as any,
-          {
+            patterns: [{ type: 'filter', expression: filterC }],
+          },
+          <any> {
             type: 'graph',
-            patterns: [ { type: 'filter', expression: filterD } as any ],
-          } as any,
-          {
+            patterns: [{ type: 'filter', expression: filterD }],
+          },
+          <any> {
             type: 'minus',
-            patterns: [ { type: 'filter', expression: filterE } as any ],
-          } as any,
-          {
+            patterns: [{ type: 'filter', expression: filterE }],
+          },
+          <any> {
             type: 'service',
-            patterns: [ { type: 'filter', expression: filterF } as any ],
-          } as any,
-          { type: 'values' } as any,
+            patterns: [{ type: 'filter', expression: filterF }],
+          },
+          <any> { type: 'values' },
         ],
-      } as any ];
+      } ];
 
       const out: Record<string, Expression[]> = {};
       extractExpressionPerOperator(patterns, out, 'filter');
@@ -156,7 +156,7 @@ describe('RefinementSequenceUtils', () => {
     });
 
     it('collects variables from many expression forms', () => {
-      const expression: Expression = {
+      const expression: Expression = <any> {
         type: 'operation',
         args: [
           { type: 'variable', value: 'fromOperation' },
@@ -175,7 +175,7 @@ describe('RefinementSequenceUtils', () => {
             args: [{ type: 'variable', value: 'fromDefaultArgs' }],
           },
         ],
-      } as any;
+      };
 
       expect(getVariablesInExpression(expression)).toEqual(new Set([
         'fromOperation',
@@ -192,12 +192,12 @@ describe('RefinementSequenceUtils', () => {
         'fromNestedExpression',
         'fromDefaultArgs',
       ]));
-      expect(getVariablesInExpression({ type: 'variable', value: '?fromPrefixedVariable' } as any))
+      expect(getVariablesInExpression(<any> { type: 'variable', value: '?fromPrefixedVariable' }))
         .toEqual(new Set([ 'fromPrefixedVariable' ]));
-      expect(getVariablesInExpression({ termType: 'Variable', value: '?fromPrefixedDefault' } as any))
+      expect(getVariablesInExpression(<any> { termType: 'Variable', value: '?fromPrefixedDefault' }))
         .toEqual(new Set([ 'fromPrefixedDefault' ]));
-      expect(getVariablesInExpression(undefined as any)).toEqual(new Set());
-      expect(getVariablesInExpression([{ type: 'variable', value: 'fromArray' }] as any)).toEqual(new Set([ 'fromArray' ]));
+      expect(getVariablesInExpression(<any> undefined)).toEqual(new Set());
+      expect(getVariablesInExpression(<any> [{ type: 'variable', value: 'fromArray' }])).toEqual(new Set([ 'fromArray' ]));
     });
   });
 
@@ -215,23 +215,23 @@ describe('RefinementSequenceUtils', () => {
         predicate: { termType: 'namedNode', value: 'ex:p' },
         object: { termType: 'literal', value: 'o' },
       };
-      expect(targetToTriple(target as any, DF)).toEqual({
+      expect(targetToTriple(<any> target, DF)).toEqual({
         subject: DF.variable('s'),
         predicate: DF.namedNode('ex:p'),
         object: DF.literal('o'),
       });
 
-      expect(() => targetToTriple({
+      expect(() => targetToTriple(<any> {
         subject: { termType: 'literal', value: 'bad' },
         predicate: { termType: 'namedNode', value: 'ex:p' },
         object: { termType: 'literal', value: 'o' },
-      } as any, DF)).toThrow('Literal subject is invalid');
+      }, DF)).toThrow('Literal subject is invalid');
 
-      expect(() => targetToTriple({
+      expect(() => targetToTriple(<any> {
         subject: { termType: 'variable', value: 's' },
         predicate: { termType: 'literal', value: 'bad' },
         object: { termType: 'literal', value: 'o' },
-      } as any, DF)).toThrow('Literal predicate is invalid');
+      }, DF)).toThrow('Literal predicate is invalid');
     });
 
     it('checks RDF term and variable guards', () => {
@@ -258,23 +258,23 @@ describe('RefinementSequenceUtils', () => {
       expect(isRdfJsTriple(triple)).toBe(true);
       expect(isRdfJsTriple({ subject: {}, predicate: {}, object: {}})).toBe(false);
 
-      expect(toTerm({ termType: 'variable', value: 'x' } as any, DF)).toEqual(DF.variable('x'));
-      expect(toTerm({ termType: 'namedNode', value: 'ex:x' } as any, DF)).toEqual(DF.namedNode('ex:x'));
-      expect(toTerm({ termType: 'literal', value: 'x' } as any, DF)).toEqual(DF.literal('x'));
+      expect(toTerm(<any> { termType: 'variable', value: 'x' }, DF)).toEqual(DF.variable('x'));
+      expect(toTerm(<any> { termType: 'namedNode', value: 'ex:x' }, DF)).toEqual(DF.namedNode('ex:x'));
+      expect(toTerm(<any> { termType: 'literal', value: 'x' }, DF)).toEqual(DF.literal('x'));
 
-      expect(toTermNoLiteral({ termType: 'VARIABLE', value: 'x' } as any, DF)).toEqual(DF.variable('x'));
-      expect(toTermNoLiteral({ termType: 'namedNode', value: 'ex:x' } as any, DF)).toEqual(DF.namedNode('ex:x'));
-      expect(() => toTermNoLiteral({ termType: 'literal', value: 'x' } as any, DF)).toThrow('Literal term is invalid');
+      expect(toTermNoLiteral(<any> { termType: 'VARIABLE', value: 'x' }, DF)).toEqual(DF.variable('x'));
+      expect(toTermNoLiteral(<any> { termType: 'namedNode', value: 'ex:x' }, DF)).toEqual(DF.namedNode('ex:x'));
+      expect(() => toTermNoLiteral(<any> { termType: 'literal', value: 'x' }, DF)).toThrow('Literal term is invalid');
     });
   });
 
   describe('equality helpers', () => {
     function path(items: (Term | PropertyPath)[], pathType = '/'): PropertyPath {
-      return {
+      return <any> {
         type: 'path',
-        pathType: pathType as any,
+        pathType: <any> pathType,
         items,
-      } as any;
+      };
     }
 
     it('compares triples and term/path values', () => {
@@ -296,10 +296,10 @@ describe('RefinementSequenceUtils', () => {
       expect(tripleEquals(t1, t2)).toBe(true);
       expect(tripleEquals(t1, t3)).toBe(false);
 
-      expect(rdfTermEquals(DF.namedNode('ex:a') as any, DF.namedNode('ex:a') as any)).toBe(true);
+      expect(rdfTermEquals(<any> DF.namedNode('ex:a'), <any> DF.namedNode('ex:a'))).toBe(true);
       expect(rdfTermEquals(path([ DF.namedNode('ex:a') ]), path([ DF.namedNode('ex:a') ]))).toBe(true);
       expect(rdfTermEquals(path([ DF.namedNode('ex:a') ]), path([ DF.namedNode('ex:b') ]))).toBe(false);
-      expect(rdfTermEquals(DF.namedNode('ex:a') as any, path([ DF.namedNode('ex:a') ]))).toBe(false);
+      expect(rdfTermEquals(<any> DF.namedNode('ex:a'), path([ DF.namedNode('ex:a') ]))).toBe(false);
     });
 
     it('checks property path equality variants', () => {
@@ -329,18 +329,18 @@ describe('RefinementSequenceUtils', () => {
       expect(rdfTermEquals(zeroOrMorePath, oneOrMorePath)).toBe(false);
 
       expect(propertyPathEquals(
-        { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a') ]} as any,
-        { type: 'other', pathType: '/', items: [ DF.namedNode('ex:a') ]} as any,
+        <any> { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a') ]},
+        <any> { type: 'other', pathType: '/', items: [ DF.namedNode('ex:a') ]},
       )).toBe(false);
 
       expect(propertyPathEquals(
-        { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a') ]} as any,
-        { type: 'path', pathType: '|', items: [ DF.namedNode('ex:a') ]} as any,
+        <any> { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a') ]},
+        <any> { type: 'path', pathType: '|', items: [ DF.namedNode('ex:a') ]},
       )).toBe(false);
 
       expect(propertyPathEquals(
-        { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a') ]} as any,
-        { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a'), DF.namedNode('ex:b') ]} as any,
+        <any> { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a') ]},
+        <any> { type: 'path', pathType: '/', items: [ DF.namedNode('ex:a'), DF.namedNode('ex:b') ]},
       )).toBe(false);
 
       expect(propertyPathEquals(
@@ -358,14 +358,14 @@ describe('RefinementSequenceUtils', () => {
       expect(hasEquals(DF.namedNode('ex:a'))).toBe(true);
       expect(hasEquals({ value: 'x' })).toBe(false);
 
-      const bgp = {
+      const bgp = <any> {
         type: 'bgp',
         triples: [{
           subject: DF.variable('s'),
           predicate: DF.namedNode('ex:p'),
           object: DF.literal('o'),
         }],
-      } as any;
+      };
       expect(hasTriple(bgp, {
         subject: DF.variable('s'),
         predicate: DF.namedNode('ex:p'),
@@ -381,7 +381,7 @@ describe('RefinementSequenceUtils', () => {
         predicate: DF.namedNode('ex:p'),
         object: DF.namedNode('o'),
       })).toBe(false);
-      expect(() => hasTriple({ type: 'optional', patterns: []} as any, bgp.triples[0])).toThrow(
+      expect(() => hasTriple(<any> { type: 'optional', patterns: []}, bgp.triples[0])).toThrow(
         'Expected a BGP pattern, but got optional',
       );
     });
