@@ -66,9 +66,9 @@ export class QLeverInstance {
         return {
           message: 'TIMEOUT',
           results: [],
-        }
+        };
       }
-      
+
       const jsonResult = await response.json();
 
       // Extract variables and remove the leading '?' from QLever's output

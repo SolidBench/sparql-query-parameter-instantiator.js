@@ -1,7 +1,7 @@
 import type * as RDF from '@rdfjs/types';
-import { DataFactory } from 'rdf-data-factory';
+import type { DataFactory } from 'rdf-data-factory';
 import type * as seedrandom from 'seedrandom';
-import { IEntityLogits } from '../QuerySequenceTemplateProvider';
+import type { IEntityLogits } from '../QuerySequenceTemplateProvider';
 
 export interface IProbabilities<T> {
   probability: number;
@@ -52,21 +52,20 @@ export function randomIntFromInterval(rng: seedrandom.PRNG, min: number, max: nu
   return Math.floor(rng() * (max - min + 1) + min);
 }
 
-
 export function sampleVariableTerm(
   variable: string,
-  user: string, 
+  user: string,
   nSamples: number,
   variableProbabilities: Record<string, Record<string, IEntityLogits[]>>,
-  DF: DataFactory,
-  rng: seedrandom.PRNG
+  df: DataFactory,
+  rng: seedrandom.PRNG,
 ): RDF.Term[] {
-  if (Object.keys(variableProbabilities[variable]).length <= nSamples) {
-    throw new Error('Trying to sample more values than there are elements');
-  }
   const probabilities = variableProbabilities[variable];
   if (!probabilities) {
     throw new Error(`No probabilities found for variable '${variable}'`);
+  }
+  if (Object.keys(probabilities).length <= nSamples) {
+    throw new Error('Trying to sample more values than there are elements');
   }
   const logits = probabilities[user];
   if (!logits) {
@@ -79,7 +78,7 @@ export function sampleVariableTerm(
       sampled.push(newSample);
     }
   }
-  return sampled.map(sample => DF.namedNode(sample));
+  return sampled.map(sample => df.namedNode(sample));
 }
 
 export function sampleTerm(logits: IEntityLogits[], rng: seedrandom.PRNG): string {

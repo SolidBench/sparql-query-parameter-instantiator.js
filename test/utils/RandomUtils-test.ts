@@ -31,7 +31,7 @@ describe('RandomUtils', () => {
       const rng = jest.fn()
         .mockReturnValueOnce(0.5)
         .mockReturnValueOnce(0.25);
-      const value = gaussianRandom(rng as any, 10, 2);
+      const value = gaussianRandom(<any> rng, 10, 2);
       const expected = Math.sqrt(-2 * Math.log(0.5)) * Math.cos(2 * Math.PI * 0.25) * 2 + 10;
       expect(value).toBeCloseTo(expected, 10);
     });
@@ -44,8 +44,8 @@ describe('RandomUtils', () => {
         .mockReturnValueOnce(0.25)
         .mockReturnValueOnce(0.5)
         .mockReturnValueOnce(0.25);
-      const base = logNormal(rng as any, 0, 1);
-      const rounded = logNormalRoundedUp(rng as any, 0, 1);
+      const base = logNormal(<any> rng, 0, 1);
+      const rounded = logNormalRoundedUp(<any> rng, 0, 1);
       expect(base).toBeGreaterThanOrEqual(0);
       expect(rounded).toBe(Math.ceil(base));
     });
@@ -95,7 +95,7 @@ describe('RandomUtils', () => {
         { entity: 'e1', similarity: 0.4 },
         { entity: 'e2', similarity: 0.6 },
       ];
-      expect(sampleTerm(logits as any, makeRng(0.8))).toBe('e2');
+      expect(sampleTerm(<any> logits, makeRng(0.8))).toBe('e2');
     });
 
     it('throws if no term could be sampled', () => {
@@ -103,7 +103,7 @@ describe('RandomUtils', () => {
         { entity: 'e1', similarity: 0.1 },
         { entity: 'e2', similarity: 0.1 },
       ];
-      expect(() => sampleTerm(logits as any, makeRng(0.9)))
+      expect(() => sampleTerm(<any> logits, makeRng(0.9)))
         .toThrow('Failed sampling, likely due to probabilities not summing to 1.');
     });
   });
@@ -129,9 +129,24 @@ describe('RandomUtils', () => {
           },
         },
         DF,
-        rng as any,
+        <any> rng,
       );
       expect(sampled.map(t => t.value).sort()).toEqual([ 'http://ex.org/a', 'http://ex.org/b' ]);
+    });
+
+    it('throws if no probabilities found for variable', () => {
+      expect(() => sampleVariableTerm(
+        'unknown_variable',
+        'alice',
+        1,
+        {
+          person: {
+            alice: [{ entity: 'http://ex.org/a', similarity: 1 }],
+          },
+        },
+        DF,
+        makeRng(0.5),
+      )).toThrow("No probabilities found for variable 'unknown_variable'");
     });
 
     it('throws if sampling more values than possible', () => {
@@ -141,7 +156,7 @@ describe('RandomUtils', () => {
         1,
         {
           person: {
-            alice: [ { entity: 'http://ex.org/a', similarity: 1 } ],
+            alice: [{ entity: 'http://ex.org/a', similarity: 1 }],
           },
         },
         DF,
@@ -156,7 +171,7 @@ describe('RandomUtils', () => {
         1,
         {
           person: {
-            alice: [ { entity: 'http://ex.org/a', similarity: 1 } ],
+            alice: [{ entity: 'http://ex.org/a', similarity: 1 }],
             bob: [],
           },
         },

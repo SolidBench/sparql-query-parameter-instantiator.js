@@ -1,26 +1,16 @@
+import type * as RDF from '@rdfjs/types';
+import type { DataFactory } from 'rdf-data-factory';
+import { getTerms, getVariables } from 'rdf-terms';
 import type {
-  BlankTerm,
-  IriTerm,
   Pattern,
-  QuadTerm,
-  SparqlQuery,
   Triple,
-  Variable,
-  VariableExpression,
   VariableTerm,
-  SelectQuery,
   PropertyPath,
   Term,
   Expression,
   BgpPattern,
-  OptionalPattern,
-  UnionPattern,
 } from 'sparqljs';
-import type * as RDF from '@rdfjs/types';
-import { ITargetTriplePattern, ITargetTriplePatternTerm } from '../QuerySequenceTemplateProvider';
-import { DataFactory } from 'rdf-data-factory';
-import { getTerms, getVariables } from 'rdf-terms';
-
+import type { ITargetTriplePattern, ITargetTriplePatternTerm } from '../QuerySequenceTemplateProvider';
 
 export function extractTriplePatternsPerOperator(
   patterns: Pattern[],
@@ -236,7 +226,6 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
   return variables;
 }
 
-
 export function targetToTriple(target: ITargetTriplePattern | Triple, DF: DataFactory): Triple {
   if (isRdfJsTriple(target)) {
     return target;
@@ -265,10 +254,9 @@ export function isVariable(term: any): term is VariableTerm {
   return isRDFTerm(term) && term.termType === 'Variable';
 }
 
-
 export function getAllVariables(triples: RDF.Quad[]): Set<string> {
-  const variables = triples.flatMap((triple) => getVariables(getTerms(triple)));
-  return new Set(variables.map((v) => v.value));
+  const variables = triples.flatMap(triple => getVariables(getTerms(triple)));
+  return new Set(variables.map(v => v.value));
 }
 
 export function isRdfJsTriple(obj: any): obj is Triple {
@@ -352,7 +340,6 @@ export function propertyPathEquals(a: PropertyPath, b: PropertyPath): boolean {
     return false;
   });
 }
-
 
 export function hasTriple(bgp: BgpPattern, triple: Triple): boolean {
   if (bgp.type !== 'bgp') {

@@ -5,7 +5,7 @@ import type { RawTerm } from './IVariableTemplate';
 import { VariableTemplateAdapter } from './VariableTemplateAdapter';
 
 /**
- * A template for instantiating RDF xsd:dateTime Literals from a variable value 
+ * A template for instantiating RDF xsd:dateTime Literals from a variable value
  * that represents a UNIX timestamp or a raw RDF string.
  */
 export class VariableTemplateTimestamp extends VariableTemplateAdapter {
@@ -35,7 +35,7 @@ export class VariableTemplateTimestamp extends VariableTemplateAdapter {
     // Clean the raw RDF string from the CSV if the option is enabled
     if (this.stripDatatype && typeof parsedValue === 'string') {
       // Splits at '^^' to remove datatype and replaces surrounding double quotes
-      parsedValue = parsedValue.split('^^')[0].replace(/^"|"$/g, '');
+      parsedValue = parsedValue.split('^^')[0].replaceAll(/^"|"$/g, '');
     }
 
     // Determine if the value is a UNIX timestamp (only numbers) or an ISO string

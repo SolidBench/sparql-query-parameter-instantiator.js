@@ -14,8 +14,8 @@ export class ValueTransformerReplaceIri implements IValueTransformer {
 
   public constructor(searchRegex: string, replacementString: string, replaceAll = false) {
     this.search = new RegExp(searchRegex, 'u');
-    if (replaceAll){
-        this.search = new RegExp(searchRegex, 'gu')
+    if (replaceAll) {
+      this.search = new RegExp(searchRegex, 'gu');
     }
     this.replacement = replacementString;
   }
