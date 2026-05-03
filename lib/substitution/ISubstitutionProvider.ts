@@ -10,6 +10,11 @@ export interface ISubstitutionProvider {
   getValues: () => Promise<RawTerm[]>;
 }
 
+export interface IEntityLogits {
+  entity: string;
+  similarity: number;
+}
+
 /**
  *
  */
@@ -18,5 +23,5 @@ export interface ISubstitutionProviderProbabilities extends ISubstitutionProvide
   /**
    * Provide a record mapping values to logits of selected the value.
    */
-  getValuesProbabilities: () => Promise<Record<string, Record<string, any>[]>>;
+  getValuesProbabilities: () => Promise<Record<string, IEntityLogits[]>>;
 }

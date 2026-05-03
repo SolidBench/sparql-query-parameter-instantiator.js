@@ -1,5 +1,5 @@
 import type { RawTerm } from '../variable/IVariableTemplate';
-import type { ISubstitutionProviderProbabilities } from './ISubstitutionProvider';
+import type { IEntityLogits, ISubstitutionProviderProbabilities } from './ISubstitutionProvider';
 import { SubstitutionProviderUnion } from './SubstitutionProviderUnion';
 
 /**
@@ -21,8 +21,8 @@ export class SubstitutionProviderUnionProbabilities
       .map(substitutionProvider => substitutionProvider.getValues()))).flat();
   }
 
-  public async getValuesProbabilities(): Promise<Record<string, Record<string, number>[]>> {
-    const results: Record<string, Record<string, number>[]> = {};
+  public async getValuesProbabilities(): Promise<Record<string, IEntityLogits[]>> {
+    const results: Record<string, IEntityLogits[]> = {};
     for (const substitutionProvider of this.substitutionProviders) {
       const probabilities = await substitutionProvider.getValuesProbabilities();
       for (const [ user, similarities ] of Object.entries(probabilities)) {
