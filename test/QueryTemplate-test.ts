@@ -2,6 +2,7 @@ import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
 import { Parser } from 'sparqljs';
 import { QueryTemplate } from '../lib/QueryTemplate';
+import type { IValueTransformer } from '../lib/valuetransformer/IValueTransformer';
 
 const DF = new DataFactory();
 
@@ -274,6 +275,39 @@ SELECT ?s WHERE { ?s ?p ?o. }
 GROUP BY ?s`, { x: [ DF.namedNode('ex:s1') ]}, 0))
         .toBe(`SELECT ?s WHERE { ?s ?p ?o. }
 GROUP BY ?s`);
+    });
+
+    it('should throw when variable mapping is missing from context', () => {
+      const query = `SELECT * WHERE { ?s ?p ?o. }`;
+      const template = new QueryTemplate(new Parser().parse(query), {});
+      const syntaxTree = new Parser().parse(query);
+      expect(() => (<any>template).instantiateSyntaxTreeRecurse(
+        syntaxTree,
+        (<any>template).instantiateTerm,
+        {},
+      )).toThrow('Instantiation of syntax tree failed due to missing variableMapping in context');
+    });
+
+    it('should transform prefixes when transformer is provided', () => {
+      const query = `PREFIX ex: <http://example.org/>
+SELECT * WHERE { ?s ex:p ?o. }`;
+      const syntaxTree = new Parser().parse(query);
+      const transformer: IValueTransformer = {
+        transform: value => DF.namedNode(`${value.value}transformed`),
+      };
+      const template = new QueryTemplate(syntaxTree, {}, transformer);
+      const instantiated = template.instantiateSyntaxTreeWrap(syntaxTree, {});
+      expect(instantiated.prefixes.ex).toBe('http://example.org/transformed');
+    });
+
+    it('should transform property paths when transformer is provided', () => {
+      const query = `SELECT * WHERE { ?s <ex:p1>/<ex:p2> ?o. }`;
+      const transformer: IValueTransformer = {
+        transform: value => DF.namedNode(`${value.value}-t`),
+      };
+      const template = new QueryTemplate(new Parser().parse(query), {}, transformer);
+      expect(template.instantiate(0))
+        .toBe(`SELECT * WHERE { ?s (<ex:p1-t>/<ex:p2-t>) ?o. }`);
     });
   });
 });

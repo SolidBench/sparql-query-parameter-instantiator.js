@@ -692,6 +692,99 @@ describe('QueryTemplate', () => {
     });
   });
 
+  describe('isValidFilterPattern', () => {
+    it('should accept custom filter operation when target is provided', () => {
+      const template = new QuerySequenceTemplate(
+        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
+        {},
+        {},
+        {},
+        {},
+        rng,
+        1,
+        1,
+      );
+      const pattern: any = {
+        type: 'FILTER',
+        operation: 'noop',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [
+          {
+            type: 'operation',
+            operator: '>',
+            args: [
+              DF.variable('s'),
+              DF.literal('18'),
+            ],
+          },
+        ],
+      };
+      const refinementState: IRefinementState = {
+        stateQuery: createOperatorState(),
+        stateFilter: createOperatorState(),
+        stateUnion: createOperatorState(),
+        stateOptional: createOperatorState(),
+        stateSubstitution: {},
+      };
+      const result = (<any>template).isValidFilterPattern(pattern, {
+        queryExpressions: [],
+        operatorExpressionsFlattened: {},
+        refinementState,
+        totalExpressions: 0,
+        variableMapping: {},
+        variablesInQuery: new Set([ 's' ]),
+      });
+      expect(result).toBe(true);
+    });
+
+    it('should accept custom filter operation when removed expressions exist', () => {
+      const template = new QuerySequenceTemplate(
+        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
+        {},
+        {},
+        {},
+        {},
+        rng,
+        1,
+        1,
+      );
+      const pattern: any = {
+        type: 'FILTER',
+        operation: 'noop',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [],
+      };
+      const refinementState: IRefinementState = {
+        stateQuery: createOperatorState(),
+        stateFilter: createOperatorState(),
+        stateUnion: createOperatorState(),
+        stateOptional: createOperatorState(),
+        stateSubstitution: {},
+      };
+      refinementState.stateFilter.removedExp.push({
+        type: 'operation',
+        operator: '>',
+        args: [
+          DF.variable('s'),
+          DF.literal('18'),
+        ],
+      });
+      const result = (<any>template).isValidFilterPattern(pattern, {
+        queryExpressions: [],
+        operatorExpressionsFlattened: {},
+        refinementState,
+        totalExpressions: 0,
+        variableMapping: {},
+        variablesInQuery: new Set([ 's' ]),
+      });
+      expect(result).toBe(true);
+    });
+  });
+
   describe('applyRefinementPattern', () => {
     let variableMappings: Record<string, RDF.Term[]>;
     let variableMappingsAlternative: Record<string, RDF.Term[]>;
