@@ -9,6 +9,7 @@ import type {
   Term,
   Expression,
   BgpPattern,
+  ValuePatternRow,
 } from 'sparqljs';
 import type { ITargetTriplePattern, ITargetTriplePatternTerm } from '../QuerySequenceTemplateProvider';
 
@@ -126,103 +127,134 @@ export function extractExpressionPerOperator(
 export function getVariablesInExpression(expr: Expression): Set<string> {
   const variables = new Set<string>();
 
-  function recurse(exp: Expression | Term | any): void {
-    if (!exp) {
-      return;
-    }
-
-    // Handle arrays (like args in operations)
-    if (Array.isArray(exp)) {
-      for (const item of exp) {
-        recurse(item);
-      }
-      return;
-    }
-
-    // Handle different expression types
-    switch (exp.type) {
-      case 'operation':
-        if (exp.args && Array.isArray(exp.args)) {
-          for (const arg of exp.args) {
-            recurse(arg);
+  function visitPattern(pattern: Pattern): void {
+    switch (pattern.type) {
+      case 'bgp':
+        for (const triple of pattern.triples) {
+          handleTerm(triple.subject);
+          handleTerm(triple.predicate);
+          handleTerm(triple.object);
+        }
+        break;
+      case 'group':
+      case 'graph':
+      case 'optional':
+      case 'minus':
+      case 'union':
+      case 'service':
+        for (const servicePattern of pattern.patterns) {
+          visitPattern(servicePattern);
+        }
+        break;
+      case 'bind':
+        handleTerm(pattern.variable);
+        visitExpression(pattern.expression);
+        break;
+      case 'filter':
+        visitExpression(pattern.expression);
+        break;
+      case 'values':
+        extractValuesVariables(pattern.values);
+        break;
+      case 'query':
+        if (pattern.where) {
+          for (const whereClause of pattern.where) {
+            visitPattern(whereClause);
           }
         }
-        break;
-
-      case 'functionCall':
-        if (exp.args && Array.isArray(exp.args)) {
-          for (const arg of exp.args) {
-            recurse(arg);
+        if (pattern.values) {
+          extractValuesVariables(pattern.values);
+        }
+        if (pattern.group) {
+          for (const groupElement of pattern.group) {
+            visitExpression(groupElement.expression);
           }
         }
-        break;
-
-      case 'term':
-        // Handle term expressions
-        if (exp.term) {
-          recurse(exp.term);
+        if (pattern.having) {
+          for (const havingElement of pattern.having) {
+            visitExpression(havingElement);
+          }
         }
-        break;
-
-      case 'variable':
-        // Direct variable reference
-        if (exp.value) {
-          variables.add(exp.value.startsWith('?') ? exp.value.slice(1) : exp.value);
-        }
-        break;
-
-      case 'aggregate':
-        // Handle aggregates (COUNT, SUM, etc.)
-        if (exp.expression) {
-          recurse(exp.expression);
-        }
-        if (exp.separator) {
-          recurse(exp.separator);
-        }
-        break;
-
-      case 'namedExpression':
-        // Handle named expressions (AS clauses)
-        if (exp.expression) {
-          recurse(exp.expression);
-        }
-        break;
-
-      case 'exists':
-      case 'notexists':
-        // Handle EXISTS and NOT EXISTS
-        if (exp.input) {
-          // This would need more complex handling for graph patterns
-          // For now, just try to recurse if it's an expression
-          recurse(exp.input);
-        }
-        break;
-
-      default:
-        // Handle direct Term objects (Variable, Literal, NamedNode, etc.)
-        if (exp.termType === 'Variable') {
-          const varName = exp.value;
-          variables.add(varName.startsWith('?') ? varName.slice(1) : varName);
-        }
-
-        // Handle other potential nested structures
-        if (exp.left) {
-          recurse(exp.left);
-        }
-        if (exp.right) {
-          recurse(exp.right);
-        }
-        if (exp.expression) {
-          recurse(exp.expression);
-        }
-        if (exp.args) {
-          recurse(exp.args);
+        if (pattern.order) {
+          for (const orderEleemnt of pattern.order) {
+            visitExpression(orderEleemnt.expression);
+          }
         }
         break;
     }
   }
 
-  recurse(expr);
+  function extractValuesVariables(values: ValuePatternRow[]): void {
+    for (const row of values) {
+      for (const [ variable ] of Object.entries(row)) {
+        const normalized = variable.slice(1);
+        variables.add(normalized);
+      }
+    }
+  }
+
+  function visitExpression(exp: Expression | Term): void {
+    // Terms are passed to the term handler
+    if ('termType' in exp) {
+      if (exp.termType === 'Quad') {
+        handleTerm(exp.subject);
+        handleTerm(exp.predicate);
+        handleTerm(exp.object);
+        handleTerm(exp.graph);
+        return;
+      }
+      handleTerm(exp);
+      return;
+    }
+
+    // Tuples are arrays of expressions
+    if (Array.isArray(exp)) {
+      for (const subExp of exp) {
+        visitExpression(subExp);
+      }
+      return;
+    }
+
+    switch (exp.type) {
+      case 'operation':
+      case 'functionCall':
+        for (const subExp of exp.args) {
+          visitExpression(subExp);
+        }
+        break;
+      case 'bgp':
+        for (const triple of exp.triples) {
+          handleTerm(triple.subject);
+          handleTerm(triple.predicate);
+          handleTerm(triple.object);
+        }
+        break;
+      case 'graph':
+      case 'group':
+        for (const pattern of exp.patterns) {
+          visitPattern(pattern);
+        }
+        break;
+      case 'aggregate':
+        visitExpression(exp.expression);
+        break;
+    }
+  }
+
+  function handleTerm(term: RDF.Term | PropertyPath): void {
+    // We do not consider propertyPaths as they don't contain variables
+    // (right?)
+    if (
+      term &&
+      typeof term === 'object' &&
+      'termType' in term &&
+      (term).termType === 'Variable'
+    ) {
+      variables.add(term.value);
+    }
+  }
+
+  visitExpression(expr);
   return variables;
 }
 

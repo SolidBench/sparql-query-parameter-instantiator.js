@@ -25,6 +25,7 @@ export class QuerySequenceTemplateProvider {
   // of instantiator
   public readonly outputVariableTypeMap: Record<string, string>;
 
+  // What templates can follow this template in a sequence
   private readonly nextTemplates: INextTemplate[];
 
   private readonly iriTransformer?: IValueTransformer;
@@ -102,17 +103,24 @@ export class QuerySequenceTemplateProvider {
 
     const variableMappings: Record<string, RDF.Term[]> = {};
     const variableProbabilityMappings: Record<string, Record<string, IEntityLogits[]>> = {};
+
     for (const variableTemplate of this.variables) {
       const variableName = variableTemplate.getName();
       const substitutionProvider = variableTemplate.getSubstitutionProvider();
+
       if (!substitutionProvider) {
         throw new Error(`The variable template '${this.templateFilePath}' for '${variableName}' has no substitution provider configured`);
       }
+
       variableMappings[variableName] = (await substitutionProvider.getValues())
         .map(value => variableTemplate.createTerm(value));
+
+      // If we're passed a substitutionProvider of type ISubstitutionProviderProbabilities
+      // we use those to map variables to instantiation values
       if ('getValuesProbabilities' in substitutionProvider &&
         typeof substitutionProvider.getValuesProbabilities === 'function') {
         const logits = await substitutionProvider.getValuesProbabilities();
+
         // Apply the variable template to the entities in the logits
         for (const [ , similarities ] of Object.entries(logits)) {
           for (const similarityObject of similarities) {
@@ -122,6 +130,7 @@ export class QuerySequenceTemplateProvider {
         variableProbabilityMappings[variableName] = this.softMaxLogits(logits, temperature);
       }
     }
+
     return new QuerySequenceTemplate(
       syntaxTree,
       variableMappings,
@@ -148,11 +157,15 @@ export class QuerySequenceTemplateProvider {
 
   public softMaxLogits(logits: Record<string, IEntityLogits[]>, temperature = 1): Record<string, IEntityLogits[]> {
     const softMaxedLogits: Record<string, IEntityLogits[]> = {};
+
     for (const [ user, logitsUser ] of Object.entries(logits)) {
       const slicedLogitsUser = logitsUser.slice(0, this.maxLogits);
+
       const logitEntities = slicedLogitsUser.map(x => x.entity);
       const logitValues = slicedLogitsUser.map(x => x.similarity);
+
       const probabilities = this.softmax(logitValues, temperature);
+
       const userProbabilities: IEntityLogits[] = [];
       for (const [ i, probability ] of probabilities.entries()) {
         userProbabilities.push({

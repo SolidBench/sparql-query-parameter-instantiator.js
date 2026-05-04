@@ -35,11 +35,12 @@ export class VariableTemplateTimestamp extends VariableTemplateAdapter {
     // Clean the raw RDF string from the CSV if the option is enabled
     if (this.stripDatatype && typeof parsedValue === 'string') {
       // Splits at '^^' to remove datatype and replaces surrounding double quotes
-      parsedValue = parsedValue.split('^^')[0].replaceAll(/^"|"$/g, '');
+      parsedValue = parsedValue.split('^^')[0].replaceAll(/^"|"$/gu, '');
     }
 
     // Determine if the value is a UNIX timestamp (only numbers) or an ISO string
-    const isNumeric = typeof parsedValue === 'number' || (typeof parsedValue === 'string' && /^\d+$/.test(parsedValue));
+    const isNumeric = typeof parsedValue === 'number' ||
+      (typeof parsedValue === 'string' && /^\d+$/u.test(parsedValue));
 
     // Parse the date appropriately
     const dateObj = new Date(isNumeric ? Number.parseInt(String(parsedValue), 10) : parsedValue);

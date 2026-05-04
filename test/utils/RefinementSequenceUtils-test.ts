@@ -1,10 +1,30 @@
+import type { Quad } from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
-import type { Expression, Pattern, PropertyPath, Term, Triple } from 'sparqljs';
+import type {
+  AggregateExpression,
+  BgpPattern,
+  BindPattern,
+  FilterPattern,
+  FunctionCallExpression,
+  GraphPattern,
+  GroupPattern,
+  MinusPattern,
+  OperationExpression,
+  OptionalPattern,
+  Pattern,
+  PropertyPath,
+  SelectQuery,
+  ServicePattern,
+  Term,
+  Triple,
+  Tuple,
+  UnionPattern,
+  ValuesPattern,
+} from 'sparqljs';
 import { Parser } from 'sparqljs';
 import {
   countFlattened,
   extractBgpPerOperator,
-  extractExpressionPerOperator,
   extractTriplePatternsPerOperator,
   flattenOperators,
   getAllVariables,
@@ -36,7 +56,7 @@ describe('RefinementSequenceUtils', () => {
         }
       `);
 
-      const where = (<any> parsed).where as Pattern[];
+      const where = <Pattern[]> (<any> parsed).where;
       expect(extractTriplePatternsPerOperator(where)).toEqual({
         bgp: [
           [{
@@ -110,94 +130,296 @@ describe('RefinementSequenceUtils', () => {
     });
   });
 
-  describe('extractExpressionPerOperator / getVariablesInExpression', () => {
-    it('extracts filter expressions through nested blocks', () => {
-      const filterA: Expression = <any> { type: 'variable', value: 'a' };
-      const filterB: Expression = <any> { type: 'variable', value: 'b' };
-      const filterC: Expression = <any> { type: 'variable', value: 'c' };
-      const filterD: Expression = <any> { type: 'variable', value: 'd' };
-      const filterE: Expression = <any> { type: 'variable', value: 'e' };
-      const filterF: Expression = <any> { type: 'variable', value: 'f' };
-
-      const patterns: Pattern[] = [ <any> {
-        type: 'query',
-        where: [
-          <any> {
-            type: 'group',
-            patterns: [{ type: 'filter', expression: filterA }],
-          },
-          <any> {
-            type: 'union',
-            patterns: [{ type: 'filter', expression: filterB }],
-          },
-          <any> {
-            type: 'optional',
-            patterns: [{ type: 'filter', expression: filterC }],
-          },
-          <any> {
-            type: 'graph',
-            patterns: [{ type: 'filter', expression: filterD }],
-          },
-          <any> {
-            type: 'minus',
-            patterns: [{ type: 'filter', expression: filterE }],
-          },
-          <any> {
-            type: 'service',
-            patterns: [{ type: 'filter', expression: filterF }],
-          },
-          <any> { type: 'values' },
-        ],
-      } ];
-
-      const out: Record<string, Expression[]> = {};
-      extractExpressionPerOperator(patterns, out, 'filter');
-      expect(out.filter).toEqual([ filterA, filterB, filterC, filterD, filterE, filterF ]);
+  describe('getVariablesInExpression', () => {
+    it('extracts variables from basic Term types, ignoring non-variables', () => {
+      expect(getVariablesInExpression(DF.variable('a'))).toEqual(new Set([ 'a' ]));
+      expect(getVariablesInExpression(DF.namedNode('http://example.org'))).toEqual(new Set());
+      expect(getVariablesInExpression(DF.literal('test'))).toEqual(new Set());
+      expect(getVariablesInExpression(DF.blankNode('b1'))).toEqual(new Set());
     });
 
-    it('collects variables from many expression forms', () => {
-      const expression: Expression = <any> {
+    it('extracts variables from nested QuadTerm (RDF-star)', () => {
+      const quad = <Quad> DF.quad(
+        DF.variable('quadSubj'),
+        DF.variable('quadPred'),
+        DF.variable('quadObj'),
+        DF.variable('quadGraph'),
+      );
+
+      expect(getVariablesInExpression(quad)).toEqual(new Set([ 'quadSubj', 'quadPred', 'quadObj', 'quadGraph' ]));
+    });
+
+    it('extracts variables from OperationExpression and FunctionCallExpression', () => {
+      const operation = <OperationExpression>{
         type: 'operation',
-        args: [
-          { type: 'variable', value: 'fromOperation' },
-          { type: 'functionCall', args: [{ type: 'variable', value: 'fromFunction' }]},
-          { type: 'term', term: DF.variable('fromTerm') },
-          { type: 'aggregate', expression: { type: 'variable', value: 'fromAggregate' }, separator: { type: 'variable', value: 'fromSep' }},
-          { type: 'namedExpression', expression: { type: 'variable', value: 'fromNamed' }},
-          { type: 'exists', input: { type: 'variable', value: 'fromExists' }},
-          { type: 'notexists', input: { type: 'variable', value: 'fromNotExists' }},
+        operator: '+',
+        args: [ DF.variable('varOp1'), DF.variable('varOp2') ],
+      };
+
+      const functionCall = <FunctionCallExpression>{
+        type: 'functionCall',
+        function: 'http://example.org/func',
+        args: [ DF.variable('varFunc') ],
+      };
+
+      expect(getVariablesInExpression(operation)).toEqual(new Set([ 'varOp1', 'varOp2' ]));
+      expect(getVariablesInExpression(functionCall)).toEqual(new Set([ 'varFunc' ]));
+    });
+
+    it('extracts variables from AggregateExpression', () => {
+      const aggregateSum = <AggregateExpression>{
+        type: 'aggregate',
+        aggregation: 'sum',
+        expression: DF.variable('varAggSum'),
+      };
+
+      const aggregateConcat = <AggregateExpression>{
+        type: 'aggregate',
+        aggregation: 'group_concat',
+        expression: DF.variable('varAggConcat'),
+        separator: ',',
+      };
+
+      expect(getVariablesInExpression(aggregateSum)).toEqual(new Set([ 'varAggSum' ]));
+      expect(getVariablesInExpression(aggregateConcat)).toEqual(new Set([ 'varAggConcat' ]));
+    });
+
+    it('extracts variables from BgpPattern, including predicates and property paths', () => {
+      const bgp = <BgpPattern>{
+        type: 'bgp',
+        triples: [
           {
-            termType: 'Variable',
-            value: 'fromDefaultTerm',
-            left: { type: 'variable', value: 'fromLeft' },
-            right: { type: 'variable', value: 'fromRight' },
-            expression: { type: 'variable', value: 'fromNestedExpression' },
-            args: [{ type: 'variable', value: 'fromDefaultArgs' }],
+            subject: DF.variable('varSubj'),
+            predicate: DF.variable('varPred'),
+            object: DF.variable('varObj'),
+          },
+          {
+            subject: DF.variable('varPathSubj'),
+            predicate: {
+              type: 'path',
+              pathType: '/',
+              items: [
+                DF.namedNode('http://example.org/p2'),
+                DF.namedNode('http://example.org/p3'),
+              ],
+            },
+            object: DF.variable('varPathObj'),
           },
         ],
       };
 
-      expect(getVariablesInExpression(expression)).toEqual(new Set([
-        'fromOperation',
-        'fromFunction',
-        'fromTerm',
-        'fromAggregate',
-        'fromSep',
-        'fromNamed',
-        'fromExists',
-        'fromNotExists',
-        'fromDefaultTerm',
-        'fromLeft',
-        'fromRight',
-        'fromNestedExpression',
-        'fromDefaultArgs',
+      expect(getVariablesInExpression(bgp)).toEqual(new Set([
+        'varSubj',
+        'varPred',
+        'varObj',
+        'varPathSubj',
+        'varPathObj',
       ]));
-      expect(getVariablesInExpression(<any> { type: 'variable', value: '?fromPrefixedVariable' }))
-        .toEqual(new Set([ 'fromPrefixedVariable' ]));
-      expect(getVariablesInExpression(<any> { termType: 'Variable', value: '?fromPrefixedDefault' }))
-        .toEqual(new Set([ 'fromPrefixedDefault' ]));
-      expect(getVariablesInExpression(<any> undefined)).toEqual(new Set());
-      expect(getVariablesInExpression(<any> [{ type: 'variable', value: 'fromArray' }])).toEqual(new Set([ 'fromArray' ]));
+    });
+
+    it('extracts variables from complex BlockPatterns nested inside GroupPattern', () => {
+      const group = <GroupPattern>{
+        type: 'group',
+        patterns: [
+        <BindPattern>{
+          type: 'bind',
+          variable: DF.variable('bindVarTarget'),
+          expression: DF.variable('bindVarSource'),
+        },
+        <FilterPattern>{
+          type: 'filter',
+          expression: <OperationExpression>{
+            type: 'operation',
+            operator: '>',
+            args: [ DF.variable('filterVar'), DF.literal('10') ],
+          },
+        },
+        <ValuesPattern>{
+          type: 'values',
+          values: [{ '?valuesVar1': DF.namedNode('http://example.org') }],
+        },
+        <UnionPattern>{
+          type: 'union',
+          patterns: [
+            <BgpPattern>{
+              type: 'bgp',
+              triples: [{ subject: DF.variable('unionVar'), predicate: DF.namedNode('p'), object: DF.literal('o') }],
+            },
+          ],
+        },
+        ],
+      };
+
+      expect(getVariablesInExpression(group)).toEqual(new Set([
+        'bindVarTarget',
+        'bindVarSource',
+        'filterVar',
+        'valuesVar1',
+        'unionVar',
+      ]));
+    });
+
+    it('extracts variables from a root GraphPattern expression', () => {
+      const graphExpression = <GraphPattern>{
+        type: 'graph',
+        name: DF.namedNode('http://example.org/graph'),
+        patterns: [
+        <BgpPattern>{
+          type: 'bgp',
+          triples: [{
+            subject: DF.variable('graphSubj'),
+            predicate: DF.namedNode('p'),
+            object: DF.literal('o'),
+          }],
+        },
+        ],
+      };
+
+      expect(getVariablesInExpression(graphExpression)).toEqual(new Set([ 'graphSubj' ]));
+    });
+
+    it('extracts variables from Optional, Minus, and Service patterns nested in a Group', () => {
+      const groupWithBlocks = <GroupPattern>{
+        type: 'group',
+        patterns: [
+        <OptionalPattern>{
+          type: 'optional',
+          patterns: [
+            <BgpPattern>{
+              type: 'bgp',
+              triples: [{ subject: DF.variable('optionalVar'), predicate: DF.namedNode('p'), object: DF.literal('o') }],
+            },
+          ],
+        },
+        <MinusPattern>{
+          type: 'minus',
+          patterns: [
+            <BgpPattern>{
+              type: 'bgp',
+              triples: [{ subject: DF.variable('minusVar'), predicate: DF.namedNode('p'), object: DF.literal('o') }],
+            },
+          ],
+        },
+        <ServicePattern>{
+          type: 'service',
+          name: DF.namedNode('http://example.org/sparql'),
+          silent: false,
+          patterns: [
+            <BgpPattern>{
+              type: 'bgp',
+              triples: [{ subject: DF.variable('serviceVar'), predicate: DF.namedNode('p'), object: DF.literal('o') }],
+            },
+          ],
+        },
+        ],
+      };
+
+      expect(getVariablesInExpression(groupWithBlocks)).toEqual(new Set([
+        'optionalVar',
+        'minusVar',
+        'serviceVar',
+      ]));
+    });
+
+    it('extracts variables from subqueries (SelectQuery) nested inside GroupPattern', () => {
+      const group = <GroupPattern>{
+        type: 'group',
+        patterns: [
+        <SelectQuery>{
+          type: 'query',
+          queryType: 'SELECT',
+          variables: [ DF.variable('subSelectVar') ],
+          prefixes: {},
+          where: [
+            <BgpPattern>{
+              type: 'bgp',
+              triples: [{ subject: DF.variable('subWhereVar'), predicate: DF.namedNode('p'), object: DF.literal('o') }],
+            },
+          ],
+        },
+        ],
+      };
+
+      expect(getVariablesInExpression(group)).toEqual(new Set([ 'subWhereVar' ]));
+    });
+
+    it('extracts variables from subqueries containing group, having, values, and order clauses', () => {
+      const groupWithComplexSubquery = <GroupPattern>{
+        type: 'group',
+        patterns: [
+        <SelectQuery>{
+          type: 'query',
+          queryType: 'SELECT',
+          prefixes: {},
+          variables: [ DF.variable('selectVar') ],
+          where: [
+            <BgpPattern>{
+              type: 'bgp',
+              triples: [{
+                subject: DF.variable('whereVar'),
+                predicate: DF.namedNode('http://example.org/p'),
+                object: DF.variable('groupVar'),
+              }],
+            },
+          ],
+          values: [
+            { '?valuesVar': DF.namedNode('http://example.org/val') },
+          ],
+          group: [
+            { expression: DF.variable('groupVar') },
+          ],
+          having: [
+            <OperationExpression>{
+              type: 'operation',
+              operator: '>',
+              args: [ DF.variable('havingVar'), DF.literal('10') ],
+            },
+          ],
+          order: [
+            { expression: DF.variable('orderVar'), descending: true },
+          ],
+        },
+        ],
+      };
+
+      expect(getVariablesInExpression(groupWithComplexSubquery)).toEqual(new Set([
+        'whereVar',
+        'groupVar',
+        'valuesVar',
+        'havingVar',
+        'orderVar',
+      ]));
+    });
+
+    it('extracts variables from subqueries lacking a where clause (testing undefined branches)', () => {
+      const groupWithEmptySubquery = <GroupPattern>{
+        type: 'group',
+        patterns: [
+          <SelectQuery>{
+            type: 'query',
+            queryType: 'SELECT',
+            variables: [ DF.variable('ignoredVar') ],
+            prefixes: {},
+            // Notice: 'where' is completely omitted here
+            values: [
+              { '?valuesVar': DF.namedNode('http://example.org/val') },
+            ],
+          },
+        ],
+      };
+
+      // Based on your current code's logic, it should only extract from values
+      expect(getVariablesInExpression(groupWithEmptySubquery)).toEqual(new Set([
+        'valuesVar',
+      ]));
+    });
+    it('extracts variables from Tuples recursively', () => {
+      const tuple = <Tuple>[
+        DF.variable('varTuple1'),
+      <Tuple>[ DF.variable('varTupleNested') ],
+      ];
+
+      expect(getVariablesInExpression(tuple)).toEqual(new Set([ 'varTuple1', 'varTupleNested' ]));
     });
   });
 
@@ -311,7 +533,10 @@ describe('RefinementSequenceUtils', () => {
         expect(propertyPathEquals(left, right)).toBe(true);
       }
 
-      const byPathType = Object.fromEntries(allPathTypes.map(pathType => [ pathType, path([ DF.namedNode('ex:a') ], pathType) ]));
+      const byPathType = Object.fromEntries(
+        allPathTypes.map(pathType => [ pathType, path([ DF.namedNode('ex:a') ], pathType) ]),
+      );
+
       const chainPath = byPathType['/'];
       const altPath = byPathType['|'];
       const inversePath = byPathType['^'];
@@ -319,6 +544,7 @@ describe('RefinementSequenceUtils', () => {
       const zeroOrOnePath = byPathType['?'];
       const zeroOrMorePath = byPathType['*'];
       const oneOrMorePath = byPathType['+'];
+
       negatedPath.items.push(DF.namedNode('ex:b'));
       chainPath.items.push(DF.namedNode('ex:b'));
       altPath.items.push(DF.namedNode('ex:b'));

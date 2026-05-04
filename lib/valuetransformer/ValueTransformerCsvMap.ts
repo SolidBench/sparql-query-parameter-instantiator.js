@@ -21,6 +21,7 @@ export class ValueTransformerCsvMap implements IValueTransformer {
 
   public readMapping(): Record<string, string> {
     const mapping: Record<string, string> = {};
+    // eslint-disable-next-line no-sync
     const content = fs.readFileSync(this.file, 'utf-8').trim();
     const lines = content.split('\n');
     for (const line of lines) {
