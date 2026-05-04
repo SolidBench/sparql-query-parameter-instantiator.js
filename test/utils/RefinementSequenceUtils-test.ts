@@ -4,6 +4,7 @@ import type {
   AggregateExpression,
   BgpPattern,
   BindPattern,
+  Expression,
   FilterPattern,
   FunctionCallExpression,
   GraphPattern,
@@ -24,7 +25,9 @@ import type {
 import { Parser } from 'sparqljs';
 import {
   countFlattened,
+  expressionEquals,
   extractBgpPerOperator,
+  extractExpressionPerOperator,
   extractTriplePatternsPerOperator,
   flattenOperators,
   getAllVariables,
@@ -421,6 +424,44 @@ describe('RefinementSequenceUtils', () => {
 
       expect(getVariablesInExpression(tuple)).toEqual(new Set([ 'varTuple1', 'varTupleNested' ]));
     });
+
+    it('handles unknown pattern type inside a group without throwing (implicit default branch)', () => {
+      // Force an unrecognized pattern type to cover the implicit default/no-match
+      // branch of the switch in the private visitPattern function.
+      const groupWithUnknown = <any>{
+        type: 'group',
+        patterns: [
+          // 'bind' with no subpatterns, followed by an unknown type
+          <any>{ type: 'unknownPatternType' },
+        ],
+      };
+      expect(getVariablesInExpression(groupWithUnknown)).toEqual(new Set());
+    });
+
+    it('handles a graph pattern nested inside a group (covers visitPattern case graph)', () => {
+      // visitPattern needs to be called with type 'graph' to cover that case arm.
+      // This happens when a graph is nested inside a group expression.
+      const groupWithGraph = <GroupPattern>{
+        type: 'group',
+        patterns: [
+          <GraphPattern>{
+            type: 'graph',
+            name: DF.namedNode('http://example.org/g'),
+            patterns: [
+              <BgpPattern>{
+                type: 'bgp',
+                triples: [{
+                  subject: DF.variable('nestedGraphVar'),
+                  predicate: DF.namedNode('p'),
+                  object: DF.literal('o'),
+                }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(getVariablesInExpression(groupWithGraph)).toEqual(new Set([ 'nestedGraphVar' ]));
+    });
   });
 
   describe('triple/term helpers', () => {
@@ -622,6 +663,88 @@ describe('RefinementSequenceUtils', () => {
       expect(flattened).toEqual({ bgp: [ 1, 2, 3 ], optional: []});
       expect(countFlattened(flattened)).toBe(3);
       expect(countFlattened({})).toBe(0);
+    });
+  });
+
+  describe('extractExpressionPerOperator', () => {
+    it('extracts filter expressions from simple where clause', () => {
+      const parsed = new Parser().parse(`
+        SELECT * WHERE {
+          ?s ?p ?o .
+          FILTER(?o > 5)
+        }
+      `);
+      const where = <Pattern[]> (<any> parsed).where;
+      const result: Record<string, Expression[]> = {};
+      extractExpressionPerOperator(where, result, 'filter');
+      expect(result.filter).toHaveLength(1);
+    });
+
+    it('extracts filter expressions from nested group, union, optional, graph, minus, and service', () => {
+      const patterns: Pattern[] = [
+        <any>{ type: 'group', patterns: [
+          <any>{ type: 'filter', expression: DF.variable('a') },
+        ]},
+        <any>{ type: 'union', patterns: [
+          <any>{ type: 'filter', expression: DF.variable('b') },
+        ]},
+        <any>{ type: 'optional', patterns: [
+          <any>{ type: 'filter', expression: DF.variable('c') },
+        ]},
+        <any>{ type: 'graph', name: DF.namedNode('ex:g'), patterns: [
+          <any>{ type: 'filter', expression: DF.variable('d') },
+        ]},
+        <any>{ type: 'minus', patterns: [
+          <any>{ type: 'filter', expression: DF.variable('e') },
+        ]},
+        <any>{ type: 'service', name: DF.namedNode('ex:svc'), silent: false, patterns: [
+          <any>{ type: 'filter', expression: DF.variable('f') },
+        ]},
+      ];
+      const result: Record<string, Expression[]> = {};
+      extractExpressionPerOperator(patterns, result, 'filter');
+      expect(result.filter).toHaveLength(6);
+    });
+
+    it('extracts filter expressions from nested query', () => {
+      const patterns: Pattern[] = [
+        <any>{
+          type: 'query',
+          queryType: 'SELECT',
+          prefixes: {},
+          variables: [ DF.variable('s') ],
+          where: [
+            <any>{ type: 'filter', expression: DF.variable('inner') },
+          ],
+        },
+      ];
+      const result: Record<string, Expression[]> = {};
+      extractExpressionPerOperator(patterns, result, 'filter');
+      expect(result.filter).toHaveLength(1);
+    });
+
+    it('skips patterns with no filter and handles subquery without where', () => {
+      const patterns: Pattern[] = [
+        <any>{ type: 'bgp', triples: []},
+        <any>{ type: 'query', queryType: 'SELECT', prefixes: {}, variables: []},
+        <any>{ type: 'bind', variable: DF.variable('x'), expression: DF.literal('1') },
+      ];
+      const result: Record<string, Expression[]> = {};
+      extractExpressionPerOperator(patterns, result, 'filter');
+      expect(result).toEqual({});
+    });
+  });
+
+  describe('expressionEquals', () => {
+    it('returns true for identical expressions', () => {
+      const expr: any = { type: 'operation', operator: '>', args: [ DF.variable('s'), DF.literal('18') ]};
+      expect(expressionEquals(expr, expr)).toBe(true);
+    });
+
+    it('returns false for different expressions', () => {
+      const a: any = { type: 'operation', operator: '>', args: [ DF.variable('s'), DF.literal('18') ]};
+      const b: any = { type: 'operation', operator: '<', args: [ DF.variable('s'), DF.literal('18') ]};
+      expect(expressionEquals(a, b)).toBe(false);
     });
   });
 });
