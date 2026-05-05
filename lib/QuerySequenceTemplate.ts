@@ -371,7 +371,7 @@ export class QuerySequenceTemplate {
     // Only allow SELECT queries
     const variableMapping: Record<string, RDF.Term> = context.variableMapping;
     if (!variableMapping) {
-      throw new Error('${this.name}: Instantiation of syntax tree failed due to missing variableMapping in context');
+      throw new Error(`${this.name}: Instantiation of syntax tree failed due to missing variableMapping in context`);
     }
 
     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
@@ -906,7 +906,7 @@ export class QuerySequenceTemplate {
         const subState = refinementState[typeToKeyMap[pattern.type]];
         const stateTargetVariable = subState[pattern.target.value];
         if (!stateTargetVariable) {
-          throw new Error('${this.name}: Passed substitution pattern with target variable that can not be substituted');
+          throw new Error(`${this.name}: Passed substitution pattern with target variable that can not be substituted`);
         }
         if (stateTargetVariable.nCalls > 0 && pattern.operation === 'addition') {
           return false;

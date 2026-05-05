@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import path from 'node:path';
 import type { Literal } from '@rdfjs/types';
 import * as yaml from 'js-yaml';
 
@@ -29,7 +30,7 @@ jest.mock('../../lib/logging/logger', () => ({
 }));
 
 const mockFetch = jest.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch;
 
 describe('QLeverInstance', () => {
   let instanceArgs: any;
@@ -46,18 +47,18 @@ describe('QLeverInstance', () => {
       timeout: 30,
     };
 
-    (os.tmpdir as jest.Mock).mockReturnValue('/tmp');
-    (fs.promises.mkdtemp as jest.Mock).mockResolvedValue('/tmp/qlever-run-123');
-    (fs.promises.writeFile as jest.Mock).mockResolvedValue(undefined);
-    (fs.promises.rm as jest.Mock).mockResolvedValue(undefined);
-    (yaml.dump as jest.Mock).mockReturnValue('mock-yaml-content');
+    (<jest.Mock> os.tmpdir).mockReturnValue('/tmp');
+    (<jest.Mock> fs.promises.mkdtemp).mockResolvedValue('/tmp/qlever-run-123');
+    (<jest.Mock> fs.promises.writeFile).mockResolvedValue(undefined);
+    (<jest.Mock>fs.promises.rm).mockResolvedValue(undefined);
+    (<jest.Mock> yaml.dump).mockReturnValue('mock-yaml-content');
 
     mockSpawnEventOn = jest.fn((event, cb) => {
       if (event === 'close') {
         cb(0);
       }
     });
-    (spawn as jest.Mock).mockReturnValue({ on: mockSpawnEventOn });
+    (<jest.Mock> spawn).mockReturnValue({ on: mockSpawnEventOn });
   });
 
   afterEach(() => {
@@ -71,14 +72,14 @@ describe('QLeverInstance', () => {
       const instance = new QLeverInstance(instanceArgs);
       await instance.getReadyStatus();
 
-      expect(fs.promises.mkdtemp).toHaveBeenCalled();
+      expect(fs.promises.mkdtemp).toHaveBeenCalledWith(path.join(os.tmpdir(), 'qlever-run-'));
       expect(fs.promises.writeFile).toHaveBeenCalledTimes(2);
       expect(spawn).toHaveBeenCalledWith('docker', [ 'volume', 'create', expect.any(String) ], expect.any(Object));
       expect(spawn).toHaveBeenCalledWith('docker', [ 'compose', 'up', '-d' ], expect.any(Object));
     });
 
     it('throws and stops if startup fails', async() => {
-      (fs.promises.mkdtemp as jest.Mock).mockRejectedValue(new Error('FS Error'));
+      (<jest.Mock> fs.promises.mkdtemp).mockRejectedValue(new Error('FS Error'));
 
       const instance = new QLeverInstance(instanceArgs);
 
@@ -87,7 +88,7 @@ describe('QLeverInstance', () => {
 
     it('swallows errors thrown by stop() during a fatal startup error', async() => {
       const startupError = new Error('FS Error');
-      (fs.promises.mkdtemp as jest.Mock).mockRejectedValueOnce(startupError);
+      (<jest.Mock> fs.promises.mkdtemp).mockRejectedValueOnce(startupError);
 
       const stopSpy = jest.spyOn(QLeverInstance.prototype, 'stop').mockRejectedValueOnce(new Error('Stop Error'));
 
@@ -109,6 +110,7 @@ describe('QLeverInstance', () => {
       const instance = new QLeverInstance(instanceArgs);
 
       const readyPromise = instance.getReadyStatus();
+
       await jest.advanceTimersByTimeAsync(500);
 
       await expect(readyPromise).resolves.toBeUndefined();
@@ -120,11 +122,15 @@ describe('QLeverInstance', () => {
 
       const instance = new QLeverInstance(instanceArgs);
 
-      const readyExpectation = expect(instance.getReadyStatus())
-        .rejects.toThrow('QLever failed to start within 60 seconds. Check docker logs');
+      const readyPromise = instance.getReadyStatus();
+
+      readyPromise.catch(() => {});
 
       await jest.advanceTimersByTimeAsync(60000);
-      await readyExpectation;
+
+      // The promise already knows it rejected, so Jest just inspects the result.
+      await expect(readyPromise)
+        .rejects.toThrow('QLever failed to start within 60 seconds. Check docker logs');
     });
 
     it('stops gracefully and removes temporary directories', async() => {
@@ -152,7 +158,7 @@ describe('QLeverInstance', () => {
     });
 
     it('throws error when critical docker commands fail', async() => {
-      (spawn as jest.Mock).mockImplementation((cmd, args) => ({
+      (<jest.Mock> spawn).mockImplementation((cmd, args) => ({
         on: (event: string, cb: Function) => {
           if (event === 'close') {
             // Fail `docker compose up` to trigger startup rejection
@@ -170,7 +176,7 @@ describe('QLeverInstance', () => {
 
     it('ignores non-critical docker errors during setup', async() => {
       mockFetch.mockResolvedValue({ status: 200, ok: true });
-      (spawn as jest.Mock).mockImplementation((cmd, args) => ({
+      (<jest.Mock> spawn).mockImplementation((cmd, args) => ({
         on: (event: string, cb: Function) => {
           if (event === 'close') {
             // Fail 'rm' and 'volume create', which are wrapped in silent catches
@@ -194,7 +200,7 @@ describe('QLeverInstance', () => {
       await instance.getReadyStatus();
 
       // Force failure on shutdown
-      (spawn as jest.Mock).mockImplementation(() => ({
+      (<jest.Mock> spawn).mockImplementation(() => ({
         on: (event: string, cb: Function) => {
           if (event === 'close') {
             cb(1);
@@ -210,10 +216,10 @@ describe('QLeverInstance', () => {
       const instance = new QLeverInstance(instanceArgs);
       const stopSpy = jest.spyOn(instance, 'stop').mockResolvedValue();
 
-      await expect((instance as any).handleSignal())
+      await expect((<any> instance).handleSignal())
         .rejects.toThrow('QLeverInstance stopped due to signal.');
 
-      expect(stopSpy).toHaveBeenCalled();
+      expect(stopSpy).toHaveBeenCalledWith();
     });
   });
 
@@ -273,7 +279,7 @@ describe('QLeverInstance', () => {
       expect(firstRow.get('p')?.termType).toBe('BlankNode');
       expect(firstRow.get('o')?.termType).toBe('Literal');
       expect((<Literal> firstRow.get('lang'))?.language).toBe('fr');
-      expect((firstRow.get('type') as any)?.datatype?.value).toBe('http://www.w3.org/2001/XMLSchema#integer');
+      expect((<any>firstRow.get('type'))?.datatype?.value).toBe('http://www.w3.org/2001/XMLSchema#integer');
 
       expect(result.joinPlan?.operation).toBe('Join (s)');
       expect(result.joinPlan?.children[0].operation).toBe('Scan (s, p, o)');
@@ -333,7 +339,13 @@ describe('QLeverInstance', () => {
       const result = await instance.executeQuery('SELECT * WHERE { ?a ?b }');
 
       expect(result.joinPlan).toEqual(
-        { actualOpTimeMs: 0, actualRows: 0, children: [], estimatedOpCost: 0, estimatedRows: 0, operation: 'IndexScan PSO',
+        {
+          actualOpTimeMs: 0,
+          actualRows: 0,
+          children: [],
+          estimatedOpCost: 0,
+          estimatedRows: 0,
+          operation: 'IndexScan PSO',
         },
       );
     });
@@ -417,12 +429,10 @@ describe('QLeverInstance', () => {
           });
         });
       });
-      const queryPromise = instance.executeQuery('SELECT *');
-
+      const executePromise = instance.executeQuery('SELECT *');
       await jest.advanceTimersByTimeAsync(instanceArgs.timeout * 1000);
-
+      await executePromise;
       expect(abortSpy).toHaveBeenCalledTimes(1);
-
       abortSpy.mockRestore();
     });
 
