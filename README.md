@@ -457,6 +457,34 @@ Options:
 * `"paddingLength"`: The string length to reach.
 * `"start"`: If padding should happen at the start of the string, otherwise it will pad from the end.
 
+#### CSV Map Value Transformer
+
+A value transformer that replaces IRI values by looking them up in a two-column CSV file (`key,value`).
+Each line maps one IRI to another. If `invertMapping` is `true`, the columns are swapped so the second column becomes the key.
+
+```json
+{
+  "valueTransformers": [
+    {
+      "@type": "ValueTransformerCsvMap",
+      "file": "path/to/mapping.csv",
+      "invertMapping": false
+    }
+  ]
+}
+```
+
+The CSV file must have no header and contain exactly two comma-separated columns per line:
+
+```
+http://original.example/entity1,http://mapped.example/entity1
+http://original.example/entity2,http://mapped.example/entity2
+```
+
+Options:
+* `"file"`: Path to the CSV mapping file.
+* `"invertMapping"`: _(Optional)_ If `true`, the value column is used as the key and the key column as the replacement. Defaults to `false`.
+
 ## Query Sequence Instantiator
 
 Used by [SolidSessionBench.js](https://github.com/RubenEschauzier/SolidBench.js/tree/feature/user-based-query-sequences) to generate realistic sequences of SPARQL queries per user.
