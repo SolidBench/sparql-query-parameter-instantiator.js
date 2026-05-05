@@ -1,11 +1,12 @@
 import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
-import type { Expression, SelectQuery, Triple } from 'sparqljs';
+import type { Expression, OperationExpression, SelectQuery, Triple } from 'sparqljs';
 import { Generator, Parser } from 'sparqljs';
 import type { IOperatorState, IRefinementState } from '../lib/QuerySequenceTemplate';
 import { QuerySequenceTemplate } from '../lib/QuerySequenceTemplate';
 import type {
   IEntityLogits,
+  IFilterRefinementPattern,
   IQueryRefinementPattern,
   ISubRefinementPattern,
 } from '../lib/QuerySequenceTemplateProvider';
@@ -1017,7 +1018,7 @@ describe('QueryTemplate', () => {
     let template: QuerySequenceTemplateTest;
     let refinementState: IRefinementState;
 
-    const filterExpression = {
+    const filterExpression: OperationExpression = {
       type: 'operation',
       operator: '>',
       args: [
@@ -1055,7 +1056,7 @@ describe('QueryTemplate', () => {
         id: 0,
         target: [ filterExpression ],
       };
-      const result = (<any>template).isValidFilterPattern(pattern, {
+      const result = template.isValidFilterPattern(pattern, {
         queryExpressions: [],
         operatorExpressionsFlattened: {},
         refinementState,
@@ -1075,7 +1076,7 @@ describe('QueryTemplate', () => {
         id: 0,
         target: [ filterExpression ],
       };
-      const result = (<any>template).isValidFilterPattern(pattern, {
+      const result = template.isValidFilterPattern(pattern, {
         queryExpressions: [ filterExpression ],
         operatorExpressionsFlattened: {},
         refinementState,
@@ -1095,7 +1096,7 @@ describe('QueryTemplate', () => {
         id: 0,
         target: [ filterExpression ],
       };
-      const result = (<any>template).isValidFilterPattern(pattern, {
+      const result = template.isValidFilterPattern(pattern, {
         queryExpressions: [],
         operatorExpressionsFlattened: {},
         refinementState,
@@ -1115,7 +1116,7 @@ describe('QueryTemplate', () => {
         id: 0,
         target: [ filterExpression ],
       };
-      const result = (<any>template).isValidFilterPattern(pattern, {
+      const result = template.isValidFilterPattern(pattern, {
         queryExpressions: [],
         operatorExpressionsFlattened: {},
         refinementState,
@@ -1135,7 +1136,7 @@ describe('QueryTemplate', () => {
         id: 0,
         target: [],
       };
-      const result = (<any>template).isValidFilterPattern(pattern, {
+      const result = template.isValidFilterPattern(pattern, {
         queryExpressions: [],
         operatorExpressionsFlattened: { filter: [ filterExpression, filterExpression ]},
         refinementState,
@@ -1155,7 +1156,7 @@ describe('QueryTemplate', () => {
         id: 0,
         target: [],
       };
-      const result = (<any>template).isValidFilterPattern(pattern, {
+      const result = template.isValidFilterPattern(pattern, {
         queryExpressions: [],
         operatorExpressionsFlattened: { filter: [ filterExpression ]},
         refinementState,
@@ -1175,7 +1176,7 @@ describe('QueryTemplate', () => {
         id: 0,
         target: [ filterExpression ],
       };
-      const result = (<any>template).isValidFilterPattern(pattern, {
+      const result = template.isValidFilterPattern(pattern, {
         queryExpressions: [ filterExpression ],
         operatorExpressionsFlattened: { filter: [ filterExpression ]},
         refinementState,
@@ -1195,7 +1196,7 @@ describe('QueryTemplate', () => {
         id: 0,
         target: [ filterExpression ],
       };
-      const result = (<any>template).isValidFilterPattern(pattern, {
+      const result = template.isValidFilterPattern(pattern, {
         queryExpressions: [],
         operatorExpressionsFlattened: { filter: []},
         refinementState,
@@ -4024,5 +4025,19 @@ class QuerySequenceTemplateTest extends QuerySequenceTemplate {
       refinementState,
       variableMapping,
     );
+  }
+
+  public isValidFilterPattern(
+    pattern: IFilterRefinementPattern,
+    context: {
+      queryExpressions: Expression[];
+      operatorExpressionsFlattened: Record<string, Expression[]>;
+      refinementState: IRefinementState;
+      totalExpressions: number;
+      variableMapping: Record<string, RDF.Term>;
+      variablesInQuery: Set<string>;
+    },
+  ): boolean {
+    return super.isValidFilterPattern(pattern, context);
   }
 }
