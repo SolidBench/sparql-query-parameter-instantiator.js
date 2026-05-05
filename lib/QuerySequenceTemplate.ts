@@ -59,6 +59,7 @@ import type { IValueTransformer } from './valuetransformer/IValueTransformer';
  * Data object for a query sequence template.
  */
 export class QuerySequenceTemplate {
+  protected readonly name: string;
   protected readonly syntaxTree: SparqlQuery;
   public readonly variableMappings: Record<string, RDF.Term[]>;
   protected readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
@@ -80,6 +81,7 @@ export class QuerySequenceTemplate {
   public readonly instantiationCounts: Record<string, Record<string, number>> = {};
 
   public constructor(
+    name: string,
     syntaxTree: SparqlQuery,
     variableMappings: Record<string, RDF.Term[]>,
     variableProbabilities: Record<string, Record<string, IEntityLogits[]>>,
@@ -91,6 +93,7 @@ export class QuerySequenceTemplate {
     iriTransformer?: IValueTransformer,
     refinementPatterns?: IQueryRefinementPattern[],
   ) {
+    this.name = name;
     this.syntaxTree = syntaxTree;
     this.variableMappings = variableMappings;
     this.variableProbabilities = variableProbabilities;
@@ -156,17 +159,17 @@ export class QuerySequenceTemplate {
 
   public validateBaseRefinementPattern(pattern: IQueryRefinementPattern): void {
     if (typeof pattern.id !== 'number') {
-      throw new TypeError(`Refinement pattern is missing a numeric id`);
+      throw new TypeError(`${this.name}: Refinement pattern is missing a numeric id`);
     }
     if (pattern.operation !== 'addition' && pattern.operation !== 'removal') {
-      throw new Error(`Invalid operation '${String(pattern.operation)}' in pattern ${pattern.id}: must be 'addition' or 'removal'`);
+      throw new Error(`${this.name}: Invalid operation '${String(pattern.operation)}' in pattern ${pattern.id}: must be 'addition' or 'removal'`);
     }
     if (typeof pattern.location !== 'number') {
-      throw new TypeError(`Pattern ${pattern.id} is missing a numeric location`);
+      throw new TypeError(`${this.name}: Pattern ${pattern.id} is missing a numeric location`);
     }
     const validTypes = [ 'BGP', 'FILTER', 'OPTIONAL', 'UNION', 'SUB' ];
     if (!validTypes.includes(pattern.type)) {
-      throw new Error(`Invalid pattern type '${pattern.type}' in pattern ${pattern.id}`);
+      throw new Error(`${this.name}: Invalid pattern type '${pattern.type}' in pattern ${pattern.id}`);
     }
   }
 
@@ -183,7 +186,7 @@ export class QuerySequenceTemplate {
       !Array.isArray(target[0]) ||
       !Array.isArray(target[1])
     ) {
-      throw new Error(`Invalid UNION target: expected a tuple of two triple arrays, got ${JSON.stringify(target)}`);
+      throw new Error(`${this.name}: Invalid UNION target: expected a tuple of two triple arrays, got ${JSON.stringify(target)}`);
     }
 
     this.validateTripleTarget(target[0], 'UNION (left side)');
@@ -192,7 +195,7 @@ export class QuerySequenceTemplate {
 
   public validateFilterTarget(target: unknown): void {
     if (!Array.isArray(target)) {
-      throw new TypeError(`Invalid FILTER target: expected an array of expressions, got ${JSON.stringify(target)}`);
+      throw new TypeError(`${this.name}: Invalid FILTER target: expected an array of expressions, got ${JSON.stringify(target)}`);
     }
     for (const expr of target) {
       if (
@@ -201,14 +204,14 @@ export class QuerySequenceTemplate {
         !('type' in expr) ||
         ((expr).type !== 'operation' && (expr).type !== 'functionCall')
       ) {
-        throw new Error(`Invalid FILTER target: expected an expression, got ${JSON.stringify(expr)}`);
+        throw new Error(`${this.name}: Invalid FILTER target: expected an expression, got ${JSON.stringify(expr)}`);
       }
     }
   }
 
   public validateTripleTarget(target: unknown, patternType: string): void {
     if (!Array.isArray(target)) {
-      throw new TypeError(`Invalid ${patternType} target: expected an array of triple patterns, got ${JSON.stringify(target)}`);
+      throw new TypeError(`${this.name}: Invalid ${patternType} target: expected an array of triple patterns, got ${JSON.stringify(target)}`);
     }
 
     for (const triple of target) {
@@ -224,20 +227,20 @@ export class QuerySequenceTemplate {
         !('predicate' in triple) ||
         !('object' in triple)
       ) {
-        throw new Error(`Invalid ${patternType} target: each entry must have subject, predicate, and object, got ${JSON.stringify(triple)}`);
+        throw new Error(`${this.name}: Invalid ${patternType} target: each entry must have subject, predicate, and object, got ${JSON.stringify(triple)}`);
       }
 
       // Deep validate the internal structure of the terms
       const rawTriple = <Record<string, unknown>> triple;
 
       if (!isRDFTerm(rawTriple.subject) && !this.isValidTermConfig(rawTriple.subject)) {
-        throw new Error(`Invalid ${patternType} target: invalid subject term, got ${JSON.stringify(rawTriple.subject)}`);
+        throw new Error(`${this.name}: Invalid ${patternType} target: invalid subject term, got ${JSON.stringify(rawTriple.subject)}`);
       }
       if (!isRDFTerm(rawTriple.predicate) && !this.isValidTermConfig(rawTriple.predicate)) {
-        throw new Error(`Invalid ${patternType} target: invalid predicate term, got ${JSON.stringify(rawTriple.predicate)}`);
+        throw new Error(`${this.name}: Invalid ${patternType} target: invalid predicate term, got ${JSON.stringify(rawTriple.predicate)}`);
       }
       if (!isRDFTerm(rawTriple.object) && !this.isValidTermConfig(rawTriple.object)) {
-        throw new Error(`Invalid ${patternType} target: invalid object term, got ${JSON.stringify(rawTriple.object)}`);
+        throw new Error(`${this.name}: Invalid ${patternType} target: invalid object term, got ${JSON.stringify(rawTriple.object)}`);
       }
     }
   }
@@ -282,7 +285,7 @@ export class QuerySequenceTemplate {
     // Create an array of SelectQueries that are variations of the same template
     if (instantiateRefinementPattern) {
       if (!this.refinementPatterns) {
-        throw new Error(`No refinement patterns available for instantiation`);
+        throw new Error(`${this.name}: No refinement patterns available for instantiation`);
       }
       const patternLength = randomIntFromInterval(this.rng, this.minRefinementLength, this.maxRefinementLength);
       const { queries, metadata } = this.createRefinementSequence(
@@ -345,7 +348,7 @@ export class QuerySequenceTemplate {
           this.updateCounter(variable, sampledValues[0].value);
         } else {
           throw new Error(
-            `Variable '${variable}' has probabilities configured but no user was provided for sampling.`,
+            `${this.name}: Variable '${variable}' has probabilities configured but no user was provided for sampling.`,
           );
         }
       }
@@ -368,11 +371,11 @@ export class QuerySequenceTemplate {
     // Only allow SELECT queries
     const variableMapping: Record<string, RDF.Term> = context.variableMapping;
     if (!variableMapping) {
-      throw new Error('Instantiation of syntax tree failed due to missing variableMapping in context');
+      throw new Error('${this.name}: Instantiation of syntax tree failed due to missing variableMapping in context');
     }
 
     if (syntaxTree.type !== 'query' || syntaxTree.queryType !== 'SELECT') {
-      throw new Error(`Only instantiations of SELECT queries are supported`);
+      throw new Error(`${this.name}: Only instantiations of SELECT queries are supported`);
     }
 
     // Remove variables
@@ -512,7 +515,7 @@ export class QuerySequenceTemplate {
 
       const patternToApply = sampleRandom(this.rng, validPatterns);
       if (!patternToApply) {
-        throw new Error(`Found no valid patterns for ${JSON.stringify(query, null, 2)}`);
+        throw new Error(`${this.name}: Found no valid patterns for ${JSON.stringify(query, null, 2)}`);
       }
       const refinedQuery = this.applyRefinementPattern(
         patternToApply,
@@ -618,7 +621,7 @@ export class QuerySequenceTemplate {
     }
 
     if (!toRefineOptional) {
-      throw new Error(`BGP Doesn't exist at index ${context.pattern.location}`);
+      throw new Error(`${this.name}: BGP Doesn't exist at index ${context.pattern.location}`);
     }
 
     this.addTargetToBgp(
@@ -674,11 +677,11 @@ export class QuerySequenceTemplate {
     // It is possible to add to a partial union if the target for that part of the union is empty
     // otherwise there should be a BGP there.
     if (!toRefineUnionLeft && context.pattern.target[0].length > 0) {
-      throw new Error(`BGP Doesn't exist for left union for union at ${context.pattern.location},
+      throw new Error(`${this.name}: BGP Doesn't exist for left union for union at ${context.pattern.location},
         while target is defined.`);
     }
     if (!toRefineUnionRight && context.pattern.target[1].length > 0) {
-      throw new Error(`BGP Doesn't exist for right union for union at ${context.pattern.location},
+      throw new Error(`${this.name}: BGP Doesn't exist for right union for union at ${context.pattern.location},
         while target is defined.`);
     }
 
@@ -847,7 +850,7 @@ export class QuerySequenceTemplate {
   protected getBgpSafely(context: IRefinementContext, operatorType: string, location: number): BgpPattern {
     const bgp = context.operatorToBgp[operatorType]?.[location];
     if (!bgp) {
-      throw new Error(`BGP Doesn't exist at index ${location} for query operator ${operatorType}`);
+      throw new Error(`${this.name}: BGP Doesn't exist at index ${location} for query operator ${operatorType}`);
     }
     return bgp;
   }
@@ -903,7 +906,7 @@ export class QuerySequenceTemplate {
         const subState = refinementState[typeToKeyMap[pattern.type]];
         const stateTargetVariable = subState[pattern.target.value];
         if (!stateTargetVariable) {
-          throw new Error('Passed substitution pattern with target variable that can not be substituted');
+          throw new Error('${this.name}: Passed substitution pattern with target variable that can not be substituted');
         }
         if (stateTargetVariable.nCalls > 0 && pattern.operation === 'addition') {
           return false;

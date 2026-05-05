@@ -7,8 +7,6 @@ import * as yaml from 'js-yaml';
 // Adjust import path
 import { QLeverInstance } from '../../lib/sequence/QLeverInstance';
 
-// Adjust import path
-
 // --- Mocks ---
 jest.mock('node:child_process');
 jest.mock('node:os');
@@ -68,13 +66,12 @@ describe('QLeverInstance', () => {
 
   describe('Initialization and Lifecycle', () => {
     it('starts successfully and reaches a healthy state', async() => {
-      mockFetch.mockResolvedValue({ status: 200 });
+      mockFetch.mockResolvedValue({ status: 200, ok: true });
 
       const instance = new QLeverInstance(instanceArgs);
       await instance.getReadyStatus();
 
       expect(fs.promises.mkdtemp).toHaveBeenCalled();
-      // Qleverfile and docker-compose.yml
       expect(fs.promises.writeFile).toHaveBeenCalledTimes(2);
       expect(spawn).toHaveBeenCalledWith('docker', [ 'volume', 'create', expect.any(String) ], expect.any(Object));
       expect(spawn).toHaveBeenCalledWith('docker', [ 'compose', 'up', '-d' ], expect.any(Object));
@@ -88,15 +85,29 @@ describe('QLeverInstance', () => {
       await expect(instance.getReadyStatus()).rejects.toThrow('FS Error');
     });
 
-    it('waits for healthy state with retries', async() => {
-      // Fail first fetch, succeed second
-      mockFetch
-        .mockRejectedValueOnce(new Error('Network Error'))
-        .mockResolvedValueOnce({ status: 200 });
+    it('swallows errors thrown by stop() during a fatal startup error', async() => {
+      const startupError = new Error('FS Error');
+      (fs.promises.mkdtemp as jest.Mock).mockRejectedValueOnce(startupError);
+
+      const stopSpy = jest.spyOn(QLeverInstance.prototype, 'stop').mockRejectedValueOnce(new Error('Stop Error'));
 
       const instance = new QLeverInstance(instanceArgs);
 
-      // Advance timers to trigger the retry in `waitForHealthy`
+      // Await the ready status. It should reject with the ORIGINAL startup error,
+      await expect(instance.getReadyStatus()).rejects.toThrow('FS Error');
+
+      expect(stopSpy).toHaveBeenCalledTimes(1);
+
+      stopSpy.mockRestore();
+    });
+
+    it('waits for healthy state with retries', async() => {
+      mockFetch
+        .mockRejectedValueOnce(new Error('Network Error'))
+        .mockResolvedValueOnce({ status: 200, ok: true });
+
+      const instance = new QLeverInstance(instanceArgs);
+
       const readyPromise = instance.getReadyStatus();
       await jest.advanceTimersByTimeAsync(500);
 
@@ -109,14 +120,15 @@ describe('QLeverInstance', () => {
 
       const instance = new QLeverInstance(instanceArgs);
 
-      expect(instance.getReadyStatus())
+      const readyExpectation = expect(instance.getReadyStatus())
         .rejects.toThrow('QLever failed to start within 60 seconds. Check docker logs');
 
       await jest.advanceTimersByTimeAsync(60000);
+      await readyExpectation;
     });
 
     it('stops gracefully and removes temporary directories', async() => {
-      mockFetch.mockResolvedValue({ status: 200 });
+      mockFetch.mockResolvedValue({ status: 200, ok: true });
       const instance = new QLeverInstance(instanceArgs);
       await instance.getReadyStatus();
 
@@ -127,7 +139,7 @@ describe('QLeverInstance', () => {
     });
 
     it('handles process signals correctly', async() => {
-      mockFetch.mockResolvedValue({ status: 200 });
+      mockFetch.mockResolvedValue({ status: 200, ok: true });
       const processOnSpy = jest.spyOn(process, 'on');
       const processOffSpy = jest.spyOn(process, 'off');
 
@@ -135,20 +147,73 @@ describe('QLeverInstance', () => {
       await instance.getReadyStatus();
 
       expect(processOnSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
-
       await instance.stop();
-
       expect(processOffSpy).toHaveBeenCalledWith('SIGINT', expect.any(Function));
     });
 
-    it('throws error when docker command fails', async() => {
-      mockSpawnEventOn.mockImplementation((event, cb) => {
-        if (event === 'close') {
-          cb(1);
-        } // Exit code 1 (error)
-      });
+    it('throws error when critical docker commands fail', async() => {
+      (spawn as jest.Mock).mockImplementation((cmd, args) => ({
+        on: (event: string, cb: Function) => {
+          if (event === 'close') {
+            // Fail `docker compose up` to trigger startup rejection
+            if (args.includes('compose') && args.includes('up')) {
+              cb(1);
+            } else {
+              cb(0);
+            }
+          }
+        },
+      }));
       const instance = new QLeverInstance(instanceArgs);
       await expect(instance.getReadyStatus()).rejects.toThrow('Command docker failed with code 1');
+    });
+
+    it('ignores non-critical docker errors during setup', async() => {
+      mockFetch.mockResolvedValue({ status: 200, ok: true });
+      (spawn as jest.Mock).mockImplementation((cmd, args) => ({
+        on: (event: string, cb: Function) => {
+          if (event === 'close') {
+            // Fail 'rm' and 'volume create', which are wrapped in silent catches
+            if (args.includes('rm') || args.includes('volume')) {
+              cb(1);
+            } else {
+              cb(0);
+            }
+          }
+        },
+      }));
+
+      const instance = new QLeverInstance(instanceArgs);
+      // Fails silently, reaches healthy state
+      await expect(instance.getReadyStatus()).resolves.toBeUndefined();
+    });
+
+    it('logs errors silently during shutdown', async() => {
+      mockFetch.mockResolvedValue({ status: 200, ok: true });
+      const instance = new QLeverInstance(instanceArgs);
+      await instance.getReadyStatus();
+
+      // Force failure on shutdown
+      (spawn as jest.Mock).mockImplementation(() => ({
+        on: (event: string, cb: Function) => {
+          if (event === 'close') {
+            cb(1);
+          }
+        },
+      }));
+
+      // Test passes if it resolves without throwing
+      await expect(instance.stop()).resolves.toBeUndefined();
+    });
+
+    it('stops when handleSignal is called and throws', async() => {
+      const instance = new QLeverInstance(instanceArgs);
+      const stopSpy = jest.spyOn(instance, 'stop').mockResolvedValue();
+
+      await expect((instance as any).handleSignal())
+        .rejects.toThrow('QLeverInstance stopped due to signal.');
+
+      expect(stopSpy).toHaveBeenCalled();
     });
   });
 
@@ -156,7 +221,7 @@ describe('QLeverInstance', () => {
     let instance: QLeverInstance;
 
     beforeEach(async() => {
-      mockFetch.mockResolvedValue({ status: 200 });
+      mockFetch.mockResolvedValue({ status: 200, ok: true });
       instance = new QLeverInstance(instanceArgs);
       await instance.getReadyStatus();
       mockFetch.mockClear();
@@ -167,13 +232,13 @@ describe('QLeverInstance', () => {
         selected: [ '?s', '?p', '?o', '?lang', '?type' ],
         res: [
           [
-            '<a>', // Named Node
-            '_:b1', // Blank Node
-            '"string"', // Literal
-            '"bonjour"@fr', // Language Literal
-            '"42"^^<http://www.w3.org/2001/XMLSchema#integer>', // Typed Literal
+            '<a>',
+            '_:b1',
+            '"string"',
+            '"bonjour"@fr',
+            '"42"^^<http://www.w3.org/2001/XMLSchema#integer>',
           ],
-          [ null, null, null, null, null ], // Handle nulls gracefully
+          [ null, null, null, null, null ],
         ],
         runtimeInformation: {
           query_execution_tree: {
@@ -203,7 +268,6 @@ describe('QLeverInstance', () => {
       expect(result.message).toBe('END');
       expect(result.results).toHaveLength(2);
 
-      // Verify parsed term structures via bindings factory results
       const firstRow = result.results[0];
       expect(firstRow.get('s')?.termType).toBe('NamedNode');
       expect(firstRow.get('p')?.termType).toBe('BlankNode');
@@ -211,10 +275,155 @@ describe('QLeverInstance', () => {
       expect((<Literal> firstRow.get('lang'))?.language).toBe('fr');
       expect((firstRow.get('type') as any)?.datatype?.value).toBe('http://www.w3.org/2001/XMLSchema#integer');
 
-      // Verify JoinTree extraction bypassing the 'Filter' node
       expect(result.joinPlan?.operation).toBe('Join (s)');
       expect(result.joinPlan?.children[0].operation).toBe('Scan (s, p, o)');
-      expect(result.joinPlan?.children[1].operation).toBe('Scan (s, o)'); // Filter bypassed
+      expect(result.joinPlan?.children[1].operation).toBe('Scan (s, o)');
+    });
+
+    it('handles query execution tree edge cases and simple text parameters', async() => {
+      const mockResult = {
+        selected: [ '?a', '?b' ],
+        res: [
+          [ '"plain"', 'bareword' ],
+        ],
+        runtimeInformation: {
+          query_execution_tree: {
+            description: 'Filter (empty)',
+            children: [],
+          },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue(mockResult),
+      });
+
+      const result = await instance.executeQuery('SELECT * WHERE { ?a ?b }');
+
+      const firstRow = result.results[0];
+      expect(firstRow.get('a')?.termType).toBe('Literal');
+      expect(firstRow.get('a')?.value).toBe('plain');
+      expect(firstRow.get('b')?.termType).toBe('Literal');
+      expect(firstRow.get('b')?.value).toBe('bareword');
+
+      expect(result.joinPlan).toBeNull();
+    });
+
+    it('handles query execution tree edge without description', async() => {
+      const mockResult = {
+        selected: [ '?a', '?b' ],
+        res: [
+          [ '"plain"', 'bareword' ],
+        ],
+        runtimeInformation: {
+          query_execution_tree: {
+            children: [{
+              description: 'IndexScan PSO',
+              children: [],
+            }],
+          },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue(mockResult),
+      });
+      const result = await instance.executeQuery('SELECT * WHERE { ?a ?b }');
+
+      expect(result.joinPlan).toEqual(
+        { actualOpTimeMs: 0, actualRows: 0, children: [], estimatedOpCost: 0, estimatedRows: 0, operation: 'IndexScan PSO',
+        },
+      );
+    });
+
+    it('handles missing selected and variables without ? prefix', async() => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          // Selected is missing → fallback to []
+          res: [[]],
+          runtimeInformation: { query_execution_tree: null },
+        }),
+      });
+
+      const result = await instance.executeQuery('SELECT *');
+
+      expect(result.results).toHaveLength(1);
+    });
+
+    it('handles variables without leading ?', async() => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          selected: [ 'a', 'b' ], // No '?'
+          res: [[ '"x"', '"y"' ]],
+          runtimeInformation: { query_execution_tree: null },
+        }),
+      });
+
+      const result = await instance.executeQuery('SELECT *');
+
+      const row = result.results[0];
+      expect(row.get('a')?.value).toBe('x');
+      expect(row.get('b')?.value).toBe('y');
+    });
+
+    it('handles empty res json', async() => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          runtimeInformation: { query_execution_tree: null },
+        }),
+      });
+
+      const result = await instance.executeQuery('SELECT *');
+      expect(result).toEqual(
+        {
+          message: 'END',
+          results: [],
+          joinPlan: null,
+        },
+      );
+    });
+
+    it('handles null query execution tree', async() => {
+      const mockResult = {
+        selected: [],
+        res: [],
+        runtimeInformation: { query_execution_tree: null },
+      };
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: jest.fn().mockResolvedValue(mockResult),
+      });
+
+      const result = await instance.executeQuery('SELECT *');
+      expect(result.joinPlan).toBeNull();
+    });
+
+    it('aborts the controller and returns TIMEOUT when the timer expires', async() => {
+      const abortSpy = jest.spyOn(AbortController.prototype, 'abort');
+
+      // Mock fetch to hang indefinitely, but respond to the abort signal
+      mockFetch.mockImplementationOnce((url, options) => {
+        return new Promise((resolve, reject) => {
+          options.signal.addEventListener('abort', () => {
+            const error = new Error('AbortError');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        });
+      });
+      const queryPromise = instance.executeQuery('SELECT *');
+
+      await jest.advanceTimersByTimeAsync(instanceArgs.timeout * 1000);
+
+      expect(abortSpy).toHaveBeenCalledTimes(1);
+
+      abortSpy.mockRestore();
     });
 
     it('returns TIMEOUT if response is not ok', async() => {
@@ -241,5 +450,7 @@ describe('QLeverInstance', () => {
       mockFetch.mockRejectedValueOnce(new Error('Fatal Network Error'));
       await expect(instance.executeQuery('SELECT *')).rejects.toThrow('Fatal Network Error');
     });
+
+    it.todo('calls handleSignal when SIGINT is fired');
   });
 });

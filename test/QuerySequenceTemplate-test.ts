@@ -25,6 +25,7 @@ describe('QueryTemplate', () => {
 
     beforeEach(() => {
       template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -359,6 +360,7 @@ describe('QueryTemplate', () => {
                 ?s ?p ?o
                 }`;
       template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse(queryString),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
@@ -1029,6 +1031,7 @@ describe('QueryTemplate', () => {
 
     beforeEach(() => {
       template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -3221,6 +3224,7 @@ describe('QueryTemplate', () => {
   describe('instantiate', () => {
     it('should instantiate without refinement patterns (basic cycling)', () => {
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1'), DF.namedNode('ex:s2') ]},
         {},
@@ -3242,6 +3246,7 @@ describe('QueryTemplate', () => {
 
     it('should throw when instantiating with refinement flag but no patterns registered', () => {
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
@@ -3271,6 +3276,7 @@ describe('QueryTemplate', () => {
       };
       const mockRng = jest.fn().mockReturnValue(0);
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
@@ -3290,6 +3296,7 @@ describe('QueryTemplate', () => {
 
     it('should use previousQueryResult values when provided', () => {
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
@@ -3305,6 +3312,7 @@ describe('QueryTemplate', () => {
 
     it('should update counter when previousQueryResult + user is given', () => {
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1'), DF.namedNode('ex:s2') ]},
         {},
@@ -3333,6 +3341,7 @@ describe('QueryTemplate', () => {
         .mockReturnValueOnce(0.01) // First sampleTerm call → picks 'ex:val1' (cumulative 0.6 > 0.01)
         .mockReturnValueOnce(0.7); // Second sampleTerm call → picks 'ex:val2' (cumulative 1.0 > 0.7)
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         probabilities,
@@ -3356,6 +3365,7 @@ describe('QueryTemplate', () => {
         },
       };
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         probabilities,
@@ -3374,6 +3384,7 @@ describe('QueryTemplate', () => {
   describe('instantiateSyntaxTreeWrap (error / iriTransformer paths)', () => {
     it('should throw when called with non-SELECT query', () => {
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -3390,6 +3401,7 @@ describe('QueryTemplate', () => {
 
     it('should throw when variableMapping is missing from context', () => {
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -3409,6 +3421,7 @@ describe('QueryTemplate', () => {
         transform: value => DF.namedNode(`${value.value}x`),
       };
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('PREFIX ex: <http://example.org/>\nSELECT * WHERE { ?s ex:p ?o. }'),
         {},
         {},
@@ -3426,6 +3439,7 @@ describe('QueryTemplate', () => {
 
     it('should instantiate GROUP BY expressions when present', () => {
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT ?s WHERE { ?s ?p ?o. } GROUP BY ?s'),
         { p: [ DF.namedNode('ex:p1') ]},
         {},
@@ -3447,6 +3461,7 @@ describe('QueryTemplate', () => {
         transform: (value: RDF.Term) => DF.namedNode(`${value.value}-t`),
       };
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s <ex:p1>/<ex:p2> ?o. }'),
         {},
         {},
@@ -3692,6 +3707,7 @@ describe('QueryTemplate', () => {
       };
       const mockRng = jest.fn().mockReturnValue(0.01);
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse(qs),
         {},
         {},
@@ -3869,6 +3885,7 @@ describe('QueryTemplate', () => {
   describe('updateCounter / getInstantiationCounts / getVariableProbabilities', () => {
     it('should update instantiation counts correctly', () => {
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -3900,6 +3917,7 @@ describe('QueryTemplate', () => {
         },
       };
       const template = new QuerySequenceTemplateTest(
+        'test',
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         probabilities,
@@ -3932,6 +3950,7 @@ function createRefinementInput(
   rngParam?: any,
 ): IRefinementInput {
   const template = new QuerySequenceTemplateTest(
+    'test',
     new Parser().parse(query),
     variableMappings,
     {},

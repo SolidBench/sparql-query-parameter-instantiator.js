@@ -74,7 +74,6 @@ export class QLeverInstance {
           results: [],
         };
       }
-
       const jsonResult = await response.json();
 
       // Extract variables and remove the leading '?' from QLever's output
@@ -150,8 +149,8 @@ export class QLeverInstance {
     this.runDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'qlever-run-'));
 
     // If the user hits Ctrl+C, we shut down the container before exiting node
-    process.on('SIGINT', () => this.handleSignal);
-    process.on('SIGTERM', () => this.handleSignal);
+    process.on('SIGINT', this.handleSignal);
+    process.on('SIGTERM', this.handleSignal);
 
     try {
       // Generate Qleverfile and write to temporary file path
@@ -262,8 +261,8 @@ ACCESS_TOKEN = test
     } finally {
       this.runDir = null;
       // Remove stop listeners
-      process.off('SIGINT', () => this.handleSignal);
-      process.off('SIGTERM', () => this.handleSignal);
+      process.off('SIGINT', this.handleSignal);
+      process.off('SIGTERM', this.handleSignal);
     }
   }
 
@@ -289,7 +288,7 @@ ACCESS_TOKEN = test
     throw new Error(`QLever failed to start within ${timeoutMs / 1000} seconds. Check docker logs.`);
   }
 
-  private readonly handleSignal: () => Promise<never> = async() => {
+  private readonly handleSignal: () => void = async() => {
     await this.stop();
     throw new Error('QLeverInstance stopped due to signal.');
   };

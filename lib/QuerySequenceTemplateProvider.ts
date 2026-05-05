@@ -132,6 +132,7 @@ export class QuerySequenceTemplateProvider {
     }
 
     return new QuerySequenceTemplate(
+      this.name,
       syntaxTree,
       variableMappings,
       variableProbabilityMappings,
