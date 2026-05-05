@@ -121,7 +121,7 @@ describe('QueryNextInstantiatorValue', () => {
       });
 
       const result = await instance.getNextQueryInstantiationValues(query, { s: [ 'nextVar' ]});
-      expect(transformSpy).toHaveBeenCalled();
+      expect(transformSpy).toHaveBeenCalledWith(DF.namedNode('ex:s1'));
       expect(result.instantiationValues.nextVar[0].value).toBe('ex:s1-transformed');
     });
 
@@ -166,22 +166,6 @@ describe('QueryNextInstantiatorValue', () => {
       expect(result.joinPlan!.children).toEqual([
         { operation: '<ex:grandchild>', children: []},
       ]);
-    });
-
-    it('should recursively translate nested join plan children', async() => {
-      mockQLever.executeQuery.mockResolvedValue({
-        message: 'END',
-        results: [],
-        joinPlan: <any> {
-          operation: '<ex:parent>',
-          children: [
-            <any>{ operation: '<ex:child>', children: []},
-          ],
-        },
-      });
-
-      const result = await instance.getNextQueryInstantiationValues(query, {});
-      expect(result.joinPlan!.children).toHaveLength(1);
     });
   });
 
@@ -239,36 +223,43 @@ describe('QueryNextInstantiatorValue', () => {
         transformers: [ transformer ],
       });
 
-      const query = new Parser().parse(`
+      const query = <SelectQuery> new Parser().parse(`
         SELECT * WHERE { ?s <http://frag.org/p> ?o. }
-      `) as SelectQuery;
+      `);
 
       const result = (<any>instance).transformQuery(query, []);
 
-      expect(mockTransformerFragmentedToOriginal.transform).toHaveBeenCalled();
-      expect(spy).toHaveBeenCalled();
+      expect(mockTransformerFragmentedToOriginal.transform)
+        .toHaveBeenCalledWith(DF.namedNode('http://frag.org/p'));
+      expect(spy).toHaveBeenCalledWith(DF.namedNode('http://frag.org/p-orig'));
       expect(result.where[0].triples[0].predicate.value).toBe('http://orig.org/p-orig');
     });
 
     it('should transform property paths via transformTerm', () => {
       const spy = jest.spyOn(<any>instance, 'transformPropertyPath');
 
-      const query = new Parser().parse(`
+      const query = <SelectQuery> new Parser().parse(`
         SELECT * WHERE { ?s <http://ex.org/p>/<http://ex.org/q> ?o. }
-      `) as SelectQuery;
+      `);
 
       (<any>instance).transformQuery(query, []);
 
-      expect(spy).toHaveBeenCalled();
+      expect(spy).toHaveBeenCalledWith(
+        { items: [
+          { termType: 'NamedNode', value: 'http://ex.org/p' },
+          { termType: 'NamedNode', value: 'http://ex.org/q' },
+        ], pathType: '/', type: 'path' },
+        { requiredSelectVariables: []},
+      );
     });
 
     it('should return term unchanged for non-NamedNode, non-PropertyPath', () => {
-      const query = new Parser().parse(`
+      const query = <SelectQuery> new Parser().parse(`
         SELECT * WHERE { 
           ?s ?p ?o .
           FILTER(?o = "test")
         }
-      `) as SelectQuery;
+      `);
 
       const result = (<any>instance).transformQuery(query, []);
 
@@ -289,26 +280,26 @@ describe('QueryNextInstantiatorValue', () => {
         transformers: [ transformer ],
       });
 
-      const query = new Parser().parse(`
+      const query = <SelectQuery> new Parser().parse(`
         PREFIX ex: <http://fragmented.org/>
         SELECT * WHERE { ?s ?p ?o. }
-      `) as SelectQuery;
+      `);
 
-      const expectedQuery = new Parser().parse(`
+      const expectedQuery = <SelectQuery> new Parser().parse(`
         PREFIX ex: <http://original.org/>
         SELECT * WHERE { ?s ?p ?o. }
-      `) as SelectQuery;
+      `);
 
       const result = (<any>instance).transformQuery(query, []);
 
-      expect(spy).toHaveBeenCalled();
+      expect(spy).toHaveBeenCalledWith('http://fragmented.org/');
       expect(result).toEqual(expectedQuery);
     });
 
     it('should transform GROUP BY expressions', () => {
-      const query = new Parser().parse(`
+      const query = <SelectQuery> new Parser().parse(`
         SELECT ?s WHERE { ?s ?p ?o. } GROUP BY ?s
-      `) as SelectQuery;
+      `);
 
       const result = (<any>instance).transformQuery(query, []);
       expect(result.group).toBeDefined();
@@ -320,8 +311,6 @@ describe('QueryNextInstantiatorValue', () => {
         fragmentedRegex: 'fragmented',
         fragmentedString: 'fragmented',
       });
-
-      const spy = jest.spyOn(transformer, 'transformFragmentedToOriginalRaw');
 
       const query = <SelectQuery> new Parser().parse(`
       SELECT ?s ( IRI( CONCAT(str( <https://fragmented/> ), str(?o) )) as ?me )

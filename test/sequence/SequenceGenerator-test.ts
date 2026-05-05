@@ -37,13 +37,14 @@ describe('SequenceGenerator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    mockFindNextInstantiationValue = {
+    mockFindNextInstantiationValue = <jest.Mocked<QueryNextInstantiatorValue>>
+    <unknown> {
       getQLeverReadyStatus: jest.fn().mockResolvedValue(undefined),
       getNextQueryInstantiationValues: jest.fn().mockResolvedValue({
         instantiationValues: { var1: []},
         joinPlan: { operation: 'JOIN', children: []},
       }),
-    } as unknown as jest.Mocked<QueryNextInstantiatorValue>;
+    };
 
     generator = new SequenceGenerator({
       meanLogSequenceLength: 1.5,
@@ -88,7 +89,7 @@ describe('SequenceGenerator', () => {
       const templateCounts = { TemplateA: 2, TemplateB: 0 };
 
       // Mock sampleProbability to return the second item (TemplateB)
-      (RandomUtils.sampleProbability as jest.Mock).mockImplementationOnce((rng, items) => items[1]);
+      (<jest.Mock> RandomUtils.sampleProbability).mockImplementationOnce((rng, items) => items[1]);
 
       const session = generator.startNewSession(mockRng, templates, 1, templateCounts);
 
@@ -110,14 +111,14 @@ describe('SequenceGenerator', () => {
 
   describe('determineNextInstantiator', () => {
     it('maps output variables to instantiation variables across templates', async() => {
-      const mockAst = {} as SelectQuery;
-      const lastTemplate = {
+      const mockAst = <SelectQuery> {};
+      const lastTemplate = <QuerySequenceTemplate> <unknown> {
         outputVariableTypeMap: { outVar1: 'TypeA', outVar2: 'TypeB' },
-      } as unknown as QuerySequenceTemplate;
+      };
 
-      const nextTemplate = {
+      const nextTemplate = <QuerySequenceTemplate> <unknown> {
         instantiationVariableTypeMap: { instVar1: 'TypeA', instVar2: 'TypeC' },
-      } as unknown as QuerySequenceTemplate;
+      };
 
       await generator.determineNextInstantiator(mockAst, lastTemplate, nextTemplate);
 
@@ -127,15 +128,15 @@ describe('SequenceGenerator', () => {
       );
     });
     it('groups multiple output variables of the same type into an array', async() => {
-      const mockAst = {} as SelectQuery;
-      const lastTemplate = {
+      const mockAst = <SelectQuery> {};
+      const lastTemplate = <QuerySequenceTemplate> <unknown> {
         outputVariableTypeMap: { outVar1: 'TypeA' },
-      } as unknown as QuerySequenceTemplate;
+      };
 
-      const nextTemplate = {
+      const nextTemplate = <QuerySequenceTemplate> <unknown> {
         // Includes two variables of the same type to trigger array push branch
         instantiationVariableTypeMap: { instVar1: 'TypeA', instVar2: 'TypeA' },
-      } as unknown as QuerySequenceTemplate;
+      };
 
       await generator.determineNextInstantiator(mockAst, lastTemplate, nextTemplate);
 
@@ -151,7 +152,7 @@ describe('SequenceGenerator', () => {
     let mockSession: any;
 
     beforeEach(() => {
-      const mockAst = { type: 'query', queryType: 'SELECT' } as unknown as SelectQuery;
+      const mockAst = <SelectQuery> <unknown> { type: 'query', queryType: 'SELECT' };
 
       mockQueryTemplate = {
         name: 'Query1',
@@ -209,7 +210,7 @@ describe('SequenceGenerator', () => {
         [],
         'user1',
         {},
-        { sequenceElements: []} as any,
+        <any> { sequenceElements: []},
       );
 
       expect(mockSession.ended).toBe(true);
@@ -223,7 +224,7 @@ describe('SequenceGenerator', () => {
         .mockResolvedValue(mockMappingResult);
 
       const prevTemplate = { template: { outputVariableTypeMap: {}}};
-      mockSession.lastAst = { type: 'query' } as any;
+      mockSession.lastAst = <any> { type: 'query' };
       mockSession.templates = [ prevTemplate ];
 
       await generator.addTemplateToSequence(
@@ -234,7 +235,7 @@ describe('SequenceGenerator', () => {
         [],
         'user1',
         {},
-        { sequenceElements: []} as any,
+        <any> { sequenceElements: []},
       );
 
       // Verify it was called twice (once for values, once for the join plan in the loop)
@@ -254,14 +255,15 @@ describe('SequenceGenerator', () => {
   describe('generateSequence', () => {
     it('executes the generation loop and respects sequence length', async() => {
       // Force sequence length to 2 to run the loop twice
-      (RandomUtils.logNormalRoundedUp as jest.Mock).mockReturnValueOnce(2);
+      (<jest.Mock> RandomUtils.logNormalRoundedUp).mockReturnValueOnce(2);
       const mockMappingResult = {
         instantiationValues: { testVar: [ DF.namedNode('ex:val1') ]},
       };
-      const determineSpy = jest.spyOn(generator, 'determineNextInstantiator')
+      jest.spyOn(generator, 'determineNextInstantiator')
         .mockResolvedValue(mockMappingResult);
 
-      const mockProvider: QuerySequenceTemplateProvider = {
+      const mockProvider: QuerySequenceTemplateProvider = <QuerySequenceTemplateProvider>
+      <unknown> {
         queryTask: 'Task1',
         getTemplateName: () => 'Template1',
         getNextTemplates: () => [{ template: 'Template1', probability: 1 }],
@@ -273,11 +275,11 @@ describe('SequenceGenerator', () => {
             asts: [{ type: 'query', queryType: 'SELECT' }],
           }),
         }),
-      } as unknown as QuerySequenceTemplateProvider;
+      };
 
       const result = await generator.generateSequence(mockRng, [ mockProvider ], {}, 'user1', 1);
 
-      expect(mockFindNextInstantiationValue.getQLeverReadyStatus).toHaveBeenCalled();
+      expect(mockFindNextInstantiationValue.getQLeverReadyStatus).toHaveBeenCalledWith();
       expect(result.querySequence).toHaveLength(2);
       expect(result.sequenceMetadata.sequenceLength).toBe(2);
     });
@@ -292,14 +294,14 @@ describe('SequenceGenerator', () => {
         }),
       };
 
-      (RandomUtils.logNormalRoundedUp as jest.Mock).mockReturnValue(3);
+      (<jest.Mock> RandomUtils.logNormalRoundedUp).mockReturnValue(3);
       const mockMappingResult = {
         instantiationValues: { testVar: [ DF.namedNode('ex:val1') ]},
       };
-      const determineSpy = jest.spyOn(generator, 'determineNextInstantiator')
+      jest.spyOn(generator, 'determineNextInstantiator')
         .mockResolvedValue(mockMappingResult);
 
-      (RandomUtils.sampleHit as jest.Mock)
+      (<jest.Mock> RandomUtils.sampleHit)
         .mockReturnValueOnce(true) // Iteration 1: Switch to new session
         .mockReturnValueOnce(true) // Iteration 2: Switch again
         .mockReturnValueOnce(true); // Iteration 3: To new session!
@@ -311,11 +313,11 @@ describe('SequenceGenerator', () => {
     });
 
     it('creates a new session when nextOptions is empty', async() => {
-      (RandomUtils.logNormalRoundedUp as jest.Mock).mockReturnValue(2);
+      (<jest.Mock> RandomUtils.logNormalRoundedUp).mockReturnValue(2);
       const mockMappingResult = {
         instantiationValues: { testVar: [ DF.namedNode('ex:val1') ]},
       };
-      const determineSpy = jest.spyOn(generator, 'determineNextInstantiator')
+      jest.spyOn(generator, 'determineNextInstantiator')
         .mockResolvedValue(mockMappingResult);
 
       const providerWithNoOptions: any = {
@@ -335,7 +337,7 @@ describe('SequenceGenerator', () => {
     });
 
     it('throws an error if the next template is not found in the providers array', async() => {
-      (RandomUtils.logNormalRoundedUp as jest.Mock).mockReturnValue(2);
+      (<jest.Mock> RandomUtils.logNormalRoundedUp).mockReturnValue(2);
 
       const providerWithBadLink: any = {
         queryTask: 'Task1',
