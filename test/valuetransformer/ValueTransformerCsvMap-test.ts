@@ -14,9 +14,9 @@ describe('ValueTransformerCsvMap', () => {
 
   describe('constructor and readMapping', () => {
     it('parses a standard CSV file correctly', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValue('old1,new1\nold2,new2');
+      (<jest.Mock> fs.readFileSync).mockReturnValue('old1,new1\nold2,new2');
       const transformer = new ValueTransformerCsvMap('dummy.csv');
-      
+
       expect(transformer.readMapping()).toEqual({
         old1: 'new1',
         old2: 'new2',
@@ -24,9 +24,9 @@ describe('ValueTransformerCsvMap', () => {
     });
 
     it('inverts the mapping when invertMapping is set to true', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValue('old1,new1\nold2,new2');
+      (<jest.Mock> fs.readFileSync).mockReturnValue('old1,new1\nold2,new2');
       const transformer = new ValueTransformerCsvMap('dummy.csv', true);
-      
+
       expect(transformer.readMapping()).toEqual({
         new1: 'old1',
         new2: 'old2',
@@ -34,9 +34,9 @@ describe('ValueTransformerCsvMap', () => {
     });
 
     it('trims whitespace from both keys and values', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValue(' old1 , new1 \n  old2,new2  ');
+      (<jest.Mock>fs.readFileSync).mockReturnValue(' old1 , new1 \n  old2,new2  ');
       const transformer = new ValueTransformerCsvMap('dummy.csv');
-      
+
       expect(transformer.readMapping()).toEqual({
         old1: 'new1',
         old2: 'new2',
@@ -48,14 +48,14 @@ describe('ValueTransformerCsvMap', () => {
     let transformer: ValueTransformerCsvMap;
 
     beforeEach(() => {
-      (fs.readFileSync as jest.Mock).mockReturnValue('http://example.org/old,http://example.org/new');
+      (<jest.Mock>fs.readFileSync).mockReturnValue('http://example.org/old,http://example.org/new');
       transformer = new ValueTransformerCsvMap('dummy.csv');
     });
 
     it('returns a new NamedNode with the mapped value when a match is found', () => {
       const input = DF.namedNode('http://example.org/old');
       const output = transformer.transform(input);
-      
+
       expect(output.termType).toBe('NamedNode');
       expect(output.value).toBe('http://example.org/new');
       expect(output).not.toBe(input); // Asserts a new instance is returned
@@ -64,7 +64,7 @@ describe('ValueTransformerCsvMap', () => {
     it('returns the original term when the NamedNode does not exist in the mapping', () => {
       const input = DF.namedNode('http://example.org/other');
       const output = transformer.transform(input);
-      
+
       expect(output).toBe(input); // Asserts exact object reference is maintained
     });
 

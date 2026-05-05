@@ -131,6 +131,7 @@ export class SequenceGenerator {
 
     // Fetch instantiation values for the new query by taking the AST of
     // the previous query in the session (not always the previous query in whole sequence)
+    const sessionHasLastAst = Boolean(session.lastAst);
     if (session.lastAst) {
       const previousTemplate = session.templates.at(-1)!;
       const { instantiationValues } = await this.determineNextInstantiator(
@@ -174,11 +175,15 @@ export class SequenceGenerator {
 
       // Fetch the join plan for this specific query.
       // Passing the current template twice safely executes the query without side-effects on external mappings.
-      const { joinPlan } = await this.determineNextInstantiator(
-        currentAst,
-        query.template,
-        query.template,
-      );
+      let joinPlan: IJoinTreeNode | undefined;
+      if (sessionHasLastAst) {
+        const result = await this.determineNextInstantiator(
+          currentAst,
+          query.template,
+          query.template,
+        );
+        joinPlan = result.joinPlan;
+      }
 
       sequenceMetadata.sequenceElements.push({
         session: {
@@ -192,9 +197,32 @@ export class SequenceGenerator {
         joinPlanCentralized: joinPlan,
       });
     }
-
     return { ast: session.lastAst, queriesAdded: queries.length };
   }
+
+  public async createAndRegisterNewSession(
+    rng: seedrandom.PRNG,
+    user: string,
+    templates: IQuerySequenceElementTemplate[],
+    templateCounts: Record<string, number>,
+    sequenceSessions: IQuerySession[],
+    querySequence: string[],
+    sequenceMetadata: IQuerySequenceMetadata,
+  ): Promise<ISessionStart> {
+    const session = this.startNewSession(rng, templates, sequenceSessions.length, templateCounts);
+    sequenceSessions.push(session);
+    const result = await this.addTemplateToSequence(
+      rng,
+      session.templates[0],
+      session,
+      sequenceSessions,
+      querySequence,
+      user,
+      templateCounts,
+      sequenceMetadata,
+    );
+    return { session, ...result };
+  };
 
   public async generateSequence(
     rng: seedrandom.PRNG,
@@ -219,23 +247,15 @@ export class SequenceGenerator {
     const sequenceSessions: IQuerySession[] = [];
     const querySequence: string[] = [];
 
-    const createAndRegisterNewSession: () => Promise<ISessionStart> = async() => {
-      const session = this.startNewSession(rng, templates, sequenceSessions.length, templateCounts);
-      sequenceSessions.push(session);
-      const result = await this.addTemplateToSequence(
-        rng,
-        session.templates[0],
-        session,
-        sequenceSessions,
-        querySequence,
-        user,
-        templateCounts,
-        sequenceMetadata,
-      );
-      return { session, ...result };
-    };
-
-    let { session: currentSession, queriesAdded } = await createAndRegisterNewSession();
+    let { session: currentSession, queriesAdded } = await this.createAndRegisterNewSession(
+      rng,
+      user,
+      templates,
+      templateCounts,
+      sequenceSessions,
+      querySequence,
+      sequenceMetadata,
+    );
     let totalQueriesGenerated = queriesAdded;
 
     // Control execution loop using total queries to properly handle batch refinement generation
@@ -248,7 +268,15 @@ export class SequenceGenerator {
           currentSession = sampleRandom(rng, openExtraSessions);
           continue;
         } else {
-          const res = await createAndRegisterNewSession();
+          const res = await this.createAndRegisterNewSession(
+            rng,
+            user,
+            templates,
+            templateCounts,
+            sequenceSessions,
+            querySequence,
+            sequenceMetadata,
+          );
           currentSession = res.session;
           totalQueriesGenerated += res.queriesAdded;
           continue;
@@ -260,7 +288,15 @@ export class SequenceGenerator {
 
       if (nextOptions.length === 0) {
         currentSession.ended = true;
-        const res = await createAndRegisterNewSession();
+        const res = await this.createAndRegisterNewSession(
+          rng,
+          user,
+          templates,
+          templateCounts,
+          sequenceSessions,
+          querySequence,
+          sequenceMetadata,
+        );
         currentSession = res.session;
         totalQueriesGenerated += res.queriesAdded;
         continue;

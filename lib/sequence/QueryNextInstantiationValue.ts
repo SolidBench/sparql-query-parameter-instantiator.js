@@ -96,7 +96,7 @@ export class QueryNextInstantiatorValue {
     return transformedQuery;
   }
 
-  private transformPropertyPath(path: PropertyPath, context: Record<string, any>): PropertyPath {
+  protected transformPropertyPath(path: PropertyPath, context: Record<string, any>): PropertyPath {
     return {
       ...path,
       // Map over every item in the path (whether it's an IRI or a nested PropertyPath)

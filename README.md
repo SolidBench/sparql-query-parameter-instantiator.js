@@ -603,7 +603,7 @@ A provider that builds query sequence templates with session-awareness and optio
   "maxRefinementLength": 3,
   "maxLogits": 100,
   "refinementPatternsFilePath": "path/to/refinements/interactive-discover-1.json",
-  "variables": [ /* same structure as QueryTemplateProvider */ ]
+  "variables": []
 }
 ```
 
@@ -614,7 +614,7 @@ Parameters:
 * `"queryTask"`: A label grouping related templates into a task (e.g. `"discover"`).
 * `"instantiationVariableTypeMap"`: Maps the instantiation variables in this template (without `?` prefix) to their entity type. Used to match output variables from the previous query to input variables for this query. This query can follow
 any other query where the entity type in `outputVariableTypeMap` matches an entity type in this `instantiationVariableTypeMap`.
-* `"outputVariableTypeMap"`: Maps SELECT variables in this template to their entity type. Used to provide instantiation values to the next query in the session. 
+* `"outputVariableTypeMap"`: Maps SELECT variables in this template to their entity type. Used to provide instantiation values to the next query in the session.
 * `"nextTemplates"`: Ordered list of template `name`s that may follow this template within a session.
 * `"nextTemplateProbabilities"`: _(Optional)_ Probability weight for each entry in `nextTemplates`. Must have the same length. Defaults to equal weights.
 * `"minRefinementLength"`: Minimum number of refinement steps when a refinement sequence is triggered.

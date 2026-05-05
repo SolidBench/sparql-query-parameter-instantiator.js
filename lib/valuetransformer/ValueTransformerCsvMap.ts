@@ -1,8 +1,8 @@
 import * as fs from 'node:fs';
 import type * as RDF from '@rdfjs/types';
+import { parse } from 'csv-parse/sync';
 import { DataFactory } from 'rdf-data-factory';
 import type { IValueTransformer } from './IValueTransformer';
-import { parse } from 'csv-parse/sync';
 
 const DF = new DataFactory();
 
@@ -20,13 +20,14 @@ export class ValueTransformerCsvMap implements IValueTransformer {
     this.mapping = this.readMapping();
   }
 
-public readMapping(): Record<string, string> {
+  public readMapping(): Record<string, string> {
     const mapping: Record<string, string> = {};
-    
+
     // eslint-disable-next-line no-sync
     const content = fs.readFileSync(this.file, 'utf-8');
-    
+
     const records = parse(content, {
+      // eslint-disable-next-line ts/naming-convention
       skip_empty_lines: true,
       trim: true,
     });
@@ -35,7 +36,7 @@ public readMapping(): Record<string, string> {
       if (record.length >= 2) {
         const key = record[0];
         const value = record[1];
-        
+
         if (key && value) {
           if (this.invertMapping) {
             mapping[value] = key;
@@ -45,7 +46,7 @@ public readMapping(): Record<string, string> {
         }
       }
     }
-    
+
     return mapping;
   }
 

@@ -2,6 +2,7 @@ import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
 import type { SelectQuery } from 'sparqljs';
 import { Parser } from 'sparqljs';
+import type { QLeverInstance } from '../../lib/sequence/QLeverInstance';
 import {
   QueryNextInstantiatorValue,
   TermTransformerBiDirectional,
@@ -9,7 +10,6 @@ import {
 import type {
   IQueryNextInstantiatorValueArgs,
 } from '../../lib/sequence/QueryNextInstantiationValue';
-import type { QLeverInstance } from '../../lib/sequence/QLeverInstance';
 import type { ValueTransformerCsvMap } from '../../lib/valuetransformer/ValueTransformerCsvMap';
 
 const DF = new DataFactory();
@@ -22,22 +22,22 @@ describe('QueryNextInstantiatorValue', () => {
   let args: IQueryNextInstantiatorValueArgs;
 
   beforeEach(() => {
-    mockQLever = {
+    mockQLever = <any> {
       executeQuery: jest.fn().mockResolvedValue({
         message: 'END',
         results: [],
         joinPlan: undefined,
       }),
       getReadyStatus: jest.fn().mockResolvedValue(undefined),
-    } as any;
+    };
 
-    mockTransformerFragmentedToOriginal = {
+    mockTransformerFragmentedToOriginal = <any> {
       transform: jest.fn().mockImplementation((term: RDF.Term) => term),
-    } as any;
+    };
 
-    mockTransformerOriginalToFragmented = {
+    mockTransformerOriginalToFragmented = <any> {
       transform: jest.fn().mockImplementation((term: RDF.Term) => term),
-    } as any;
+    };
 
     args = {
       termMappingTransformerFragmentedToOriginal: mockTransformerFragmentedToOriginal,
@@ -53,11 +53,11 @@ describe('QueryNextInstantiatorValue', () => {
     let query: SelectQuery;
 
     beforeEach(() => {
-      query = new Parser().parse('SELECT * WHERE { ?s ?p ?o. }') as SelectQuery;
+      query = <SelectQuery> new Parser().parse('SELECT * WHERE { ?s ?p ?o. }');
     });
 
     it('should return empty instantiation values when query returns no results', async() => {
-      mockQLever.executeQuery.mockResolvedValue({ message: 'END', results: [] });
+      mockQLever.executeQuery.mockResolvedValue({ message: 'END', results: []});
       const result = await instance.getNextQueryInstantiationValues(query, { s: [ 'nextVar' ]});
       expect(result.instantiationValues).toEqual({ nextVar: []});
       expect(result.joinPlan).toBeUndefined();
@@ -67,7 +67,7 @@ describe('QueryNextInstantiatorValue', () => {
       const binding = new Map([[ 's', DF.namedNode('ex:s1') ]]);
       mockQLever.executeQuery.mockResolvedValue({
         message: 'END',
-        results: [{ get: (v: string) => binding.get(v) } as unknown as RDF.Bindings ],
+        results: [ <RDF.Bindings> { get: (v: string) => binding.get(v) } ],
       });
 
       const result = await instance.getNextQueryInstantiationValues(query, { s: [ 'nextVar' ]});
@@ -78,7 +78,7 @@ describe('QueryNextInstantiatorValue', () => {
       const binding = new Map([[ 's', DF.namedNode('ex:s1') ]]);
       mockQLever.executeQuery.mockResolvedValue({
         message: 'END',
-        results: [{ get: (v: string) => binding.get(v) } as unknown as RDF.Bindings ],
+        results: [ <RDF.Bindings> { get: (v: string) => binding.get(v) } ],
       });
 
       const result = await instance.getNextQueryInstantiationValues(query, { s: [ 'var1', 'var2' ]});
@@ -89,7 +89,7 @@ describe('QueryNextInstantiatorValue', () => {
     it('should skip bindings where output variable is undefined', async() => {
       mockQLever.executeQuery.mockResolvedValue({
         message: 'END',
-        results: [{ get: () => undefined } as unknown as RDF.Bindings ],
+        results: [ <RDF.Bindings><unknown> { get: () => undefined } ],
       });
 
       const result = await instance.getNextQueryInstantiationValues(query, { s: [ 'nextVar' ]});
@@ -117,7 +117,7 @@ describe('QueryNextInstantiatorValue', () => {
       const binding = new Map([[ 's', DF.namedNode('ex:s1') ]]);
       mockQLever.executeQuery.mockResolvedValue({
         message: 'END',
-        results: [{ get: (v: string) => binding.get(v) } as unknown as RDF.Bindings ],
+        results: [ <RDF.Bindings>{ get: (v: string) => binding.get(v) } ],
       });
 
       const result = await instance.getNextQueryInstantiationValues(query, { s: [ 'nextVar' ]});
@@ -152,6 +152,33 @@ describe('QueryNextInstantiatorValue', () => {
           ],
         },
       });
+      const transformer = new TermTransformerBiDirectional({
+        originalRegex: 'child',
+        originalString: 'child',
+        fragmentedRegex: 'grandchild',
+        fragmentedString: 'grandchild',
+      });
+
+      instance = new QueryNextInstantiatorValue({ ...args, transformers: [ transformer ]});
+
+      const result = await instance.getNextQueryInstantiationValues(query, {});
+      expect(result.joinPlan!.children).toHaveLength(1);
+      expect(result.joinPlan!.children).toEqual([
+        { operation: '<ex:grandchild>', children: []},
+      ]);
+    });
+
+    it('should recursively translate nested join plan children', async() => {
+      mockQLever.executeQuery.mockResolvedValue({
+        message: 'END',
+        results: [],
+        joinPlan: <any> {
+          operation: '<ex:parent>',
+          children: [
+            <any>{ operation: '<ex:child>', children: []},
+          ],
+        },
+      });
 
       const result = await instance.getNextQueryInstantiationValues(query, {});
       expect(result.joinPlan!.children).toHaveLength(1);
@@ -173,7 +200,7 @@ describe('QueryNextInstantiatorValue', () => {
     });
 
     it('should add required select variables not already in query', () => {
-      const selectQuery = new Parser().parse('SELECT ?s WHERE { ?s ?p ?o. }') as SelectQuery;
+      const selectQuery = <SelectQuery> new Parser().parse('SELECT ?s WHERE { ?s ?p ?o. }');
       const result = (<any>instance).transformQuery(selectQuery, [ 'p', 'o' ]);
       const varNames = result.variables.map((v: any) => v.value);
       expect(varNames).toContain('p');
@@ -181,27 +208,141 @@ describe('QueryNextInstantiatorValue', () => {
     });
 
     it('should not duplicate variables already in SELECT', () => {
-      const selectQuery = new Parser().parse('SELECT ?s WHERE { ?s ?p ?o. }') as SelectQuery;
+      const selectQuery = <SelectQuery> new Parser().parse('SELECT ?s WHERE { ?s ?p ?o. }');
       const result = (<any>instance).transformQuery(selectQuery, [ 's' ]);
       const varNames = result.variables.map((v: any) => v.value);
       expect(varNames.filter((v: string) => v === 's')).toHaveLength(1);
     });
 
     it('should not modify variables when query uses wildcard', () => {
-      const selectQuery = new Parser().parse('SELECT * WHERE { ?s ?p ?o. }') as SelectQuery;
+      const selectQuery = <SelectQuery> new Parser().parse('SELECT * WHERE { ?s ?p ?o. }');
       const result = (<any>instance).transformQuery(selectQuery, [ 'newVar' ]);
-      expect(result.variables).toHaveLength(1); // Still just the wildcard
+      expect(result.variables).toHaveLength(1);
     });
 
-    // it('should transform NamedNode terms in WHERE clause', () => {
-    //   mockTransformerFragmentedToOriginal.transform.mockImplementation(
-    //     (term: RDF.Term) => DF.namedNode(`${term.value}-original`),
-    //   );
-    //   const selectQuery = new Parser().parse('SELECT * WHERE { ?s <ex:p> ?o. }') as SelectQuery;
-    //   const result = (<any>instance).transformQuery(selectQuery, []);
-    //   expect(new Parser().parse(require('sparqljs').Generator
-    //     ? new require('sparqljs').Generator().stringify(result) : '')).toBeDefined();
-    // });
+    it('should transform NamedNode terms via transformers', () => {
+      mockTransformerFragmentedToOriginal.transform.mockImplementation(
+        (term: RDF.Term) => DF.namedNode(`${term.value}-orig`),
+      );
+
+      const transformer = new TermTransformerBiDirectional({
+        originalRegex: 'orig',
+        originalString: 'orig',
+        fragmentedRegex: 'frag',
+        fragmentedString: 'frag',
+      });
+
+      const spy = jest.spyOn(transformer, 'transformFragmentedToOriginal');
+
+      instance = new QueryNextInstantiatorValue({
+        ...args,
+        transformers: [ transformer ],
+      });
+
+      const query = new Parser().parse(`
+        SELECT * WHERE { ?s <http://frag.org/p> ?o. }
+      `) as SelectQuery;
+
+      const result = (<any>instance).transformQuery(query, []);
+
+      expect(mockTransformerFragmentedToOriginal.transform).toHaveBeenCalled();
+      expect(spy).toHaveBeenCalled();
+      expect(result.where[0].triples[0].predicate.value).toBe('http://orig.org/p-orig');
+    });
+
+    it('should transform property paths via transformTerm', () => {
+      const spy = jest.spyOn(<any>instance, 'transformPropertyPath');
+
+      const query = new Parser().parse(`
+        SELECT * WHERE { ?s <http://ex.org/p>/<http://ex.org/q> ?o. }
+      `) as SelectQuery;
+
+      (<any>instance).transformQuery(query, []);
+
+      expect(spy).toHaveBeenCalled();
+    });
+
+    it('should return term unchanged for non-NamedNode, non-PropertyPath', () => {
+      const query = new Parser().parse(`
+        SELECT * WHERE { 
+          ?s ?p ?o .
+          FILTER(?o = "test")
+        }
+      `) as SelectQuery;
+
+      const result = (<any>instance).transformQuery(query, []);
+
+      expect(result).toBeDefined();
+    });
+    it('should call transformFragmentedToOriginalRaw for prefixes', () => {
+      const transformer = new TermTransformerBiDirectional({
+        originalRegex: 'original',
+        originalString: 'original',
+        fragmentedRegex: 'fragmented',
+        fragmentedString: 'fragmented',
+      });
+
+      const spy = jest.spyOn(transformer, 'transformFragmentedToOriginalRaw');
+
+      instance = new QueryNextInstantiatorValue({
+        ...args,
+        transformers: [ transformer ],
+      });
+
+      const query = new Parser().parse(`
+        PREFIX ex: <http://fragmented.org/>
+        SELECT * WHERE { ?s ?p ?o. }
+      `) as SelectQuery;
+
+      const expectedQuery = new Parser().parse(`
+        PREFIX ex: <http://original.org/>
+        SELECT * WHERE { ?s ?p ?o. }
+      `) as SelectQuery;
+
+      const result = (<any>instance).transformQuery(query, []);
+
+      expect(spy).toHaveBeenCalled();
+      expect(result).toEqual(expectedQuery);
+    });
+
+    it('should transform GROUP BY expressions', () => {
+      const query = new Parser().parse(`
+        SELECT ?s WHERE { ?s ?p ?o. } GROUP BY ?s
+      `) as SelectQuery;
+
+      const result = (<any>instance).transformQuery(query, []);
+      expect(result.group).toBeDefined();
+    });
+    it('should transform query with term in variables', () => {
+      const transformer = new TermTransformerBiDirectional({
+        originalRegex: 'original',
+        originalString: 'original',
+        fragmentedRegex: 'fragmented',
+        fragmentedString: 'fragmented',
+      });
+
+      const spy = jest.spyOn(transformer, 'transformFragmentedToOriginalRaw');
+
+      const query = <SelectQuery> new Parser().parse(`
+      SELECT ?s ( IRI( CONCAT(str( <https://fragmented/> ), str(?o) )) as ?me )
+        WHERE {
+        ?s ?p ?o 
+        } limit 5
+      `);
+      const expectedQuery = <SelectQuery> new Parser().parse(`
+      SELECT ?s ( IRI( CONCAT(str( <https://original/> ), str(?o) )) as ?me )
+        WHERE {
+        ?s ?p ?o 
+        } limit 5
+      `);
+
+      instance = new QueryNextInstantiatorValue({
+        ...args,
+        transformers: [ transformer ],
+      });
+      const result = (<any>instance).transformQuery(query, []);
+      expect(result).toEqual(expectedQuery);
+    });
   });
 });
 
