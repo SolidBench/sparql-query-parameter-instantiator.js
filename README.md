@@ -474,9 +474,10 @@ Each line maps one IRI to another. If `invertMapping` is `true`, the columns are
 }
 ```
 
-The CSV file must have no header and contain exactly two comma-separated columns per line:
+The CSV file must contain exactly two comma-separated columns per line:
 
 ```
+originalSubject,mappedSubject
 http://original.example/entity1,http://mapped.example/entity1
 http://original.example/entity2,http://mapped.example/entity2
 ```
@@ -489,7 +490,7 @@ Options:
 
 Used by [SolidSessionBench.js](https://github.com/RubenEschauzier/SolidBench.js/tree/feature/user-based-query-sequences) to generate realistic sequences of SPARQL queries per user.
 Unlike the standard instantiator, this generates ordered sequences where consecutive queries within a session share variable bindings derived from the previous query's results.
-Sequences can also include query refinements — additions, removals, or substitutions of query patterns that simulate a user iteratively exploring data.
+Sequences can also include query refinements: additions, removals, or substitutions of query patterns that simulate a user iteratively exploring data.
 
 ### Logical sessions
 
@@ -611,8 +612,9 @@ Parameters:
 * `"templateFilePath"`: The path to a SPARQL template file.
 * `"name"`: Unique identifier for this template, used to reference it in `nextTemplates`.
 * `"queryTask"`: A label grouping related templates into a task (e.g. `"discover"`).
-* `"instantiationVariableTypeMap"`: Maps variables in this template (without `?` prefix) to their entity type. Used to match output variables from the previous query to input variables for this query.
-* `"outputVariableTypeMap"`: Maps SELECT variables in this template to their entity type. Used to provide instantiation values to the next query in the session.
+* `"instantiationVariableTypeMap"`: Maps the instantiation variables in this template (without `?` prefix) to their entity type. Used to match output variables from the previous query to input variables for this query. This query can follow
+any other query where the entity type in `outputVariableTypeMap` matches an entity type in this `instantiationVariableTypeMap`.
+* `"outputVariableTypeMap"`: Maps SELECT variables in this template to their entity type. Used to provide instantiation values to the next query in the session. 
 * `"nextTemplates"`: Ordered list of template `name`s that may follow this template within a session.
 * `"nextTemplateProbabilities"`: _(Optional)_ Probability weight for each entry in `nextTemplates`. Must have the same length. Defaults to equal weights.
 * `"minRefinementLength"`: Minimum number of refinement steps when a refinement sequence is triggered.
