@@ -309,6 +309,65 @@ Parameters:
 * `"substitutionProvider"`: The substitution provider to shuffle.
 * `"seed"`: The random seed for shuffling.
 
+#### CSV Similarity-Based Probability Substitution Provider
+
+A substitution provider for use with `QuerySequenceTemplateProvider` that drives similarity-based entity selection at the start of a logical session.
+It reads two CSV files: an optional file of candidate values, and a required similarities file that maps each subject entity (e.g. a user) to a JSON-encoded array of `{ entity, similarity }` objects.
+At session start, the similarity logits for the active user are extracted, passed through a softmax (using the configured `temperature`), and used to sample a starting entity that reflects the user's interests rather than picking uniformly at random.
+
+```json
+{
+  "substitutionProvider": {
+    "@type": "SubstitutionProviderCsvSimilarityBasedProbability",
+    "csvFilePath": "path/to/values.csv",
+    "columnName": "person",
+    "columnNameSimilaritySubject": "user",
+    "csvFilePathSimilarities": "path/to/similarities.csv"
+  }
+}
+```
+
+The similarities CSV must have at least two columns: one named by `columnNameSimilaritySubject` (the subject, e.g. a user IRI), and one named `similarities` containing a JSON array of `{ "entity": "...", "similarity": <number> }` objects.
+
+Parameters:
+
+* `"csvFilePath"`: _(Optional)_ Path to a CSV file of candidate values. When omitted, `getValues()` returns an empty list (values come solely from the similarity mapping).
+* `"columnName"`: Column in `csvFilePath` to extract flat values from.
+* `"columnNameSimilaritySubject"`: Column in `csvFilePathSimilarities` that identifies the subject entity (e.g. the user).
+* `"csvFilePathSimilarities"`: Path to a CSV file mapping each subject entity to its similarity logits.
+* `"separator"`: _(Optional)_ Column separator for both CSV files. Defaults to `,`.
+
+#### Union Probabilities Substitution Provider
+
+A variant of `SubstitutionProviderUnion` for providers that implement `ISubstitutionProviderProbabilities` (i.e., those that also expose similarity logits via `getValuesProbabilities`).
+It merges the flat value lists and the similarity maps from all wrapped providers, sorting the combined similarity entries per subject in descending order.
+
+```json
+{
+  "substitutionProvider": {
+    "@type": "SubstitutionProviderUnionProbabilities",
+    "substitutionProviders": [
+      {
+        "@type": "SubstitutionProviderCsvSimilarityBasedProbability",
+        "columnName": "person",
+        "columnNameSimilaritySubject": "user",
+        "csvFilePathSimilarities": "path/to/similarities-a.csv"
+      },
+      {
+        "@type": "SubstitutionProviderCsvSimilarityBasedProbability",
+        "columnName": "person",
+        "columnNameSimilaritySubject": "user",
+        "csvFilePathSimilarities": "path/to/similarities-b.csv"
+      }
+    ]
+  }
+}
+```
+
+Parameters:
+
+* `"substitutionProviders"`: Array of `ISubstitutionProviderProbabilities` providers to union over.
+
 ### Value Transformers
 
 Value transformers can be attached to variable templates
@@ -403,6 +462,17 @@ Options:
 Used by [SolidSessionBench.js](https://github.com/RubenEschauzier/SolidBench.js/tree/feature/user-based-query-sequences) to generate realistic sequences of SPARQL queries per user.
 Unlike the standard instantiator, this generates ordered sequences where consecutive queries within a session share variable bindings derived from the previous query's results.
 Sequences can also include query refinements — additions, removals, or substitutions of query patterns that simulate a user iteratively exploring data.
+
+### Logical sessions
+
+A generated sequence models a user conducting multiple interleaved _logical sessions_.
+Each session has a task focus and a sampled length drawn from a log-normal distribution.
+Within a session, consecutive queries are linked: the output variables of one query are used to instantiate the next, simulating a user who clicks through results.
+To determine these binding values, the previous query is re-executed against a centralized SPARQL endpoint (via a `QueryNextInstantiatorValue`), and the results are mapped from the centralized dataset IRIs back to the fragmented IRIs of the benchmark dataset.
+
+At the _start_ of a new logical session, there is no previous query to link from.
+In this case, if the query template's variable is backed by a `SubstitutionProviderCsvSimilarityBasedProbability` (or `SubstitutionProviderUnionProbabilities`), the first entity is sampled from a per-user similarity distribution rather than uniformly at random.
+This models a user choosing a starting point that reflects their personal interests.
 
 ### Invoke from the command line
 
@@ -553,7 +623,55 @@ Parameters:
 * `"stdLogTransitionProbability"`: Log-normal standard deviation for the session transition probability.
 * `"refinementPatternProbability"`: Probability that a query instantiation triggers a refinement sequence.
 * `"temperature"`: Softmax temperature for entity selection from probability-weighted candidates.
-* `"findNextInstantiationValue"`: A `QueryNextInstantiatorValue` instance used to derive binding values for the next query from the previous query's results.
+* `"findNextInstantiationValue"`: A `QueryNextInstantiatorValue` instance. At each step within a session it re-executes the previous query against a centralized SPARQL endpoint and maps the results back to fragmented IRIs so they can be used to instantiate the next query.
+
+#### QueryNextInstantiatorValue
+
+Bridges the fragmented benchmark dataset and the centralized dataset used to resolve cross-document links within a session.
+It starts a QLever SPARQL endpoint using Docker, executes each previous query in its centralized form, and translates the resulting IRIs back to the fragmented form expected by the benchmark templates.
+
+```json
+{
+  "@type": "QueryNextInstantiatorValue",
+  "termMappingTransformerFragmentedToOriginal": {
+    "@type": "ValueTransformerCsvMap",
+    "file": "path/to/fragmented-to-original.csv"
+  },
+  "termMappingTransformerOriginalToFragmented": {
+    "@type": "ValueTransformerCsvMap",
+    "file": "path/to/original-to-fragmented.csv"
+  },
+  "transformers": [
+    {
+      "@type": "TermTransformerBiDirectional",
+      "originalRegex": "^http://www.ldbc.eu",
+      "originalString": "http://www.ldbc.eu",
+      "fragmentedRegex": "^http://localhost:3000/www.ldbc.eu",
+      "fragmentedString": "http://localhost:3000/www.ldbc.eu"
+    }
+  ],
+  "qLever": {
+    "@type": "QLeverInstance",
+    "imageName": "adfreiburg/qlever",
+    "dataLocations": ["path/to/centralized.ttl"],
+    "port": 7001,
+    "timeout": 30
+  }
+}
+```
+
+Parameters:
+
+* `"termMappingTransformerFragmentedToOriginal"`: A `ValueTransformerCsvMap` that translates fragmented IRIs to centralized IRIs for entities (e.g. posts/comments) whose mapping is not a simple string replacement.
+* `"termMappingTransformerOriginalToFragmented"`: A `ValueTransformerCsvMap` that translates centralized IRIs back to fragmented IRIs.
+* `"transformers"`: An array of `TermTransformerBiDirectional` objects for IRI segments that _can_ be replaced by a regex. Applied from most-specific to most-general. Each transformer has:
+  * `"originalRegex"` / `"originalString"`: Regex and replacement string for the centralized form.
+  * `"fragmentedRegex"` / `"fragmentedString"`: Regex and replacement string for the fragmented form.
+* `"qLever"`: A `QLeverInstance` that manages a Dockerized QLever server used to execute the centralized queries. Parameters:
+  * `"imageName"`: Docker image name for QLever (e.g. `"adfreiburg/qlever"`).
+  * `"dataLocations"`: Array of paths to TTL files to load into the index.
+  * `"port"`: Local port for the QLever HTTP endpoint.
+  * `"timeout"`: Per-query timeout in seconds.
 
 #### Refinement Patterns
 
