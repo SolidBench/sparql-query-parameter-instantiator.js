@@ -255,8 +255,7 @@ export class QuerySequenceTemplate {
           this.updateCounter(variable, sampledValues[0].value);
         } else {
           throw new Error(
-            `Either probabilities (${Object.keys(this.variableProbabilities).length > 0 ? 'defined' : 'undefined'}), ` +
-            `or base user (${user ? 'defined' : 'undefined'}) are not given.`,
+            `Variable '${variable}' has probabilities configured but no user was provided for sampling.`,
           );
         }
       }

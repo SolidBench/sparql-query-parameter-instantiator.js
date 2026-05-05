@@ -431,15 +431,15 @@ describe('RefinementSequenceUtils', () => {
       const groupWithUnknown = <any>{
         type: 'group',
         patterns: [
-          // 'bind' with no subpatterns, followed by an unknown type
           <any>{ type: 'unknownPatternType' },
         ],
       };
+      expect(() => getVariablesInExpression(groupWithUnknown)).not.toThrow();
       expect(getVariablesInExpression(groupWithUnknown)).toEqual(new Set());
     });
 
     it('handles a graph pattern nested inside a group (covers visitPattern case graph)', () => {
-      // visitPattern needs to be called with type 'graph' to cover that case arm.
+      // VisitPattern needs to be called with type 'graph' to cover that case arm.
       // This happens when a graph is nested inside a group expression.
       const groupWithGraph = <GroupPattern>{
         type: 'group',
@@ -461,6 +461,29 @@ describe('RefinementSequenceUtils', () => {
         ],
       };
       expect(getVariablesInExpression(groupWithGraph)).toEqual(new Set([ 'nestedGraphVar' ]));
+    });
+
+    it('extracts variables from a group nested inside another group (covers visitPattern case group)', () => {
+      // VisitPattern 'group' case: a GroupPattern nested inside a GroupPattern
+      const outerGroup = <GroupPattern>{
+        type: 'group',
+        patterns: [
+          <GroupPattern>{
+            type: 'group',
+            patterns: [
+              <BgpPattern>{
+                type: 'bgp',
+                triples: [{
+                  subject: DF.variable('innerGroupVar'),
+                  predicate: DF.namedNode('p'),
+                  object: DF.literal('o'),
+                }],
+              },
+            ],
+          },
+        ],
+      };
+      expect(getVariablesInExpression(outerGroup)).toEqual(new Set([ 'innerGroupVar' ]));
     });
   });
 
