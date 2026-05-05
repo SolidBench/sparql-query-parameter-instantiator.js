@@ -44,6 +44,7 @@ import {
   flattenOperators,
   getVariablesInExpression,
   hasTriple,
+  isRdfJsTriple,
   isRDFTerm,
   targetToTriple,
   toTermNoLiteral,
@@ -58,23 +59,23 @@ import type { IValueTransformer } from './valuetransformer/IValueTransformer';
  * Data object for a query sequence template.
  */
 export class QuerySequenceTemplate {
-  private readonly syntaxTree: SparqlQuery;
+  protected readonly syntaxTree: SparqlQuery;
   public readonly variableMappings: Record<string, RDF.Term[]>;
-  private readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
+  protected readonly variableProbabilities: Record<string, Record<string, IEntityLogits[]>>;
   // Mapping from variable to be instantiated to the type of variable (defined in config)
   public readonly instantiationVariableTypeMap: Record<string, string>;
   // Mapping from output query variable usable for next query instantiation to the type
   // of instantiator
   public readonly outputVariableTypeMap: Record<string, string>;
 
-  private readonly rng: seedrandom.PRNG;
-  private readonly dataFactory: DataFactory = new DataFactory();
+  protected readonly rng: seedrandom.PRNG;
+  protected readonly dataFactory: DataFactory = new DataFactory();
 
-  private readonly iriTransformer?: IValueTransformer;
+  protected readonly iriTransformer?: IValueTransformer;
 
-  private readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
-  private readonly minRefinementLength: number;
-  private readonly maxRefinementLength: number;
+  protected readonly refinementPatterns: IQueryRefinementPattern[] | undefined;
+  protected readonly minRefinementLength: number;
+  protected readonly maxRefinementLength: number;
 
   public readonly instantiationCounts: Record<string, Record<string, number>> = {};
 
@@ -104,19 +105,21 @@ export class QuerySequenceTemplate {
     this.iriTransformer = iriTransformer;
   }
 
-  public mapRefinementConfigToSparqlJs(refinementPatterns: IQueryRefinementPattern[]):
-  IQueryRefinementPattern[] {
+  public mapRefinementConfigToSparqlJs(refinementPatterns: IQueryRefinementPattern[]): IQueryRefinementPattern[] {
     return refinementPatterns.map((pattern) => {
-      // Map config representation of target of substitution to a RDF.Variable object
+      this.validateBaseRefinementPattern(pattern);
+
       if (pattern.type === 'SUB' && !this.isVariable(pattern.target)) {
-        pattern.target = <RDF.Variable> toTermNoLiteral(pattern.target, this.dataFactory);
+        this.validateSubTarget(pattern.target);
+        pattern.target = <RDF.Variable>toTermNoLiteral(pattern.target, this.dataFactory);
       } else if (pattern.type === 'UNION') {
+        this.validateUnionTarget(pattern.target);
         pattern.target = [
           pattern.target[0].map(triple => targetToTriple(triple, this.dataFactory)),
           pattern.target[1].map(triple => targetToTriple(triple, this.dataFactory)),
         ];
       } else if (pattern.type === 'FILTER') {
-        // Deeply map raw JSON terms within filter expressions to valid RDFJS objects
+        this.validateFilterTarget(pattern.target);
         pattern.target = pattern.target.map(expr =>
           recurseExpression(
             expr,
@@ -131,25 +134,112 @@ export class QuerySequenceTemplate {
                 }
                 if (type === 'literal') {
                   let languageOrDatatype: string | RDF.NamedNode | undefined = term.language;
-
-                  // We can safely access term.datatype.value because of our interface
-                  if (!languageOrDatatype && term.datatype && term.datatype.value) {
+                  if (!languageOrDatatype && term.datatype?.value) {
                     languageOrDatatype = this.dataFactory.namedNode(term.datatype.value);
                   }
-
                   return this.dataFactory.literal(term.value, languageOrDatatype);
                 }
               }
-              return <Term> term;
+              return <Term>term;
             },
             {},
             this.instantiateSyntaxTreeRecurse,
           ));
       } else if (pattern.type !== 'SUB') {
+        this.validateTripleTarget(pattern.target, pattern.type);
         pattern.target = pattern.target.map(triple => targetToTriple(triple, this.dataFactory));
       }
+
       return pattern;
     });
+  }
+
+  public validateBaseRefinementPattern(pattern: IQueryRefinementPattern): void {
+    if (typeof pattern.id !== 'number') {
+      throw new TypeError(`Refinement pattern is missing a numeric id`);
+    }
+    if (pattern.operation !== 'addition' && pattern.operation !== 'removal') {
+      throw new Error(`Invalid operation '${String(pattern.operation)}' in pattern ${pattern.id}: must be 'addition' or 'removal'`);
+    }
+    if (typeof pattern.location !== 'number') {
+      throw new TypeError(`Pattern ${pattern.id} is missing a numeric location`);
+    }
+    const validTypes = [ 'BGP', 'FILTER', 'OPTIONAL', 'UNION', 'SUB' ];
+    if (!validTypes.includes(pattern.type)) {
+      throw new Error(`Invalid pattern type '${pattern.type}' in pattern ${pattern.id}`);
+    }
+  }
+
+  public validateSubTarget(target: unknown): void {
+    if (!isRDFTerm(target) && !this.isValidTermConfig(target)) {
+      throw new Error(`Invalid SUB target: expected a variable term, got ${JSON.stringify(target)}`);
+    }
+  }
+
+  public validateUnionTarget(target: unknown): void {
+    if (
+      !Array.isArray(target) ||
+      target.length !== 2 ||
+      !Array.isArray(target[0]) ||
+      !Array.isArray(target[1])
+    ) {
+      throw new Error(`Invalid UNION target: expected a tuple of two triple arrays, got ${JSON.stringify(target)}`);
+    }
+
+    this.validateTripleTarget(target[0], 'UNION (left side)');
+    this.validateTripleTarget(target[1], 'UNION (right side)');
+  }
+
+  public validateFilterTarget(target: unknown): void {
+    if (!Array.isArray(target)) {
+      throw new TypeError(`Invalid FILTER target: expected an array of expressions, got ${JSON.stringify(target)}`);
+    }
+    for (const expr of target) {
+      if (
+        typeof expr !== 'object' ||
+        expr === null ||
+        !('type' in expr) ||
+        ((expr).type !== 'operation' && (expr).type !== 'functionCall')
+      ) {
+        throw new Error(`Invalid FILTER target: expected an expression, got ${JSON.stringify(expr)}`);
+      }
+    }
+  }
+
+  public validateTripleTarget(target: unknown, patternType: string): void {
+    if (!Array.isArray(target)) {
+      throw new TypeError(`Invalid ${patternType} target: expected an array of triple patterns, got ${JSON.stringify(target)}`);
+    }
+
+    for (const triple of target) {
+      // If it's already a strict RDF.js triple, it's valid
+      if (isRdfJsTriple(triple)) {
+        continue;
+      }
+
+      if (
+        typeof triple !== 'object' ||
+        triple === null ||
+        !('subject' in triple) ||
+        !('predicate' in triple) ||
+        !('object' in triple)
+      ) {
+        throw new Error(`Invalid ${patternType} target: each entry must have subject, predicate, and object, got ${JSON.stringify(triple)}`);
+      }
+
+      // Deep validate the internal structure of the terms
+      const rawTriple = <Record<string, unknown>> triple;
+
+      if (!isRDFTerm(rawTriple.subject) && !this.isValidTermConfig(rawTriple.subject)) {
+        throw new Error(`Invalid ${patternType} target: invalid subject term, got ${JSON.stringify(rawTriple.subject)}`);
+      }
+      if (!isRDFTerm(rawTriple.predicate) && !this.isValidTermConfig(rawTriple.predicate)) {
+        throw new Error(`Invalid ${patternType} target: invalid predicate term, got ${JSON.stringify(rawTriple.predicate)}`);
+      }
+      if (!isRDFTerm(rawTriple.object) && !this.isValidTermConfig(rawTriple.object)) {
+        throw new Error(`Invalid ${patternType} target: invalid object term, got ${JSON.stringify(rawTriple.object)}`);
+      }
+    }
   }
 
   public isValidTermConfig(term: unknown): term is ISerializedRDFTerm {
@@ -216,7 +306,7 @@ export class QuerySequenceTemplate {
     };
   }
 
-  private getVariableMapping(
+  protected getVariableMapping(
     previousQueryResult: Record<string, RDF.Term[]>,
     counter: number,
     user?: string,
@@ -263,14 +353,14 @@ export class QuerySequenceTemplate {
     return { variableMapping, alternativeMapping };
   }
 
-  // TODO: This has complete overlap with QueryTemplate functions. When we're happy with the benchmark
+  // TODO: This has overlap with QueryTemplate functions. When we're happy with the benchmark
   // we should make a base instantiator class.
   public instantiateSyntaxTreeWrap(syntaxTree: SparqlQuery, variableMapping: Record<string, RDF.Term>): SelectQuery {
     const context: Record<string, any> = { variableMapping };
     return this.instantiateSyntaxTreeRecurse(syntaxTree, this.instantiateTerm, context);
   }
 
-  private readonly instantiateSyntaxTreeRecurse = (
+  protected readonly instantiateSyntaxTreeRecurse = (
     syntaxTree: SparqlQuery,
     termCallback: TermCallback,
     context: Record<string, any>,
@@ -339,7 +429,7 @@ export class QuerySequenceTemplate {
     return syntaxTree;
   };
 
-  private readonly instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
+  protected readonly instantiateTerm = <T extends IriTerm | BlankTerm | VariableTerm | QuadTerm | PropertyPath | Term>(
     term: T,
     context: Record<string, any>,
   ): T | RDF.Term => {
@@ -364,7 +454,7 @@ export class QuerySequenceTemplate {
     return term;
   };
 
-  private transformPropertyPath(path: PropertyPath, context: Record<string, any>): PropertyPath {
+  protected transformPropertyPath(path: PropertyPath, context: Record<string, any>): PropertyPath {
     return {
       ...path,
       // Map over every item in the path (whether it's an IRI or a nested PropertyPath)
@@ -373,7 +463,7 @@ export class QuerySequenceTemplate {
     };
   }
 
-  public createRefinementSequence(
+  protected createRefinementSequence(
     refinementPatterns: IQueryRefinementPattern[],
     query: SelectQuery,
     nSteps: number,
@@ -441,17 +531,13 @@ export class QuerySequenceTemplate {
     return { queries: refinementSequence, metadata: patternMetadata };
   }
 
-  public applyRefinementPattern(
+  protected applyRefinementPattern(
     pattern: IQueryRefinementPattern,
     query: SelectQuery,
     variableMapping: Record<string, RDF.Term>,
     alternativeMapping: Record<string, RDF.Term>,
     refinementState: IRefinementState,
   ): SelectQuery {
-    if (pattern.location === undefined) {
-      throw new Error(`Location for refinement pattern ${pattern.description} is not defined`);
-    }
-
     // Get query operator elements
     const operatorToBgp: Record<string, BgpPattern[]> = {};
     const operatorToExpression: Record<string, Expression[]> = {};
@@ -470,16 +556,14 @@ export class QuerySequenceTemplate {
 
     if (pattern.operation === 'addition') {
       this.handleAddition(context);
-    } else if (pattern.operation === 'removal') {
-      this.handleRemoval(context);
     } else {
-      throw new Error(`Unknown operation type '${String(pattern.operation)}'`);
+      this.handleRemoval(context);
     }
 
     return query;
   }
 
-  private handleAddition(context: IRefinementContext): void {
+  protected handleAddition(context: IRefinementContext): void {
     switch (context.pattern.type) {
       case 'OPTIONAL':
         this.addOptional(context);
@@ -496,12 +580,10 @@ export class QuerySequenceTemplate {
       case 'SUB':
         this.addSub(context);
         break;
-      default: throw new Error(`Unsupported addition type: 
-        ${(<any> context.pattern).type}`);
     }
   }
 
-  private handleRemoval(context: IRefinementContext): void {
+  protected handleRemoval(context: IRefinementContext): void {
     switch (context.pattern.type) {
       case 'OPTIONAL':
       case 'BGP':
@@ -516,12 +598,10 @@ export class QuerySequenceTemplate {
       case 'SUB':
         this.removeSub(context);
         break;
-      default: throw new Error(`Unsupported removal type: 
-        ${(<any> context.pattern).type}`);
     }
   }
 
-  private addOptional(context: IRefinementContext): void {
+  protected addOptional(context: IRefinementContext): void {
     const groupPattern = context.operatorToBgp.optional;
 
     // As the checks were done before, we can explicitly cast the pattern type
@@ -550,7 +630,7 @@ export class QuerySequenceTemplate {
     );
   }
 
-  private removeBgpOrOptional(context: IRefinementContext): void {
+  protected removeBgpOrOptional(context: IRefinementContext): void {
     // As the checks were done before, we can explicitly cast the pattern type
     context.pattern = <IOtherRefinementPattern> context.pattern;
 
@@ -567,7 +647,7 @@ export class QuerySequenceTemplate {
     (<IOperatorState>context.state).removedTps.push(...removed);
   }
 
-  private addUnion(context: IRefinementContext): void {
+  protected addUnion(context: IRefinementContext): void {
     const groupPattern = context.operatorToBgp.union;
 
     context.pattern = <IUnionRefinementPattern> context.pattern;
@@ -618,7 +698,7 @@ export class QuerySequenceTemplate {
     );
   }
 
-  private removeUnion(context: IRefinementContext): void {
+  protected removeUnion(context: IRefinementContext): void {
     context.pattern = <IUnionRefinementPattern> context.pattern;
 
     const unionLeftBgpIndex = context.pattern.location * 2;
@@ -643,7 +723,7 @@ export class QuerySequenceTemplate {
     this.cleanUpUnusedVariables(context);
   }
 
-  private addFilter(context: IRefinementContext): void {
+  protected addFilter(context: IRefinementContext): void {
     context.pattern = <IFilterRefinementPattern> context.pattern;
     // Targets are instantiated and then evaluated
     let targetFilters: Expression[] = context.pattern.target.map(
@@ -672,7 +752,7 @@ export class QuerySequenceTemplate {
     }
   }
 
-  private removeFilter(context: IRefinementContext): void {
+  protected removeFilter(context: IRefinementContext): void {
     context.pattern = <IFilterRefinementPattern> context.pattern;
     // Filters to remove are instantiated versions of target
     let filtersToRemove = context.pattern.target.map(
@@ -699,7 +779,7 @@ export class QuerySequenceTemplate {
     );
   }
 
-  private addBgp(context: IRefinementContext): void {
+  protected addBgp(context: IRefinementContext): void {
     context.pattern = <IOtherRefinementPattern> context.pattern;
     const bgpToRefine = this.getBgpSafely(
       context,
@@ -729,7 +809,7 @@ export class QuerySequenceTemplate {
     );
   }
 
-  private addSub(context: IRefinementContext): void {
+  protected addSub(context: IRefinementContext): void {
     const pattern = <ISubRefinementPattern> context.pattern;
 
     const toReplace: string = context.variableMapping[pattern.target.value].value;
@@ -746,7 +826,7 @@ export class QuerySequenceTemplate {
     subStateTarget.nCalls++;
   }
 
-  private removeSub(context: IRefinementContext): void {
+  protected removeSub(context: IRefinementContext): void {
     const pattern = <ISubRefinementPattern> context.pattern;
 
     const toReplaceWith: string = context.variableMapping[pattern.target.value].value;
@@ -764,7 +844,7 @@ export class QuerySequenceTemplate {
     subStateTarget.nCalls++;
   }
 
-  private getBgpSafely(context: IRefinementContext, operatorType: string, location: number): BgpPattern {
+  protected getBgpSafely(context: IRefinementContext, operatorType: string, location: number): BgpPattern {
     const bgp = context.operatorToBgp[operatorType]?.[location];
     if (!bgp) {
       throw new Error(`BGP Doesn't exist at index ${location} for query operator ${operatorType}`);
@@ -772,7 +852,7 @@ export class QuerySequenceTemplate {
     return bgp;
   }
 
-  private cleanUpUnusedVariables(context: IRefinementContext): void {
+  protected cleanUpUnusedVariables(context: IRefinementContext): void {
     if (this.hasWildCard(context.query.variables)) {
       return;
     }
@@ -792,7 +872,7 @@ export class QuerySequenceTemplate {
     });
   }
 
-  public findValidRefinementPatterns(
+  protected findValidRefinementPatterns(
     operatorTriplePatterns: Record<string, Triple[][]>,
     operatorExpressions: Record<string, Expression[][]>,
     refinementPatterns: IQueryRefinementPattern[],
@@ -800,7 +880,6 @@ export class QuerySequenceTemplate {
     variableMapping: Record<string, RDF.Term>,
   ): IQueryRefinementPattern[] {
     const operatorTriplePatternsFlattened = flattenOperators(operatorTriplePatterns);
-    // Const totalTriples = this.countFlattened(operatorTriplePatternsFlattened);
 
     const operatorExpressionsFlattened = flattenOperators(operatorExpressions);
     const totalExpressions = countFlattened(operatorExpressionsFlattened);
@@ -851,7 +930,7 @@ export class QuerySequenceTemplate {
     });
   }
 
-  private isValidFilterPattern(
+  protected isValidFilterPattern(
     pattern: IFilterRefinementPattern,
     context: {
       queryExpressions: Expression[];
@@ -862,8 +941,12 @@ export class QuerySequenceTemplate {
       variablesInQuery: Set<string>;
     },
   ): boolean {
+    if (pattern.operation !== 'addition' && pattern.operation !== 'removal') {
+      return false;
+    }
+
     const patternType = pattern.type.toLowerCase();
-    const targets = pattern.target.map(
+    const targets: Expression[] = pattern.target.map(
       x => recurseExpression(
         x,
         this.instantiateTerm,
@@ -879,33 +962,28 @@ export class QuerySequenceTemplate {
     if (alreadyPresent && pattern.operation === 'addition') {
       return false;
     }
-
-    // Filter requires all variables in the filter to also be in the query body
     if (pattern.operation === 'addition') {
+      // Without targets, we need a previously removed expression to add back
+      if (targets.length === 0) {
+        return context.refinementState[typeToKeyMap[pattern.type]].removedExp.length > 0;
+      }
+      // Filter requires all variables in the filter to also be in the query body
       const allVarsPresent = targets.every((expr) => {
         const vars = getVariablesInExpression(expr);
         return vars.size > 0 && [ ...vars ].every(v => context.variablesInQuery.has(v));
       });
       return allVarsPresent;
     }
-
-    if (pattern.operation === 'removal') {
-      if (targets.length === 0) {
-        return context.operatorExpressionsFlattened[patternType]?.length > 1;
-      }
-      // Require all expressions in target to be present in query
-      const opExps = context.operatorExpressionsFlattened[patternType];
-      return opExps && targets.every(t => opExps.some(e => expressionEquals(t, e)));
+    // Removal operation
+    if (targets.length === 0) {
+      return context.operatorExpressionsFlattened[patternType]?.length > 1;
     }
-
-    // If not already present and we have a target we can always add the filter
-    if (targets.length > 0) {
-      return true;
-    }
-    return context.refinementState[typeToKeyMap[pattern.type]].removedExp.length > 0;
+    // Require all expressions in target to be present in query
+    const opExps = context.operatorExpressionsFlattened[patternType];
+    return opExps && targets.every(t => opExps.some(e => expressionEquals(t, e)));
   }
 
-  private isValidUnionPattern(
+  protected isValidUnionPattern(
     pattern: IUnionRefinementPattern,
     context: {
       queryTriples: Triple[];
@@ -928,7 +1006,7 @@ export class QuerySequenceTemplate {
     return true;
   }
 
-  private isValidTriplePattern(
+  protected isValidTriplePattern(
     pattern: IOtherRefinementPattern,
     context: {
       queryTriples: Triple[];
@@ -985,15 +1063,15 @@ export class QuerySequenceTemplate {
     return targetState.removedTps.length > 0;
   }
 
-  private isVariable(term: any): term is VariableTerm {
+  protected isVariable(term: any): term is VariableTerm {
     return isRDFTerm(term) && term.termType === 'Variable';
   }
 
-  private hasWildCard(variables: Variable[] | [Wildcard]): variables is [Wildcard] {
+  protected hasWildCard(variables: Variable[] | [Wildcard]): variables is [Wildcard] {
     return variables.some(term => term instanceof Wildcard);
   }
 
-  private getAllVariables(triples: Triple[]): Set<string> {
+  protected getAllVariables(triples: Triple[]): Set<string> {
     const variables = new Set<string>();
 
     for (const triple of triples) {
@@ -1008,12 +1086,12 @@ export class QuerySequenceTemplate {
     return variables;
   }
 
-  private hasVariable(variables: Variable[] | [Wildcard], variable: VariableTerm): boolean {
+  protected hasVariable(variables: Variable[] | [Wildcard], variable: VariableTerm): boolean {
     return variables.some(bgpVariable => 'termType' in bgpVariable &&
       bgpVariable.termType === 'Variable' && variable.value === bgpVariable.value);
   }
 
-  private updateVariablesQuery(query: SelectQuery, instantiatedTriple: Triple): Variable[] | [Wildcard] {
+  protected updateVariablesQuery(query: SelectQuery, instantiatedTriple: Triple): Variable[] | [Wildcard] {
     if (query.group) {
       return query.variables;
     }
@@ -1038,7 +1116,7 @@ export class QuerySequenceTemplate {
     return vars;
   }
 
-  private addTargetToBgp(
+  protected addTargetToBgp(
     bgp: BgpPattern,
     targets: (ITargetTriplePattern | Triple)[],
     query: SelectQuery,
@@ -1060,7 +1138,7 @@ export class QuerySequenceTemplate {
     }
   }
 
-  private removeTargetFromBgp(
+  protected removeTargetFromBgp(
     bgp: BgpPattern,
     targets: Triple[],
     variableMapping: Record<string, RDF.Term>,
@@ -1080,7 +1158,7 @@ export class QuerySequenceTemplate {
     return removedTriplePatterns;
   }
 
-  private initializeEmptyOperatorState(): IOperatorState {
+  protected initializeEmptyOperatorState(): IOperatorState {
     return {
       addedTps: [],
       removedTps: [],

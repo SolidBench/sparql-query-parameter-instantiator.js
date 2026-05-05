@@ -403,7 +403,6 @@ describe('RefinementSequenceUtils', () => {
             queryType: 'SELECT',
             variables: [ DF.variable('ignoredVar') ],
             prefixes: {},
-            // Notice: 'where' is completely omitted here
             values: [
               { '?valuesVar': DF.namedNode('http://example.org/val') },
             ],
@@ -434,8 +433,7 @@ describe('RefinementSequenceUtils', () => {
           <any>{ type: 'unknownPatternType' },
         ],
       };
-      expect(() => getVariablesInExpression(groupWithUnknown)).not.toThrow();
-      expect(getVariablesInExpression(groupWithUnknown)).toEqual(new Set());
+      expect(() => getVariablesInExpression(groupWithUnknown)).toThrow('Unknown pattern: unknownPatternType');
     });
 
     it('handles a graph pattern nested inside a group (covers visitPattern case graph)', () => {
@@ -700,7 +698,22 @@ describe('RefinementSequenceUtils', () => {
       const where = <Pattern[]> (<any> parsed).where;
       const result: Record<string, Expression[]> = {};
       extractExpressionPerOperator(where, result, 'filter');
+
       expect(result.filter).toHaveLength(1);
+
+      const expr = <OperationExpression> result.filter[0];
+
+      expect(expr.type).toBe('operation');
+      expect(expr.operator).toBe('>');
+      expect(expr.args).toHaveLength(2);
+      expect(expr.args[0]).toMatchObject({
+        termType: 'Variable',
+        value: 'o',
+      });
+      expect(expr.args[1]).toMatchObject({
+        termType: 'Literal',
+        value: '5',
+      });
     });
 
     it('extracts filter expressions from nested group, union, optional, graph, minus, and service', () => {

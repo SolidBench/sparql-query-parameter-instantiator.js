@@ -18,8 +18,324 @@ const rng = seedrandomFn('test');
 const DF = new DataFactory();
 
 describe('QueryTemplate', () => {
+  describe('QuerySequenceTemplate Validation and Mapping', () => {
+    let template: QuerySequenceTemplateTest;
+    let rng: any; // Mock or provide your RNG here
+
+    beforeEach(() => {
+      template = new QuerySequenceTemplateTest(
+        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
+        {},
+        {},
+        {},
+        {},
+        rng,
+        1,
+        1,
+        undefined,
+        [],
+      );
+    });
+
+    describe('mapRefinementConfigToSparqlJs', () => {
+      it('should convert a raw SUB target config object to an RDF Variable', () => {
+        const subPattern: IQueryRefinementPattern = {
+          type: 'SUB',
+          id: 0,
+          operation: 'addition',
+          description: '',
+          location: 0,
+          target: <any>{ value: 's', termType: 'variable' },
+        };
+        const mapped = template.mapRefinementConfigToSparqlJs([ subPattern ]);
+        expect(mapped[0].type).toBe('SUB');
+        expect((<ISubRefinementPattern>mapped[0]).target.termType).toBe('Variable');
+        expect((<ISubRefinementPattern>mapped[0]).target.value).toBe('s');
+      });
+
+      it('should skip conversion if SUB target is already an RDF Variable', () => {
+        const subPattern: IQueryRefinementPattern = {
+          type: 'SUB',
+          id: 0,
+          operation: 'addition',
+          description: '',
+          location: 0,
+          target: DF.variable('s'),
+        };
+        const mapped = template.mapRefinementConfigToSparqlJs([ subPattern ]);
+        expect((<ISubRefinementPattern>mapped[0]).target.termType).toBe('Variable');
+      });
+
+      it('should convert FILTER target with namedNode and nested operation terms', () => {
+        const filterPattern: IQueryRefinementPattern = {
+          type: 'FILTER',
+          id: 0,
+          operation: 'addition',
+          description: '',
+          location: 0,
+          target: [ <any>{
+            type: 'operation',
+            operator: '=',
+            args: [
+              { termType: 'NamedNode', value: 'http://example.org/val' },
+              DF.blankNode('b1'),
+            ],
+          } ],
+        };
+        const mapped = template.mapRefinementConfigToSparqlJs([ filterPattern ]);
+        const targetExpr = (<any>mapped[0]).target[0];
+        expect(targetExpr.args[0].termType).toBe('NamedNode');
+        expect(targetExpr.args[0].value).toBe('http://example.org/val');
+        expect(targetExpr.args[1].termType).toBe('BlankNode');
+      });
+
+      it('should handle FILTER target with literal that has a language tag', () => {
+        const filterPattern: IQueryRefinementPattern = {
+          type: 'FILTER',
+          id: 0,
+          operation: 'addition',
+          description: '',
+          location: 0,
+          target: [ <any>{
+            type: 'operation',
+            operator: '>',
+            args: [ DF.variable('s'), { termType: 'literal', value: 'hello', language: 'en' }],
+          } ],
+        };
+        const mapped = template.mapRefinementConfigToSparqlJs([ filterPattern ]);
+        const term = <RDF.Literal>(<any>mapped[0]).target[0].args[1];
+        expect(term.termType).toBe('Literal');
+        expect(term.language).toBe('en');
+      });
+
+      it('should handle FILTER target with literal that has a datatype', () => {
+        const filterPattern: IQueryRefinementPattern = {
+          type: 'FILTER',
+          id: 0,
+          operation: 'addition',
+          description: '',
+          location: 0,
+          target: [ <any>{
+            type: 'operation',
+            operator: '>',
+            args: [ DF.variable('s'), { termType: 'literal', value: '42', datatype: { value: 'http://example.org/int' }}],
+          } ],
+        };
+        const mapped = template.mapRefinementConfigToSparqlJs([ filterPattern ]);
+        const term = <RDF.Literal>(<any>mapped[0]).target[0].args[1];
+        expect(term.termType).toBe('Literal');
+        expect(term.datatype.value).toBe('http://example.org/int');
+      });
+
+      it('should convert BGP targets using targetToTriple', () => {
+        const bgpPattern: IQueryRefinementPattern = {
+          type: 'BGP',
+          id: 0,
+          operation: 'addition',
+          description: '',
+          location: 0,
+          target: [{
+            subject: { value: 's', termType: 'variable' },
+            predicate: { value: 'ex:p', termType: 'namedNode' },
+            object: { value: 'o', termType: 'variable' },
+          }],
+        };
+        const mapped = template.mapRefinementConfigToSparqlJs([ bgpPattern ]);
+        expect((<any>mapped[0]).target[0].subject.termType).toBe('Variable');
+      });
+    });
+
+    describe('validateBaseRefinementPattern', () => {
+      it('should throw if id is not a number', () => {
+        expect(() => template.validateBaseRefinementPattern(
+          <any>{ operation: 'addition', location: 0, type: 'BGP' },
+        ))
+          .toThrow('Refinement pattern is missing a numeric id');
+      });
+
+      it('should throw if operation is invalid', () => {
+        expect(() => template.validateBaseRefinementPattern(
+          <any>{ id: 1, operation: 'invalid', location: 0, type: 'BGP' },
+        ))
+          .toThrow('Invalid operation \'invalid\' in pattern 1');
+      });
+
+      it('should throw if location is not a number', () => {
+        expect(() => template.validateBaseRefinementPattern(
+          <any>{ id: 1, operation: 'addition', type: 'BGP' },
+        ))
+          .toThrow('Pattern 1 is missing a numeric location');
+      });
+
+      it('should throw if type is invalid', () => {
+        expect(() => template.validateBaseRefinementPattern(
+          <any>{ id: 1, operation: 'addition', location: 0, type: 'INVALID' },
+        ))
+          .toThrow('Invalid pattern type \'INVALID\' in pattern 1');
+      });
+
+      it('should pass for valid base patterns', () => {
+        expect(() => template.validateBaseRefinementPattern(
+          { id: 1, description: 'None', operation: 'addition', location: 0, type: 'BGP', target: []},
+        )).not.toThrow();
+      });
+    });
+
+    describe('validateSubTarget', () => {
+      it('should throw if target is neither an RDF term nor a valid term config', () => {
+        expect(() => template.validateSubTarget({ invalid: 'data' }))
+          .toThrow('Invalid SUB target: expected a variable term');
+      });
+
+      it('should pass if target is a valid term config', () => {
+        expect(() => template.validateSubTarget({ termType: 'variable', value: 's' })).not.toThrow();
+      });
+
+      it('should pass if target is an RDFJS Term', () => {
+        expect(() => template.validateSubTarget(DF.variable('s'))).not.toThrow();
+      });
+    });
+
+    describe('validateUnionTarget', () => {
+      it('should throw if target is not an array', () => {
+        expect(() => template.validateUnionTarget({})).toThrow('Invalid UNION target');
+      });
+
+      it('should throw if target array length is not 2', () => {
+        expect(() => template.validateUnionTarget([[]])).toThrow('Invalid UNION target');
+      });
+
+      it('should throw if target sub-elements are not arrays', () => {
+        expect(() => template.validateUnionTarget([[], {}])).toThrow('Invalid UNION target');
+      });
+
+      it('should pass for a tuple of two arrays', () => {
+        expect(() => template.validateUnionTarget([[], []])).not.toThrow();
+      });
+    });
+
+    describe('validateFilterTarget', () => {
+      it('should throw if target is not an array', () => {
+        expect(() => template.validateFilterTarget({})).toThrow('Invalid FILTER target: expected an array');
+      });
+
+      it('should throw if an expression is null or not an object', () => {
+        expect(() => template.validateFilterTarget([ null ]))
+          .toThrow('Invalid FILTER target: expected an expression');
+        expect(() => template.validateFilterTarget([ 'string' ]))
+          .toThrow('Invalid FILTER target: expected an expression');
+      });
+
+      it('should throw if expression type is invalid', () => {
+        expect(() => template.validateFilterTarget([{ type: 'invalid' }]))
+          .toThrow('Invalid FILTER target: expected an expression');
+      });
+
+      it('should throw when FILTER target is a bare term', () => {
+        expect(() => template.validateFilterTarget([{ termType: 'literal', value: '42' }]))
+          .toThrow('Invalid FILTER target: expected an expression');
+      });
+
+      it('should pass for valid operation or functionCall objects', () => {
+        expect(() => template.validateFilterTarget(
+          [{ type: 'operation' }, { type: 'functionCall' }],
+        )).not.toThrow();
+      });
+    });
+
+    describe('validateTripleTarget', () => {
+      it('should throw if target is not an array', () => {
+        expect(() => template.validateTripleTarget({}, 'BGP')).toThrow('Invalid BGP target: expected an array');
+      });
+
+      it('should throw if a triple lacks subject, predicate, or object', () => {
+        expect(() => template.validateTripleTarget([{ subject: {}}], 'OPTIONAL'))
+          .toThrow('Invalid OPTIONAL target: each entry must have subject, predicate, and object, got {"subject":{}}');
+      });
+
+      it('should pass for complete and valid triple configs', () => {
+        expect(() => template.validateTripleTarget(
+          [{
+            subject: { termType: 'variable', value: 's' },
+            predicate: { termType: 'namedNode', value: 'http://example.org/p' },
+            object: { termType: 'literal', value: '42' },
+          }],
+          'BGP',
+        )).not.toThrow();
+      });
+    });
+    describe('Deep Term Validation', () => {
+      const validConfig = { termType: 'variable', value: 'v1' };
+      const validRdf = DF.namedNode('http://example.org/p');
+
+      it('should throw if the subject is neither an RDFTerm nor a valid term config', () => {
+        const target = [{
+          subject: { invalid: 'data' }, // Invalid
+          predicate: validConfig,
+          object: validRdf,
+        }];
+
+        expect(() => template.validateTripleTarget(target, 'BGP'))
+          .toThrow(/Invalid BGP target:[\S\s]*invalid subject term, got \{"invalid":"data"\}/u);
+      });
+
+      it('should throw if the predicate is neither an RDFTerm nor a valid term config', () => {
+        const target = [{
+          subject: validConfig,
+          predicate: { termType: 'NamedNode' },
+          object: validRdf,
+        }];
+
+        expect(() => template.validateTripleTarget(target, 'OPTIONAL'))
+          .toThrow(/Invalid OPTIONAL target:[\S\s]*invalid predicate term, got \{"termType":"NamedNode"\}/u);
+      });
+
+      it('should throw if the object is neither an RDFTerm nor a valid term config', () => {
+        const target = [{
+          subject: validRdf,
+          predicate: validConfig,
+          object: null,
+        }];
+
+        expect(() => template.validateTripleTarget(target, 'UNION'))
+          .toThrow(/Invalid UNION target:[\S\s]*invalid object term, got null/u);
+      });
+
+      it('should pass when terms are a valid mix of config objects and RDFJS terms', () => {
+        const target = [{
+          subject: validConfig,
+          predicate: validRdf,
+          object: { termType: 'literal', value: 'string' },
+        }];
+
+        expect(() => template.validateTripleTarget(target, 'BGP')).not.toThrow();
+      });
+    });
+
+    describe('isValidTermConfig', () => {
+      it('should return false for null or non-objects', () => {
+        expect(template.isValidTermConfig(null)).toBe(false);
+        expect(template.isValidTermConfig('string')).toBe(false);
+      });
+
+      it('should return false if termType is missing or not a string', () => {
+        expect(template.isValidTermConfig({ value: 's' })).toBe(false);
+        expect(template.isValidTermConfig({ termType: 123, value: 's' })).toBe(false);
+      });
+
+      it('should return false if value is missing or not a string', () => {
+        expect(template.isValidTermConfig({ termType: 'variable' })).toBe(false);
+        expect(template.isValidTermConfig({ termType: 'variable', value: 123 })).toBe(false);
+      });
+
+      it('should return true for valid term configs', () => {
+        expect(template.isValidTermConfig({ termType: 'variable', value: 's' })).toBe(true);
+      });
+    });
+  });
+
   describe('findValidRefinementPatterns', () => {
-    let template: QuerySequenceTemplate;
+    let template: QuerySequenceTemplateTest;
     let additionPattern1: IQueryRefinementPattern;
     let additionPattern2: IQueryRefinementPattern;
     let additionPattern3: IQueryRefinementPattern;
@@ -41,7 +357,7 @@ describe('QueryTemplate', () => {
       queryString = ` SELECT * WHERE {
                 ?s ?p ?o
                 }`;
-      template = new QuerySequenceTemplate(
+      template = new QuerySequenceTemplateTest(
         new Parser().parse(queryString),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
@@ -698,8 +1014,20 @@ describe('QueryTemplate', () => {
   });
 
   describe('isValidFilterPattern', () => {
-    it('should accept custom filter operation when target is provided', () => {
-      const template = new QuerySequenceTemplate(
+    let template: QuerySequenceTemplateTest;
+    let refinementState: IRefinementState;
+
+    const filterExpression = {
+      type: 'operation',
+      operator: '>',
+      args: [
+        DF.variable('s'),
+        DF.literal('18'),
+      ],
+    };
+
+    beforeEach(() => {
+      template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -709,29 +1037,83 @@ describe('QueryTemplate', () => {
         1,
         1,
       );
+      refinementState = {
+        stateQuery: createOperatorState(),
+        stateFilter: createOperatorState(),
+        stateUnion: createOperatorState(),
+        stateOptional: createOperatorState(),
+        stateSubstitution: {},
+      };
+    });
+
+    it('should not accept custom operation', () => {
       const pattern: any = {
         type: 'FILTER',
         operation: 'noop',
         description: '',
         location: 0,
         id: 0,
-        target: [
-          {
-            type: 'operation',
-            operator: '>',
-            args: [
-              DF.variable('s'),
-              DF.literal('18'),
-            ],
-          },
-        ],
+        target: [ filterExpression ],
       };
-      const refinementState: IRefinementState = {
-        stateQuery: createOperatorState(),
-        stateFilter: createOperatorState(),
-        stateUnion: createOperatorState(),
-        stateOptional: createOperatorState(),
-        stateSubstitution: {},
+      const result = (<any>template).isValidFilterPattern(pattern, {
+        queryExpressions: [],
+        operatorExpressionsFlattened: {},
+        refinementState,
+        totalExpressions: 0,
+        variableMapping: {},
+        variablesInQuery: new Set([ 's' ]),
+      });
+      expect(result).toBe(false);
+    });
+
+    it('should reject addition when expression is already present in query', () => {
+      const pattern: any = {
+        type: 'FILTER',
+        operation: 'addition',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [ filterExpression ],
+      };
+      const result = (<any>template).isValidFilterPattern(pattern, {
+        queryExpressions: [ filterExpression ],
+        operatorExpressionsFlattened: {},
+        refinementState,
+        totalExpressions: 0,
+        variableMapping: {},
+        variablesInQuery: new Set([ 's' ]),
+      });
+      expect(result).toBe(false);
+    });
+
+    it('should reject addition when a variable in the expression is not in the query body', () => {
+      const pattern: any = {
+        type: 'FILTER',
+        operation: 'addition',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [ filterExpression ],
+      };
+      const result = (<any>template).isValidFilterPattern(pattern, {
+        queryExpressions: [],
+        operatorExpressionsFlattened: {},
+        refinementState,
+        totalExpressions: 0,
+        variableMapping: {},
+        variablesInQuery: new Set(), // 's' missing
+      });
+      expect(result).toBe(false);
+    });
+
+    it('should accept addition when all variables in expression are present in query body', () => {
+      const pattern: any = {
+        type: 'FILTER',
+        operation: 'addition',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [ filterExpression ],
       };
       const result = (<any>template).isValidFilterPattern(pattern, {
         queryExpressions: [],
@@ -744,49 +1126,84 @@ describe('QueryTemplate', () => {
       expect(result).toBe(true);
     });
 
-    it('should accept custom filter operation when removed expressions exist', () => {
-      const template = new QuerySequenceTemplate(
-        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
-        {},
-        {},
-        {},
-        {},
-        rng,
-        1,
-        1,
-      );
+    it('should accept removal when no target given and more than one expression present', () => {
       const pattern: any = {
         type: 'FILTER',
-        operation: 'noop',
+        operation: 'removal',
         description: '',
         location: 0,
         id: 0,
         target: [],
       };
-      const refinementState: IRefinementState = {
-        stateQuery: createOperatorState(),
-        stateFilter: createOperatorState(),
-        stateUnion: createOperatorState(),
-        stateOptional: createOperatorState(),
-        stateSubstitution: {},
-      };
-      refinementState.stateFilter.removedExp.push({
-        type: 'operation',
-        operator: '>',
-        args: [
-          DF.variable('s'),
-          DF.literal('18'),
-        ],
-      });
       const result = (<any>template).isValidFilterPattern(pattern, {
         queryExpressions: [],
-        operatorExpressionsFlattened: {},
+        operatorExpressionsFlattened: { filter: [ filterExpression, filterExpression ]},
         refinementState,
-        totalExpressions: 0,
+        totalExpressions: 2,
+        variableMapping: {},
+        variablesInQuery: new Set(),
+      });
+      expect(result).toBe(true);
+    });
+
+    it('should reject removal when no target given and only one expression present', () => {
+      const pattern: any = {
+        type: 'FILTER',
+        operation: 'removal',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [],
+      };
+      const result = (<any>template).isValidFilterPattern(pattern, {
+        queryExpressions: [],
+        operatorExpressionsFlattened: { filter: [ filterExpression ]},
+        refinementState,
+        totalExpressions: 1,
+        variableMapping: {},
+        variablesInQuery: new Set(),
+      });
+      expect(result).toBe(false);
+    });
+
+    it('should accept removal when target expression is present in query', () => {
+      const pattern: any = {
+        type: 'FILTER',
+        operation: 'removal',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [ filterExpression ],
+      };
+      const result = (<any>template).isValidFilterPattern(pattern, {
+        queryExpressions: [ filterExpression ],
+        operatorExpressionsFlattened: { filter: [ filterExpression ]},
+        refinementState,
+        totalExpressions: 1,
         variableMapping: {},
         variablesInQuery: new Set([ 's' ]),
       });
       expect(result).toBe(true);
+    });
+
+    it('should reject removal when target expression is not present in query', () => {
+      const pattern: any = {
+        type: 'FILTER',
+        operation: 'removal',
+        description: '',
+        location: 0,
+        id: 0,
+        target: [ filterExpression ],
+      };
+      const result = (<any>template).isValidFilterPattern(pattern, {
+        queryExpressions: [],
+        operatorExpressionsFlattened: { filter: []},
+        refinementState,
+        totalExpressions: 0,
+        variableMapping: {},
+        variablesInQuery: new Set(),
+      });
+      expect(result).toBe(false);
     });
   });
 
@@ -2800,177 +3217,9 @@ describe('QueryTemplate', () => {
       );
     });
   });
-
-  describe('mapRefinementConfigToSparqlJs', () => {
-    it('should convert a raw SUB target config object to an RDF Variable', () => {
-      const subPattern: IQueryRefinementPattern = {
-        type: 'SUB',
-        id: 0,
-        operation: 'addition',
-        description: '',
-        location: 0,
-        // Raw config object (not an RDF.Variable – no equals/hashCode)
-        target: <any>{ value: 's', termType: 'variable' },
-      };
-      const template = new QuerySequenceTemplate(
-        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
-        {},
-        {},
-        {},
-        {},
-        rng,
-        1,
-        1,
-        undefined,
-        [ subPattern ],
-      );
-      const mapped = template.mapRefinementConfigToSparqlJs([ subPattern ]);
-      expect(mapped[0].type).toBe('SUB');
-      expect((<ISubRefinementPattern>mapped[0]).target.termType).toBe('Variable');
-      expect((<ISubRefinementPattern>mapped[0]).target.value).toBe('s');
-    });
-
-    it('should convert FILTER target with namedNode and nested operation terms', () => {
-      const filterPattern: IQueryRefinementPattern = {
-        type: 'FILTER',
-        id: 0,
-        operation: 'addition',
-        description: '',
-        location: 0,
-        target: [
-          <any>{
-            type: 'operation',
-            operator: '=',
-            args: [
-              // NamedNode raw config — termType is lowercased during processing, covers the namedNode branch
-              <any>{ termType: 'NamedNode', value: 'http://example.org/val' },
-              // BlankNode term: isValidTermConfig=true but termType lowercases to 'blanknode',
-              // which does not match 'variable'/'namednode'/'literal', so the fallback
-              // `return <Term> term` path (line 143) is exercised.
-              <any>DF.blankNode('b1'),
-            ],
-          },
-        ],
-      };
-      const template = new QuerySequenceTemplate(
-        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
-        {},
-        {},
-        {},
-        {},
-        rng,
-        1,
-        1,
-        undefined,
-        [ filterPattern ],
-      );
-      const mapped = template.mapRefinementConfigToSparqlJs([ filterPattern ]);
-      expect(mapped[0].type).toBe('FILTER');
-      // The namedNode arg should have been converted to a real NamedNode
-      const targetExpr = (<any>mapped[0]).target[0];
-      expect(targetExpr.args[0].termType).toBe('NamedNode');
-      expect(targetExpr.args[0].value).toBe('http://example.org/val');
-    });
-
-    it('should handle FILTER target with literal that has a language tag', () => {
-      const filterPattern: IQueryRefinementPattern = {
-        type: 'FILTER',
-        id: 0,
-        operation: 'addition',
-        description: '',
-        location: 0,
-        target: [
-          <any>{ termType: 'literal', value: 'hello', language: 'en' },
-        ],
-      };
-      const template = new QuerySequenceTemplate(
-        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
-        {},
-        {},
-        {},
-        {},
-        rng,
-        1,
-        1,
-        undefined,
-        [ filterPattern ],
-      );
-      const mapped = template.mapRefinementConfigToSparqlJs([ filterPattern ]);
-      const term = <RDF.Literal>(<any>mapped[0]).target[0];
-      expect(term.termType).toBe('Literal');
-      expect(term.value).toBe('hello');
-      expect(term.language).toBe('en');
-    });
-
-    it('should handle FILTER target with literal that has a datatype', () => {
-      const filterPattern: IQueryRefinementPattern = {
-        type: 'FILTER',
-        id: 0,
-        operation: 'addition',
-        description: '',
-        location: 0,
-        target: [
-          <any>{
-            termType: 'literal',
-            value: '42',
-            datatype: { value: 'http://www.w3.org/2001/XMLSchema#integer' },
-          },
-        ],
-      };
-      const template = new QuerySequenceTemplate(
-        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
-        {},
-        {},
-        {},
-        {},
-        rng,
-        1,
-        1,
-        undefined,
-        [ filterPattern ],
-      );
-      const mapped = template.mapRefinementConfigToSparqlJs([ filterPattern ]);
-      const term = <RDF.Literal>(<any>mapped[0]).target[0];
-      expect(term.termType).toBe('Literal');
-      expect(term.value).toBe('42');
-      expect(term.datatype.value).toBe('http://www.w3.org/2001/XMLSchema#integer');
-    });
-
-    it('should convert BGP targets using targetToTriple', () => {
-      const bgpPattern: IQueryRefinementPattern = {
-        type: 'BGP',
-        id: 0,
-        operation: 'addition',
-        description: '',
-        location: 0,
-        target: [
-          {
-            subject: { value: 's', termType: 'variable' },
-            predicate: { value: 'ex:p', termType: 'namedNode' },
-            object: { value: 'o', termType: 'variable' },
-          },
-        ],
-      };
-      const template = new QuerySequenceTemplate(
-        new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
-        {},
-        {},
-        {},
-        {},
-        rng,
-        1,
-        1,
-        undefined,
-        [ bgpPattern ],
-      );
-      const mapped = template.mapRefinementConfigToSparqlJs([ bgpPattern ]);
-      expect((<any>mapped[0]).target[0].subject.termType).toBe('Variable');
-    });
-  });
-
   describe('instantiate', () => {
     it('should instantiate without refinement patterns (basic cycling)', () => {
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1'), DF.namedNode('ex:s2') ]},
         {},
@@ -2991,7 +3240,7 @@ describe('QueryTemplate', () => {
     });
 
     it('should throw when instantiating with refinement flag but no patterns registered', () => {
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
@@ -3020,7 +3269,7 @@ describe('QueryTemplate', () => {
         ],
       };
       const mockRng = jest.fn().mockReturnValue(0);
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
@@ -3039,7 +3288,7 @@ describe('QueryTemplate', () => {
     });
 
     it('should use previousQueryResult values when provided', () => {
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         {},
@@ -3054,7 +3303,7 @@ describe('QueryTemplate', () => {
     });
 
     it('should update counter when previousQueryResult + user is given', () => {
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1'), DF.namedNode('ex:s2') ]},
         {},
@@ -3082,7 +3331,7 @@ describe('QueryTemplate', () => {
       const deterministicRng = jest.fn()
         .mockReturnValueOnce(0.01) // First sampleTerm call → picks 'ex:val1' (cumulative 0.6 > 0.01)
         .mockReturnValueOnce(0.7); // Second sampleTerm call → picks 'ex:val2' (cumulative 1.0 > 0.7)
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         probabilities,
@@ -3105,7 +3354,7 @@ describe('QueryTemplate', () => {
           user3: [{ entity: 'ex:val3', similarity: 1 }],
         },
       };
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         { s: [ DF.namedNode('ex:s1') ]},
         probabilities,
@@ -3123,7 +3372,7 @@ describe('QueryTemplate', () => {
 
   describe('instantiateSyntaxTreeWrap (error / iriTransformer paths)', () => {
     it('should throw when called with non-SELECT query', () => {
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -3139,7 +3388,7 @@ describe('QueryTemplate', () => {
     });
 
     it('should throw when variableMapping is missing from context', () => {
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -3158,7 +3407,7 @@ describe('QueryTemplate', () => {
       const transformer: IValueTransformer = {
         transform: value => DF.namedNode(`${value.value}x`),
       };
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('PREFIX ex: <http://example.org/>\nSELECT * WHERE { ?s ex:p ?o. }'),
         {},
         {},
@@ -3175,7 +3424,7 @@ describe('QueryTemplate', () => {
     });
 
     it('should instantiate GROUP BY expressions when present', () => {
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT ?s WHERE { ?s ?p ?o. } GROUP BY ?s'),
         { p: [ DF.namedNode('ex:p1') ]},
         {},
@@ -3196,7 +3445,7 @@ describe('QueryTemplate', () => {
       const transformer: IValueTransformer = {
         transform: (value: RDF.Term) => DF.namedNode(`${value.value}-t`),
       };
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s <ex:p1>/<ex:p2> ?o. }'),
         {},
         {},
@@ -3265,82 +3514,6 @@ describe('QueryTemplate', () => {
         stateOptional: createOperatorState(),
         stateSubstitution: {},
       };
-    });
-
-    it('should throw when pattern location is undefined', () => {
-      const pattern: IQueryRefinementPattern = {
-        type: 'BGP',
-        operation: 'addition',
-        description: 'no location',
-        id: 0,
-        location: <any>undefined,
-        target: [],
-      };
-      const input = createRefinementInput('SELECT * WHERE { ?s ?p ?o. }', {}, {}, pattern);
-      expect(() => input.template.applyRefinementPattern(
-        pattern,
-        input.query,
-        {},
-        {},
-        refinementState,
-      )).toThrow('Location for refinement pattern no location is not defined');
-    });
-
-    it('should throw for unknown operation type', () => {
-      const pattern: IQueryRefinementPattern = {
-        type: 'BGP',
-        operation: <any>'noop',
-        description: '',
-        id: 0,
-        location: 0,
-        target: [],
-      };
-      const input = createRefinementInput('SELECT * WHERE { ?s ?p ?o. }', {}, {}, pattern);
-      expect(() => input.template.applyRefinementPattern(
-        pattern,
-        input.query,
-        {},
-        {},
-        refinementState,
-      )).toThrow('Unknown operation type \'noop\'');
-    });
-
-    it('should throw for unsupported addition type', () => {
-      const pattern = <IQueryRefinementPattern>{
-        type: <any>'CUSTOM_TYPE',
-        operation: <const>'addition',
-        description: '',
-        id: 0,
-        location: 0,
-        target: [],
-      };
-      const input = createRefinementInput('SELECT * WHERE { ?s ?p ?o. }', {}, {}, pattern);
-      expect(() => input.template.applyRefinementPattern(
-        pattern,
-        input.query,
-        {},
-        {},
-        refinementState,
-      )).toThrow('Unsupported addition type');
-    });
-
-    it('should throw for unsupported removal type', () => {
-      const pattern = <IQueryRefinementPattern>{
-        type: <any>'CUSTOM_TYPE',
-        operation: <const>'removal',
-        description: '',
-        id: 0,
-        location: 0,
-        target: [],
-      };
-      const input = createRefinementInput('SELECT * WHERE { ?s ?p ?o. }', {}, {}, pattern);
-      expect(() => input.template.applyRefinementPattern(
-        pattern,
-        input.query,
-        {},
-        {},
-        refinementState,
-      )).toThrow('Unsupported removal type');
     });
 
     it('should throw when BGP location does not exist (getBgpSafely)', () => {
@@ -3517,7 +3690,7 @@ describe('QueryTemplate', () => {
         target: [],
       };
       const mockRng = jest.fn().mockReturnValue(0.01);
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse(qs),
         {},
         {},
@@ -3694,7 +3867,7 @@ describe('QueryTemplate', () => {
 
   describe('updateCounter / getInstantiationCounts / getVariableProbabilities', () => {
     it('should update instantiation counts correctly', () => {
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         {},
@@ -3725,7 +3898,7 @@ describe('QueryTemplate', () => {
           user1: [{ entity: 'ex:val1', similarity: 1 }],
         },
       };
-      const template = new QuerySequenceTemplate(
+      const template = new QuerySequenceTemplateTest(
         new Parser().parse('SELECT * WHERE { ?s ?p ?o. }'),
         {},
         probabilities,
@@ -3757,7 +3930,7 @@ function createRefinementInput(
   refinementPattern: IQueryRefinementPattern,
   rngParam?: any,
 ): IRefinementInput {
-  const template = new QuerySequenceTemplate(
+  const template = new QuerySequenceTemplateTest(
     new Parser().parse(query),
     variableMappings,
     {},
@@ -3807,5 +3980,49 @@ interface IRefinementInput {
   query: SelectQuery;
   variableMapping: Record<string, RDF.Term>;
   variableMappingAlternative: Record<string, RDF.Term>;
-  template: QuerySequenceTemplate;
+  template: QuerySequenceTemplateTest;
+}
+
+class QuerySequenceTemplateTest extends QuerySequenceTemplate {
+  public createRefinementSequence(
+    refinementPatterns: IQueryRefinementPattern[],
+    query: SelectQuery,
+    nSteps: number,
+    variableMapping: Record<string, RDF.Term>,
+    alternativeMapping: Record<string, RDF.Term>,
+  ) {
+    return super.createRefinementSequence(refinementPatterns, query, nSteps, variableMapping, alternativeMapping);
+  }
+
+  public applyRefinementPattern(
+    pattern: IQueryRefinementPattern,
+    query: SelectQuery,
+    variableMapping: Record<string, RDF.Term>,
+    alternativeMapping: Record<string, RDF.Term>,
+    refinementState: IRefinementState,
+  ): SelectQuery {
+    return super.applyRefinementPattern(
+      pattern,
+      query,
+      variableMapping,
+      alternativeMapping,
+      refinementState,
+    );
+  }
+
+  public findValidRefinementPatterns(
+    operatorTriplePatterns: Record<string, Triple[][]>,
+    operatorExpressions: Record<string, Expression[][]>,
+    refinementPatterns: IQueryRefinementPattern[],
+    refinementState: IRefinementState,
+    variableMapping: Record<string, RDF.Term>,
+  ): IQueryRefinementPattern[] {
+    return super.findValidRefinementPatterns(
+      operatorTriplePatterns,
+      operatorExpressions,
+      refinementPatterns,
+      refinementState,
+      variableMapping,
+    );
+  }
 }

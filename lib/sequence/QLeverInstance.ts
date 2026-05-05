@@ -98,6 +98,7 @@ export class QLeverInstance {
       const joinPlan = <IJoinTreeNode> QLeverInstance.extractJoinTree(
         jsonResult.runtimeInformation.query_execution_tree,
       );
+
       return {
         message: 'END',
         results: result,
@@ -224,10 +225,8 @@ ACCESS_TOKEN = test
       try {
         await this.runCommand('docker', [ 'rm', '-f', `qlever-${this.port}` ], this.runDir);
       } catch {}
-      this.log.info('Starting Docker Compose...');
 
-      // We do NOT use -d (detached) here if we want to pipe logs to the main process,
-      // but usually -d is better for stability, so we keep -d and just wait.
+      this.log.info('Starting Docker Compose...');
       await this.runCommand('docker', [ 'compose', 'up', '-d' ], this.runDir);
 
       this.log.info('Waiting for server to accept connections...');
