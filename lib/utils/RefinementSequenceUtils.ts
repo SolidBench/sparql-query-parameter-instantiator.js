@@ -181,6 +181,8 @@ export function getVariablesInExpression(expr: Expression): Set<string> {
           }
         }
         break;
+      default:
+        throw new Error(`Unknown pattern: ${(<Pattern>pattern).type}`);
     }
   }
 

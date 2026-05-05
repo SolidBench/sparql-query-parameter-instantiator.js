@@ -150,6 +150,7 @@ export class QueryNextInstantiatorValue {
         return [ prefix, transformed ];
       }),
     );
+
     // Apply expressions in variables
     syntaxTree.variables = <any> syntaxTree.variables.map((variable) => {
       if ('expression' in variable) {
@@ -162,6 +163,7 @@ export class QueryNextInstantiatorValue {
       }
       return variable;
     });
+
     // Select variables required for this query
     const requiredSelectVariables: string[] = context.requiredSelectVariables;
 
