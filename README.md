@@ -35,6 +35,10 @@ SELECT * WHERE { <ex:s3> ?p ?o. }
 
 Queries per template are separated by empty newlines.
 
+### Sequence Generation
+
+The generator also supports constructing ordered sequences of queries to simulate continuous workloads, such as caching benchmarks. You can read more about the configuration in the [Sequence Configuration](#query-sequence-instantiator) section.
+
 ## Installation
 
 ```bash
@@ -488,7 +492,7 @@ Options:
 
 ## Query Sequence Instantiator
 
-Used by [SolidSessionBench.js](https://github.com/RubenEschauzier/SolidBench.js/tree/feature/user-based-query-sequences) to generate realistic sequences of SPARQL queries per user.
+Used by [SolidSessionBench.js](https://github.com/SolidBench/SolidBench.js) to generate realistic sequences of SPARQL queries per user.
 Unlike the standard instantiator, this generates ordered sequences where consecutive queries within a session share variable bindings derived from the previous query's results.
 Sequences can also include query refinements: additions, removals, or substitutions of query patterns that simulate a user iteratively exploring data.
 
@@ -541,7 +545,33 @@ $ sparql-query-parameter-instantiator path/to/sequence-config.json
     "stdLogTransitionProbability": 0.5,
     "refinementPatternProbability": 0.1,
     "temperature": 0.5,
-    "findNextInstantiationValue": { /* ... */ }
+    "findNextInstantiationValue": {
+      "@type": "QueryNextInstantiatorValue",
+      "termMappingTransformerFragmentedToOriginal": {
+        "@type": "ValueTransformerCsvMap",
+        "file": "path/to/fragmented-to-original.csv"
+      },
+      "termMappingTransformerOriginalToFragmented": {
+        "@type": "ValueTransformerCsvMap",
+        "file": "path/to/original-to-fragmented.csv"
+      },
+      "transformers": [
+        {
+          "@type": "TermTransformerBiDirectional",
+          "originalRegex": "^http://www.ldbc.eu",
+          "originalString": "http://www.ldbc.eu",
+          "fragmentedRegex": "^http://localhost:3000/www.ldbc.eu",
+          "fragmentedString": "http://localhost:3000/www.ldbc.eu"
+        }
+      ],
+      "qLever": {
+        "@type": "QLeverInstance",
+        "imageName": "adfreiburg/qlever@sha256:90c0cffc9a9158dff4c3841d5b0198cf76e67a4f47827e3321c4dff439408384",
+        "dataLocations": ["path/to/centralized.ttl"],
+        "port": 7001,
+        "timeout": 30
+      }
+    }
   },
   "providers": [
     {
@@ -639,7 +669,33 @@ Controls how sequences and sessions are statistically shaped.
   "stdLogTransitionProbability": 0.5,
   "refinementPatternProbability": 0.1,
   "temperature": 0.5,
-  "findNextInstantiationValue": { /* ... */ }
+  "findNextInstantiationValue": {
+    "@type": "QueryNextInstantiatorValue",
+    "termMappingTransformerFragmentedToOriginal": {
+      "@type": "ValueTransformerCsvMap",
+      "file": "path/to/fragmented-to-original.csv"
+    },
+    "termMappingTransformerOriginalToFragmented": {
+      "@type": "ValueTransformerCsvMap",
+      "file": "path/to/original-to-fragmented.csv"
+    },
+    "transformers": [
+      {
+        "@type": "TermTransformerBiDirectional",
+        "originalRegex": "^http://www.ldbc.eu",
+        "originalString": "http://www.ldbc.eu",
+        "fragmentedRegex": "^http://localhost:3000/www.ldbc.eu",
+        "fragmentedString": "http://localhost:3000/www.ldbc.eu"
+      }
+    ],
+    "qLever": {
+      "@type": "QLeverInstance",
+      "imageName": "adfreiburg/qlever@sha256:90c0cffc9a9158dff4c3841d5b0198cf76e67a4f47827e3321c4dff439408384",
+      "dataLocations": ["path/to/centralized.ttl"],
+      "port": 7001,
+      "timeout": 30
+    }
+  }
 }
 ```
 
@@ -659,33 +715,61 @@ Parameters:
 
 Bridges the fragmented benchmark dataset and the centralized dataset used to resolve cross-document links within a session.
 It starts a QLever SPARQL endpoint using Docker, executes each previous query in its centralized form, and translates the resulting IRIs back to the fragmented form expected by the benchmark templates.
+Note that we pin the specific QLever image hash in this example configuration to ensure that QLever updates do not break our library. However, you may find that using `imageName: adfreiburg/qlever` works too.
 
 ```json
 {
   "@type": "QueryNextInstantiatorValue",
   "termMappingTransformerFragmentedToOriginal": {
     "@type": "ValueTransformerCsvMap",
-    "file": "path/to/fragmented-to-original.csv"
+    "file": "out-fragments/transformed-activities.csv",
+    "invertMapping": true
   },
   "termMappingTransformerOriginalToFragmented": {
     "@type": "ValueTransformerCsvMap",
-    "file": "path/to/original-to-fragmented.csv"
+    "file": "out-fragments/transformed-activities.csv",
+    "invertMapping": false
   },
   "transformers": [
     {
       "@type": "TermTransformerBiDirectional",
+      "originalRegex": "^http://www.ldbc.eu/ldbc_socialnet/1.0/data/pers([0-9]*)$",
+      "originalString": "http://www.ldbc.eu/ldbc_socialnet/1.0/data/pers$1",
+      "fragmentedRegex": "^http://solidbench-server:3000/pods/([0-9]*)/profile/card#me$",
+      "fragmentedString": "http://solidbench-server:3000/pods/$1/profile/card#me"
+    },
+    {
+      "@type": "TermTransformerBiDirectional",
       "originalRegex": "^http://www.ldbc.eu",
       "originalString": "http://www.ldbc.eu",
-      "fragmentedRegex": "^http://localhost:3000/www.ldbc.eu",
-      "fragmentedString": "http://localhost:3000/www.ldbc.eu"
+      "fragmentedRegex": "^http://solidbench-server:3000/www.ldbc.eu",
+      "fragmentedString": "http://solidbench-server:3000/www.ldbc.eu"
+    },
+    {
+      "@type": "TermTransformerBiDirectional",
+      "originalRegex": "^http://dbpedia.org",
+      "originalString": "http://dbpedia.org",
+      "fragmentedRegex": "^http://solidbench-server:3000/dbpedia.org",
+      "fragmentedString": "http://solidbench-server:3000/dbpedia.org"
+    },
+    {
+      "@type": "TermTransformerBiDirectional",
+      "originalRegex": "^http://www.w3.org/2002/07/owl",
+      "originalString": "http://www.w3.org/2002/07/owl",
+      "fragmentedRegex": "^http://solidbench-server:3000/www.w3.org/2002/07/owl",
+      "fragmentedString": "http://solidbench-server:3000/www.w3.org/2002/07/owl"
     }
   ],
   "qLever": {
     "@type": "QLeverInstance",
-    "imageName": "adfreiburg/qlever",
-    "dataLocations": ["path/to/centralized.ttl"],
-    "port": 7001,
-    "timeout": 30
+    "imageName": "adfreiburg/qlever@sha256:90c0cffc9a9158dff4c3841d5b0198cf76e67a4f47827e3321c4dff439408384",
+    "port": 7000,
+    "timeout": 60,
+    "dataLocations": [
+      "out-snb/social_network/social_network_activity_0_0.ttl",
+      "out-snb/social_network/social_network_person_0_0.ttl",
+      "out-snb/social_network/social_network_static_0_0.ttl"
+    ]
   }
 }
 ```
@@ -703,7 +787,7 @@ Parameters:
   * `"port"`: Local port for the QLever HTTP endpoint.
   * `"timeout"`: Per-query timeout in seconds.
 
-#### Refinement Patterns
+### Refinement Patterns
 
 A refinement patterns file is a JSON array. Each element describes one possible mutation that can be applied to the query template. Mutations are randomly selected and applied when a refinement sequence is triggered.
 
@@ -812,7 +896,7 @@ Pass an empty array for one side to modify only the other branch.
 
 Refinement pattern variables (e.g., `timestamp` in a FILTER) can be instantiated by defining a `substitutionProvider` on the corresponding variable in the `QuerySequenceTemplateProvider`, the same way as regular query variables.
 
-For concrete examples of refinement pattern files, see the [SolidSessionBench.js refinement templates](https://github.com/RubenEschauzier/SolidBench.js/tree/feature/user-based-query-sequences/templates/refinements).
+For concrete examples of refinement pattern files, see the [SolidSessionBench.js refinement templates](https://github.com/SolidBench/SolidBench.js/tree/master/templates/refinements).
 
 ## License
 

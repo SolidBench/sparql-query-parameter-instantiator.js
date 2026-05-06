@@ -13,7 +13,7 @@ export class VariableTemplateList extends VariableTemplateAdapter {
     name: string,
     public readonly separator: string,
     public readonly innerTemplate: IVariableTemplate,
-    substitutionProvider?: ISubstitutionProvider | ISubstitutionProviderProbabilities,
+    substitutionProvider?: ISubstitutionProvider,
     valueTransformers?: IValueTransformer[],
   ) {
     super(name, substitutionProvider, valueTransformers);

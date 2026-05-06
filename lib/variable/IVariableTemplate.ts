@@ -6,7 +6,7 @@ import type { ISubstitutionProvider, ISubstitutionProviderProbabilities } from '
  */
 export interface IVariableTemplate {
   getName: () => string;
-  getSubstitutionProvider: () => ISubstitutionProvider | ISubstitutionProviderProbabilities | undefined;
+  getSubstitutionProvider: () => ISubstitutionProvider | undefined;
   createTerm: (value: RawTerm) => RDF.Term;
 }
 

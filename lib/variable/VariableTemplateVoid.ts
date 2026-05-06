@@ -17,7 +17,7 @@ export class VariableTemplateVoid implements IVariableTemplate {
     return '__void';
   }
 
-  public getSubstitutionProvider(): ISubstitutionProvider | ISubstitutionProviderProbabilities | undefined {
+  public getSubstitutionProvider(): ISubstitutionProvider | undefined {
     return undefined;
   }
 }

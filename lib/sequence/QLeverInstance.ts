@@ -10,6 +10,11 @@ import type { Logger } from 'winston';
 import { logger } from '../logging/logger';
 import type { IQueryExecutionResult } from './QueryNextInstantiationValue';
 
+/**
+ * TODO: This class should be modular, where we use a IQueryEngine interface to define
+ * the required behavior of a query engine and then let QLeverInstance be an implementation
+ * of this interface.
+ */
 const DF = new DataFactory();
 const BF = new BindingsFactory(DF, {});
 

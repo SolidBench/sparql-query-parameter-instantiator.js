@@ -8,7 +8,7 @@ import type { IVariableTemplate, RawTerm } from './IVariableTemplate';
 export class VariableTemplateWrapper implements IVariableTemplate {
   public constructor(
     public readonly variableTemplate: IVariableTemplate,
-    public readonly substitutionProvider?: ISubstitutionProvider | ISubstitutionProviderProbabilities,
+    public readonly substitutionProvider?: ISubstitutionProvider,
   ) {}
 
   public createTerm(value: RawTerm): RDF.Term {
@@ -19,7 +19,7 @@ export class VariableTemplateWrapper implements IVariableTemplate {
     return this.variableTemplate.getName();
   }
 
-  public getSubstitutionProvider(): ISubstitutionProvider | ISubstitutionProviderProbabilities | undefined {
+  public getSubstitutionProvider(): ISubstitutionProvider | undefined {
     // eslint-disable-next-line ts/prefer-nullish-coalescing
     return this.substitutionProvider || this.variableTemplate.getSubstitutionProvider();
   }

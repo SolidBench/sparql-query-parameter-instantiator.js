@@ -5,7 +5,7 @@ import type * as seedrandom from 'seedrandom';
 import type { Expression, SparqlParser, Triple } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QuerySequenceTemplate } from './QuerySequenceTemplate';
-import type { IEntityLogits } from './substitution/ISubstitutionProvider';
+import type { IEntityLogits, ISubstitutionProviderProbabilities } from './substitution/ISubstitutionProvider';
 import type { IValueTransformer } from './valuetransformer/IValueTransformer';
 import type { IVariableTemplate, RawTerm } from './variable/IVariableTemplate';
 
@@ -119,7 +119,7 @@ export class QuerySequenceTemplateProvider {
       // we use those to map variables to instantiation values
       if ('getValuesProbabilities' in substitutionProvider &&
         typeof substitutionProvider.getValuesProbabilities === 'function') {
-        const logits = await substitutionProvider.getValuesProbabilities();
+        const logits = await (<ISubstitutionProviderProbabilities>substitutionProvider).getValuesProbabilities();
 
         // Apply the variable template to the entities in the logits
         for (const [ , similarities ] of Object.entries(logits)) {

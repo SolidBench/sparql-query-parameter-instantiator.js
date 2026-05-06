@@ -31,7 +31,7 @@ export abstract class VariableTemplateAdapter implements IVariableTemplate {
     return this.name;
   }
 
-  public getSubstitutionProvider(): ISubstitutionProvider | ISubstitutionProviderProbabilities | undefined {
+  public getSubstitutionProvider(): ISubstitutionProvider | undefined {
     return this.substitutionProvider;
   }
 
