@@ -1,6 +1,8 @@
 import type * as RDF from '@rdfjs/types';
 import type { DataFactory } from 'rdf-data-factory';
 import { getTerms, getVariables } from 'rdf-terms';
+// TODO: Migrate from sparqljs (deprecated) to traqula 
+// (https://github.com/comunica/traqula).
 import type {
   Pattern,
   Triple,
