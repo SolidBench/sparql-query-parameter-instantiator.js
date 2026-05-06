@@ -1,5 +1,4 @@
 import type * as RDF from '@rdfjs/types';
-import type { Logger } from 'pino';
 import { DataFactory } from 'rdf-data-factory';
 import type {
   SelectQuery,
@@ -12,6 +11,7 @@ import type {
   Variable,
 } from 'sparqljs';
 import { Generator } from 'sparqljs';
+import type { Logger } from 'winston';
 import { logger } from '../logging/logger';
 import type { ValueTransformerCsvMap } from '../valuetransformer/ValueTransformerCsvMap';
 import type { TermCallback } from './../utils/SyntaxTreeUtils';

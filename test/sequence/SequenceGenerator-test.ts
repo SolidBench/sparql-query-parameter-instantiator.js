@@ -283,6 +283,7 @@ describe('SequenceGenerator', () => {
       expect(result.querySequence).toHaveLength(2);
       expect(result.sequenceMetadata.sequenceLength).toBe(2);
     });
+
     it('switches to an existing open session when probabilities align', async() => {
       const provider: any = {
         queryTask: 'T1',

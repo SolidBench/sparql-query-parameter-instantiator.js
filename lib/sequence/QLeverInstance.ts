@@ -5,8 +5,8 @@ import * as path from 'node:path';
 import { BindingsFactory } from '@comunica/utils-bindings-factory';
 import type * as RDF from '@rdfjs/types';
 import * as yaml from 'js-yaml';
-import type { Logger } from 'pino';
 import { DataFactory } from 'rdf-data-factory';
+import type { Logger } from 'winston';
 import { logger } from '../logging/logger';
 import type { IQueryExecutionResult } from './QueryNextInstantiationValue';
 
@@ -42,7 +42,7 @@ export class QLeverInstance {
 
     // Start the background setup
     this.ready = this.start().catch((err) => {
-      this.log.error(err, 'Fatal startup error');
+      this.log.error('Fatal startup error', { error: err });
       this.stop().catch(() => {});
       throw err;
     });
@@ -68,7 +68,7 @@ export class QLeverInstance {
       });
 
       if (!response.ok) {
-        this.log.error(await response.json(), 'Error response from QLever.');
+        this.log.error('Error response from QLever.', { response: await response.json() });
         return {
           message: 'TIMEOUT',
           results: [],
@@ -257,7 +257,7 @@ ACCESS_TOKEN = test
       await fs.promises.rm(this.runDir, { recursive: true, force: true });
       this.log.info('Shutdown complete.');
     } catch (e) {
-      this.log.error(e, '[QLever] Error during shutdown:');
+      this.log.error('Error during shutdown:', { error: e });
     } finally {
       this.runDir = null;
       // Remove stop listeners

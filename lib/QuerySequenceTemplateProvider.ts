@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import type * as RDF from '@rdfjs/types';
 
-import type seedrandom from 'seedrandom';
+import type * as seedrandom from 'seedrandom';
 import type { Expression, SparqlParser, Triple } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QuerySequenceTemplate } from './QuerySequenceTemplate';

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Logger } from 'pino';
-import seedrandom from 'seedrandom';
+import seedrandom = require('seedrandom');
+import type { Logger } from 'winston';
 import { logger } from './logging/logger';
 import type { QuerySequenceTemplateProvider } from './QuerySequenceTemplateProvider';
 import type { IQuerySequenceMetadata, SequenceGenerator } from './sequence/SequenceGenerator';
@@ -43,7 +43,7 @@ export class QuerySequenceInstantiator {
   }
 
   public async instantiateProviderSequence(n: number, user: string): Promise<void> {
-    this.log.info(this.templateCounts, 'Current template counts in all generated sequences');
+    this.log.info('Current template counts in all generated sequences', { templateCounts: this.templateCounts });
     const { querySequence, sequenceMetadata } =
       await this.sequenceGenerator.generateSequence(
         this.rngSeeded,

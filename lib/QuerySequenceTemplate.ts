@@ -2,7 +2,8 @@ import type * as RDF from '@rdfjs/types';
 import { cloneDeep } from 'lodash';
 import { DataFactory } from 'rdf-data-factory';
 
-import type seedrandom from 'seedrandom';
+import type * as seedrandom from 'seedrandom';
+
 import type {
   BlankTerm,
   IriTerm,

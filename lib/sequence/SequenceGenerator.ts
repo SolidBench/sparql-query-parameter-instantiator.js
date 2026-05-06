@@ -1,8 +1,8 @@
 import type * as RDF from '@rdfjs/types';
-import type { Logger } from 'pino';
 import type * as seedrandom from 'seedrandom';
 
 import type { SelectQuery } from 'sparqljs';
+import type { Logger } from 'winston';
 import { logger } from '../logging/logger';
 import type { QuerySequenceTemplate } from '../QuerySequenceTemplate';
 import type { INextTemplate, QuerySequenceTemplateProvider } from '../QuerySequenceTemplateProvider';
@@ -42,7 +42,7 @@ export class SequenceGenerator {
     this.findNextInstantiationValue = args.findNextInstantiationValue;
 
     this.log = logger.child({ module: 'SequenceGenerator' });
-    this.log.info({
+    this.log.info('Sequence generation parameters initialized', {
       expectedSequenceLength: calculateExpectedMeanLogNormal(
         this.meanLogSequenceLength,
         this.stdLogSequenceLength,
@@ -55,7 +55,7 @@ export class SequenceGenerator {
         this.meanLogTransitionProbability,
         this.stdLogTransitionProbability,
       ),
-    }, 'Sequence generation parameters initialized');
+    });
   }
 
   public initSequence(rng: seedrandom.PRNG, user: string, n: number): ISequenceInit {
@@ -74,13 +74,13 @@ export class SequenceGenerator {
     };
 
     this.log.debug(
+      'Instantiating sequence',
       {
         n,
         sequenceLength,
         user,
         sessionTransitionProbability: sessionTransitionProbability.toFixed(2),
       },
-      'Instantiating sequence',
     );
     return { sequenceLength, sessionTransitionProbability, sequenceMetadata };
   }

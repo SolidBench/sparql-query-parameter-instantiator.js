@@ -1,4 +1,4 @@
-import seedrandom from 'seedrandom';
+import seedrandom = require('seedrandom');
 import type { RawTerm } from '../variable/IVariableTemplate';
 import type { ISubstitutionProvider } from './ISubstitutionProvider';
 
