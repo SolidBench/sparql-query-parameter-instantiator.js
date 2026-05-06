@@ -1,6 +1,6 @@
 import type * as RDF from '@rdfjs/types';
 import { DataFactory } from 'rdf-data-factory';
-import type { ISubstitutionProvider, ISubstitutionProviderProbabilities } from '../substitution/ISubstitutionProvider';
+import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
 import type { IValueTransformer } from '../valuetransformer/IValueTransformer';
 import type { IVariableTemplate, RawTerm } from './IVariableTemplate';
 
