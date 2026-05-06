@@ -1,5 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+// eslint-disable-next-line ts/no-require-imports
 import seedrandom = require('seedrandom');
 import type { Logger } from 'winston';
 import { logger } from './logging/logger';

@@ -1,5 +1,5 @@
 import type * as RDF from '@rdfjs/types';
-import type { ISubstitutionProvider, ISubstitutionProviderProbabilities } from '../substitution/ISubstitutionProvider';
+import type { ISubstitutionProvider } from '../substitution/ISubstitutionProvider';
 
 /**
  * A template for instantiating RDF terms from a variable value.

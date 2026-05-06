@@ -38,15 +38,19 @@ describe('Logger', () => {
   });
 
   it('should format logs correctly with extra metadata', () => {
-    const mockMetadata = { templateCounts: { templateA: 5, templateB: 10 } };
+    const escapeRegExp = (str: string): string => str.replaceAll(/[$()*+.?[\\\]^{|}]/gu, '\\$&');
+    const mockMetadata = { templateCounts: { templateA: 5, templateB: 10 }};
     logger.info('Test message with metadata', mockMetadata);
 
     const expectedMetaString = JSON.stringify(mockMetadata, null, 2);
 
+    const escapedMeta = escapeRegExp(expectedMetaString);
+    const regex = new RegExp(`Test message with metadata\n${escapedMeta}`, 'u');
+
     expect(logSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         // Verifies that both the message and the stringified metadata are present
-        [MESSAGE]: expect.stringMatching(new RegExp(`Test message with metadata\n${expectedMetaString}`)),
+        [MESSAGE]: expect.stringMatching(regex),
       }),
       expect.anything(),
     );
