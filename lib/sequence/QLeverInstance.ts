@@ -99,14 +99,9 @@ export class QLeverInstance {
         return BF.fromRecord(resultRecord);
       });
 
-      const joinPlan = <IJoinTreeNode> QLeverInstance.extractJoinTree(
-        jsonResult.runtimeInformation.query_execution_tree,
-      );
-
       return {
         message: 'END',
         results: result,
-        joinPlan,
       };
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -320,44 +315,6 @@ ACCESS_TOKEN = test
   public getReadyStatus(): Promise<void> {
     return this.ready;
   }
-
-  /**
-   * Extracts the execution plan as a nested tree to preserve the exact join structure.
-   * Bypasses non-structural unary operations to focus strictly on Joins and Scans.
-   */
-  private static extractJoinTree(node: any): IJoinTreeNode | null {
-    if (!node) {
-      return null;
-    }
-
-    // Recursively parse children
-    const children: IJoinTreeNode[] = (node.children || [])
-      .map(QLeverInstance.extractJoinTree)
-      .filter((child: IJoinTreeNode | null) => child !== null);
-
-    const description = node.description || '';
-    const isJoinOrScan = description.startsWith('Join') || description.includes('Scan');
-
-    // Bypass non-join/non-scan unary operations (e.g., Sort, Order By, Filter)
-    // to keep the resulting tree focused purely on the join topology.
-    if (!isJoinOrScan) {
-      if (children.length === 1) {
-        return children[0];
-      }
-      if (children.length === 0) {
-        return null;
-      }
-    }
-
-    return {
-      operation: description,
-      children,
-      actualOpTimeMs: node.operation_time || 0,
-      actualRows: node.result_rows || 0,
-      estimatedOpCost: node.estimated_operation_cost || 0,
-      estimatedRows: node.estimated_size || 0,
-    };
-  }
 }
 
 export interface IQLeverInstanceArgs {
@@ -377,34 +334,4 @@ export interface IQLeverInstanceArgs {
    * Query timeout in seconds
    */
   timeout: number;
-}
-
-/**
- * Recursive iterface denoting a node in the plan produced by QLever to execute the query.
- */
-export interface IJoinTreeNode {
-  /**
-   * Operation name
-   */
-  operation: string;
-  /**
-   * Children operations using the result of this operation
-   */
-  children: IJoinTreeNode[];
-  /**
-   * Actual time executing this query operation
-   */
-  actualOpTimeMs: number;
-  /**
-   * Actual value
-   */
-  actualRows: number;
-  /**
-   * Estimated operation cost
-   */
-  estimatedOpCost: number;
-  /**
-   * Estimated join results
-   */
-  estimatedRows: number;
 }

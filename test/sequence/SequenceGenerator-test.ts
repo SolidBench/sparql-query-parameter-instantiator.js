@@ -216,7 +216,7 @@ describe('SequenceGenerator', () => {
       expect(mockSession.ended).toBe(true);
     });
 
-    it('fetches instantiation values by mocking determineNextInstantiator to bypass AST requirements', async() => {
+    it('fetches instantiation values', async() => {
       const mockMappingResult = {
         instantiationValues: { testVar: [ DF.namedNode('ex:val1') ]},
       };
@@ -239,7 +239,7 @@ describe('SequenceGenerator', () => {
       );
 
       // Verify it was called twice (once for values, once for the join plan in the loop)
-      expect(determineSpy).toHaveBeenCalledTimes(2);
+      expect(determineSpy).toHaveBeenCalledTimes(1);
 
       // Verify that we attempt to instantiate the template with the previously obtained
       // instantiation values

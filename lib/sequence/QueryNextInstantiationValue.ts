@@ -16,7 +16,7 @@ import { logger } from '../logging/logger';
 import type { ValueTransformerCsvMap } from '../valuetransformer/ValueTransformerCsvMap';
 import type { TermCallback } from './../utils/SyntaxTreeUtils';
 import { recurseExpression, recursePatterns } from './../utils/SyntaxTreeUtils';
-import type { IJoinTreeNode, QLeverInstance } from './QLeverInstance';
+import type { QLeverInstance } from './QLeverInstance';
 
 export class QueryNextInstantiatorValue {
   protected readonly termMappingTransformerFragmentedToOrginal: ValueTransformerCsvMap;
@@ -45,7 +45,7 @@ export class QueryNextInstantiatorValue {
    * @param query Previous query's AST
    * @param outputToInstantiationVariables Mapping mapping output variables of previous queries
    * to the variables that need to be instantiated in the next query
-   * @returns possible instantiation values and the joinPlan used to execute the query
+   * @returns possible instantiation values
    */
   public async getNextQueryInstantiationValues(
     query: SelectQuery,
@@ -54,15 +54,10 @@ export class QueryNextInstantiatorValue {
     // Transform query to original centralized data and ensure that the required variables for
     // next query are present in the SELECT clause
     const transformedQuery = this.transformQuery(query, Object.keys(outputToInstantiationVariables));
-    const { message, results, joinPlan } = await this.qLever.executeQuery(new Generator().stringify(transformedQuery));
+    const { message, results } = await this.qLever.executeQuery(new Generator().stringify(transformedQuery));
 
     if (message === 'TIMEOUT') {
       this.log.warn('Query timed out.');
-    }
-
-    let fragmentedJoinPlan: IJoinTreeNode | undefined;
-    if (joinPlan) {
-      fragmentedJoinPlan = this.translateJoinPlanToFragmented(joinPlan);
     }
 
     // Record mapping variables that should be instantiated to possible values
@@ -84,7 +79,7 @@ export class QueryNextInstantiatorValue {
         instantiationValues[instantiationVariable] = resultsForVariable;
       }
     }
-    return { instantiationValues, joinPlan: fragmentedJoinPlan };
+    return { instantiationValues };
   }
 
   protected transformQuery(query: SelectQuery, requiredSelectVariables: string[]): SelectQuery {
@@ -202,30 +197,6 @@ export class QueryNextInstantiatorValue {
     return syntaxTree;
   };
 
-  private translateJoinPlanToFragmented(node: IJoinTreeNode): IJoinTreeNode {
-    const newNode: IJoinTreeNode = { ...node, children: []};
-
-    // Replace URIs inside < > brackets in the operation string
-    newNode.operation = node.operation.replaceAll(/<([^>]+)>/gu, (match, uri) => {
-      let tempTerm: RDF.Term = this.dataFactory.namedNode(uri);
-      tempTerm = this.termMappingTransformerOriginalToFragmented.transform(tempTerm);
-      let transformedUri = tempTerm.value;
-
-      for (const transformer of this.transformers) {
-        transformedUri = transformer.transformOriginalToFragmentedRaw(transformedUri);
-      }
-
-      return `<${transformedUri}>`;
-    });
-
-    // Recursively apply to all children
-    if (node.children && node.children.length > 0) {
-      newNode.children = node.children.map(child => this.translateJoinPlanToFragmented(child));
-    }
-
-    return newNode;
-  }
-
   public getQLeverReadyStatus(): Promise<void> {
     return this.qLever.getReadyStatus();
   }
@@ -304,10 +275,8 @@ export interface ITermTransformerArgs {
 export interface IQueryExecutionResult {
   message: 'TIMEOUT' | 'END';
   results: RDF.Bindings[];
-  joinPlan?: IJoinTreeNode;
 }
 
 export interface IQueryInstantiationValuesQLever {
   instantiationValues: Record<string, RDF.Term[]>;
-  joinPlan?: IJoinTreeNode;
 }

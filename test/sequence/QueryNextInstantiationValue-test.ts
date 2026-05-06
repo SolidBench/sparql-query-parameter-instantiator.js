@@ -60,7 +60,6 @@ describe('QueryNextInstantiatorValue', () => {
       mockQLever.executeQuery.mockResolvedValue({ message: 'END', results: []});
       const result = await instance.getNextQueryInstantiationValues(query, { s: [ 'nextVar' ]});
       expect(result.instantiationValues).toEqual({ nextVar: []});
-      expect(result.joinPlan).toBeUndefined();
     });
 
     it('should map output variables to instantiation variables', async() => {
@@ -124,49 +123,6 @@ describe('QueryNextInstantiatorValue', () => {
       expect(transformSpy).toHaveBeenCalledWith(DF.namedNode('ex:s1'));
       expect(result.instantiationValues.nextVar[0].value).toBe('ex:s1-transformed');
     });
-
-    it('should translate join plan to fragmented when present', async() => {
-      mockQLever.executeQuery.mockResolvedValue({
-        message: 'END',
-        results: [],
-        joinPlan: <any> { operation: '<ex:original>', children: []},
-      });
-
-      mockTransformerOriginalToFragmented.transform.mockImplementation(
-        (term: RDF.Term) => DF.namedNode(term.value.replace('original', 'fragmented')),
-      );
-
-      const result = await instance.getNextQueryInstantiationValues(query, {});
-      expect(result.joinPlan).toBeDefined();
-      expect(result.joinPlan!.operation).toContain('fragmented');
-    });
-
-    it('should recursively translate nested join plan children', async() => {
-      mockQLever.executeQuery.mockResolvedValue({
-        message: 'END',
-        results: [],
-        joinPlan: <any> {
-          operation: '<ex:parent>',
-          children: [
-            <any>{ operation: '<ex:child>', children: []},
-          ],
-        },
-      });
-      const transformer = new TermTransformerBiDirectional({
-        originalRegex: 'child',
-        originalString: 'child',
-        fragmentedRegex: 'grandchild',
-        fragmentedString: 'grandchild',
-      });
-
-      instance = new QueryNextInstantiatorValue({ ...args, transformers: [ transformer ]});
-
-      const result = await instance.getNextQueryInstantiationValues(query, {});
-      expect(result.joinPlan!.children).toHaveLength(1);
-      expect(result.joinPlan!.children).toEqual([
-        { operation: '<ex:grandchild>', children: []},
-      ]);
-    });
   });
 
   describe('getQLeverReadyStatus', () => {
@@ -190,7 +146,6 @@ describe('QueryNextInstantiatorValue', () => {
       expect(varNames).toContain('p');
       expect(varNames).toContain('o');
     });
-
     it('should not duplicate variables already in SELECT', () => {
       const selectQuery = <SelectQuery> new Parser().parse('SELECT ?s WHERE { ?s ?p ?o. }');
       const result = (<any>instance).transformQuery(selectQuery, [ 's' ]);

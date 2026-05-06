@@ -14,7 +14,6 @@ import {
   sampleProbability,
   sampleRandom,
 } from '../utils/RandomUtils';
-import type { IJoinTreeNode } from './QLeverInstance';
 import type { QueryNextInstantiatorValue } from './QueryNextInstantiationValue';
 
 export class SequenceGenerator {
@@ -131,7 +130,6 @@ export class SequenceGenerator {
 
     // Fetch instantiation values for the new query by taking the AST of
     // the previous query in the session (not always the previous query in whole sequence)
-    const sessionHasLastAst = Boolean(session.lastAst);
     if (session.lastAst) {
       const previousTemplate = session.templates.at(-1)!;
       const { instantiationValues } = await this.determineNextInstantiator(
@@ -168,23 +166,9 @@ export class SequenceGenerator {
 
     const nOpenSessions = sequenceSessions.filter(x => !x.ended).length;
 
-    // For all generated queries (including refinement patterns), we get
-    // join plans and any additional metadata
+    // For all generated queries (including refinement patterns),
+    // add metadata
     for (let i = 0; i < queries.length; i++) {
-      const currentAst = asts[i];
-
-      // Fetch the join plan for this specific query.
-      // Passing the current template twice safely executes the query without side-effects on external mappings.
-      let joinPlan: IJoinTreeNode | undefined;
-      if (sessionHasLastAst) {
-        const result = await this.determineNextInstantiator(
-          currentAst,
-          query.template,
-          query.template,
-        );
-        joinPlan = result.joinPlan;
-      }
-
       sequenceMetadata.sequenceElements.push({
         session: {
           task: session.task,
@@ -194,7 +178,6 @@ export class SequenceGenerator {
         template: query.name,
         nOpenSessions,
         refinementMetadata: patternMetadata[i],
-        joinPlanCentralized: joinPlan,
       });
     }
     return { ast: session.lastAst, queriesAdded: queries.length };
@@ -346,7 +329,7 @@ export class SequenceGenerator {
     ast: SelectQuery,
     lastTemplate: QuerySequenceTemplate,
     nextTemplate: QuerySequenceTemplate,
-  ): Promise<{ instantiationValues: Record<string, RDF.Term[]>; joinPlan?: IJoinTreeNode }> {
+  ): Promise<{ instantiationValues: Record<string, RDF.Term[]> }> {
     const mapping: Record<string, string[]> = this.mapOutputVariablesToInstatiationVariables(
       lastTemplate,
       nextTemplate,
@@ -498,7 +481,6 @@ export interface IQuerySequenceElementMetadata {
   template: string;
   nOpenSessions: number;
   refinementMetadata: Record<string, any>;
-  joinPlanCentralized?: IJoinTreeNode;
 }
 
 export interface IQuerySequenceMetadata {

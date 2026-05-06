@@ -280,10 +280,6 @@ describe('QLeverInstance', () => {
       expect(firstRow.get('o')?.termType).toBe('Literal');
       expect((<Literal> firstRow.get('lang'))?.language).toBe('fr');
       expect((<any>firstRow.get('type'))?.datatype?.value).toBe('http://www.w3.org/2001/XMLSchema#integer');
-
-      expect(result.joinPlan?.operation).toBe('Join (s)');
-      expect(result.joinPlan?.children[0].operation).toBe('Scan (s, p, o)');
-      expect(result.joinPlan?.children[1].operation).toBe('Scan (s, o)');
     });
 
     it('handles query execution tree edge cases and simple text parameters', async() => {
@@ -312,42 +308,6 @@ describe('QLeverInstance', () => {
       expect(firstRow.get('a')?.value).toBe('plain');
       expect(firstRow.get('b')?.termType).toBe('Literal');
       expect(firstRow.get('b')?.value).toBe('bareword');
-
-      expect(result.joinPlan).toBeNull();
-    });
-
-    it('handles query execution tree edge without description', async() => {
-      const mockResult = {
-        selected: [ '?a', '?b' ],
-        res: [
-          [ '"plain"', 'bareword' ],
-        ],
-        runtimeInformation: {
-          query_execution_tree: {
-            children: [{
-              description: 'IndexScan PSO',
-              children: [],
-            }],
-          },
-        },
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockResult),
-      });
-      const result = await instance.executeQuery('SELECT * WHERE { ?a ?b }');
-
-      expect(result.joinPlan).toEqual(
-        {
-          actualOpTimeMs: 0,
-          actualRows: 0,
-          children: [],
-          estimatedOpCost: 0,
-          estimatedRows: 0,
-          operation: 'IndexScan PSO',
-        },
-      );
     });
 
     it('handles missing selected and variables without ? prefix', async() => {
@@ -395,25 +355,8 @@ describe('QLeverInstance', () => {
         {
           message: 'END',
           results: [],
-          joinPlan: null,
         },
       );
-    });
-
-    it('handles null query execution tree', async() => {
-      const mockResult = {
-        selected: [],
-        res: [],
-        runtimeInformation: { query_execution_tree: null },
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockResult),
-      });
-
-      const result = await instance.executeQuery('SELECT *');
-      expect(result.joinPlan).toBeNull();
     });
 
     it('aborts the controller and returns TIMEOUT when the timer expires', async() => {
@@ -460,7 +403,5 @@ describe('QLeverInstance', () => {
       mockFetch.mockRejectedValueOnce(new Error('Fatal Network Error'));
       await expect(instance.executeQuery('SELECT *')).rejects.toThrow('Fatal Network Error');
     });
-
-    it.todo('calls handleSignal when SIGINT is fired');
   });
 });
