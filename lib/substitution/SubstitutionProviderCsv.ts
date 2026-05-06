@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import type { ISubstitutionProvider } from './ISubstitutionProvider';
 
-// eslint-disable-next-line ts/no-require-imports, ts/no-var-requires
+// eslint-disable-next-line ts/no-require-imports,ts/no-var-requires
 const csvParser = require('csv-parser');
 
 /**
