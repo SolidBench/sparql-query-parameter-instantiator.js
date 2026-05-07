@@ -7,7 +7,8 @@ import type { IValueTransformer } from './IValueTransformer';
 const DF = new DataFactory();
 
 /**
- * Replaces parts of an IRI.
+ * Replaces parts of an IRI using a provided CSV mapping one
+ * term to another.
  */
 export class ValueTransformerCsvMap implements IValueTransformer {
   private readonly file: string;
@@ -33,17 +34,16 @@ export class ValueTransformerCsvMap implements IValueTransformer {
     });
 
     for (const record of records) {
-      if (record.length >= 2) {
+      if (record.length === 2) {
         const key = record[0];
         const value = record[1];
-
-        if (key && value) {
-          if (this.invertMapping) {
-            mapping[value] = key;
-          } else {
-            mapping[key] = value;
-          }
+        if (this.invertMapping) {
+          mapping[value] = key;
+        } else {
+          mapping[key] = value;
         }
+      } else {
+        throw new Error(`${this.constructor.name}: csv entry invalid number of columns found (!=2)`);
       }
     }
 

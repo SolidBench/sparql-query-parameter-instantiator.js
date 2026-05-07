@@ -42,6 +42,14 @@ describe('ValueTransformerCsvMap', () => {
         old2: 'new2',
       });
     });
+    it('throws when CSV does not have two columns', () => {
+      (<jest.Mock>fs.readFileSync).mockReturnValue(' old1  \n  old2  ');
+
+      // Wrap the constructor inside the expect() function!
+      expect(() => {
+        new ValueTransformerCsvMap('dummy.csv');
+      }).toThrow(/csv entry invalid number of columns found/u);
+    });
   });
 
   describe('transform', () => {

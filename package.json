@@ -65,6 +65,7 @@
     "rdf-terms": "^2.0.0",
     "seedrandom": "^3.0.5",
     "sparqljs": "^3.7.0",
+    "sparqljson-parse": "^3.3.0",
     "winston": "^3.19.0"
   },
   "devDependencies": {

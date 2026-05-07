@@ -92,6 +92,20 @@ describe('RefinementSequenceUtils', () => {
         ],
       });
     });
+    it('extracts nothing for empty where in query', () => {
+      const ast: SelectQuery = <any> {
+        type: 'query',
+        queryType: 'SELECT',
+        variables: [
+          DF.variable('s'),
+          DF.variable('p'),
+          DF.variable('o'),
+        ],
+      };
+      const operatorToBgp = {};
+      extractBgpPerOperator([ ast ], operatorToBgp, 'bgp');
+      expect(operatorToBgp).toEqual({});
+    });
 
     it('handles nested unions and empty union branches', () => {
       const patterns: Pattern[] = [ <any> {

@@ -2,7 +2,6 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Literal } from '@rdfjs/types';
 import * as yaml from 'js-yaml';
 
 // Adjust import path
@@ -63,6 +62,8 @@ describe('QLeverInstance', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
   describe('Initialization and Lifecycle', () => {
@@ -76,6 +77,26 @@ describe('QLeverInstance', () => {
       expect(fs.promises.writeFile).toHaveBeenCalledTimes(2);
       expect(spawn).toHaveBeenCalledWith('docker', [ 'volume', 'create', expect.any(String) ], expect.any(Object));
       expect(spawn).toHaveBeenCalledWith('docker', [ 'compose', 'up', '-d' ], expect.any(Object));
+    });
+
+    it('should retry until healthy', async() => {
+      jest.useFakeTimers();
+
+      mockFetch
+        .mockResolvedValueOnce({ status: 503 })
+        .mockResolvedValueOnce({ status: 200 });
+
+      const instance = new QLeverInstance(instanceArgs);
+      const readyPromise = instance.getReadyStatus();
+
+      await jest.advanceTimersByTimeAsync(0);
+      await jest.advanceTimersByTimeAsync(500);
+      await jest.advanceTimersByTimeAsync(0);
+
+      await readyPromise;
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      jest.useRealTimers();
     });
 
     it('throws and stops if startup fails', async() => {
@@ -235,32 +256,38 @@ describe('QLeverInstance', () => {
 
     it('executes query and parses different RDF terms correctly', async() => {
       const mockResult = {
-        selected: [ '?s', '?p', '?o', '?lang', '?type' ],
-        res: [
-          [
-            '<a>',
-            '_:b1',
-            '"string"',
-            '"bonjour"@fr',
-            '"42"^^<http://www.w3.org/2001/XMLSchema#integer>',
+        head: {
+          vars: [
+            's',
+            'p',
+            'o',
+            'lang',
+            'type',
           ],
-          [ null, null, null, null, null ],
-        ],
-        runtimeInformation: {
-          query_execution_tree: {
-            description: 'Join (s)',
-            operation_time: 10,
-            result_rows: 1,
-            estimated_operation_cost: 5,
-            estimated_size: 1,
-            children: [
-              { description: 'Scan (s, p, o)' },
-              {
-                description: 'Filter (o > 0)',
-                children: [{ description: 'Scan (s, o)' }],
+        },
+        results: {
+          bindings: [
+            {
+              s: {
+                type: 'uri',
+                value: 'a',
               },
-            ],
-          },
+              p: {
+                type: 'bnode',
+                value: 'b1',
+              },
+              o: {
+                type: 'literal',
+                value: 'string',
+              },
+              type: {
+                type: 'literal',
+                value: '42',
+                datatype: 'http://www.w3.org/2001/XMLSchema#integer',
+              },
+            },
+            {},
+          ],
         },
       };
 
@@ -278,85 +305,53 @@ describe('QLeverInstance', () => {
       expect(firstRow.get('s')?.termType).toBe('NamedNode');
       expect(firstRow.get('p')?.termType).toBe('BlankNode');
       expect(firstRow.get('o')?.termType).toBe('Literal');
-      expect((<Literal> firstRow.get('lang'))?.language).toBe('fr');
       expect((<any>firstRow.get('type'))?.datatype?.value).toBe('http://www.w3.org/2001/XMLSchema#integer');
+      expect((<any>firstRow.get('type'))?.value).toBe('42');
     });
 
-    it('handles query execution tree edge cases and simple text parameters', async() => {
-      const mockResult = {
-        selected: [ '?a', '?b' ],
-        res: [
-          [ '"plain"', 'bareword' ],
-        ],
-        runtimeInformation: {
-          query_execution_tree: {
-            description: 'Filter (empty)',
-            children: [],
-          },
-        },
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue(mockResult),
-      });
-
-      const result = await instance.executeQuery('SELECT * WHERE { ?a ?b }');
-
-      const firstRow = result.results[0];
-      expect(firstRow.get('a')?.termType).toBe('Literal');
-      expect(firstRow.get('a')?.value).toBe('plain');
-      expect(firstRow.get('b')?.termType).toBe('Literal');
-      expect(firstRow.get('b')?.value).toBe('bareword');
-    });
-
-    it('handles missing selected and variables without ? prefix', async() => {
+    it('handles missing vars in head gracefully', async() => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue({
-          // Selected is missing → fallback to []
-          res: [[]],
-          runtimeInformation: { query_execution_tree: null },
+          // Head.vars is missing -> fallback to empty array safely
+          head: {},
+          results: {
+            // One row, but with no bindings
+            bindings: [{}],
+          },
         }),
       });
 
       const result = await instance.executeQuery('SELECT *');
 
+      // Verifies that the parser didn't crash and returned the empty row
       expect(result.results).toHaveLength(1);
     });
 
-    it('handles variables without leading ?', async() => {
+    it('handles queries with no solutions (empty bindings) but variables in head', async() => {
+      // Mock the standard SPARQL JSON response for an empty result set
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: jest.fn().mockResolvedValue({
-          selected: [ 'a', 'b' ], // No '?'
-          res: [[ '"x"', '"y"' ]],
-          runtimeInformation: { query_execution_tree: null },
+          head: {
+            vars: [ 's', 'p', 'o' ],
+          },
+          results: {
+            bindings: [], // Zero matching rows
+          },
         }),
       });
 
-      const result = await instance.executeQuery('SELECT *');
+      // Execute a query that hypothetically matches nothing
+      const result = await instance.executeQuery('SELECT ?s ?p ?o WHERE { ?s ?p "NonExistentValue" }');
 
-      const row = result.results[0];
-      expect(row.get('a')?.value).toBe('x');
-      expect(row.get('b')?.value).toBe('y');
-    });
+      // The parser should safely process the empty bindings array
+      // and return an empty result set without throwing errors.
+      expect(result.results).toHaveLength(0);
 
-    it('handles empty res json', async() => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: jest.fn().mockResolvedValue({
-          runtimeInformation: { query_execution_tree: null },
-        }),
-      });
-
-      const result = await instance.executeQuery('SELECT *');
-      expect(result).toEqual(
-        {
-          message: 'END',
-          results: [],
-        },
-      );
+      // (Optional) If your custom result wrapper also exposes the parsed variables,
+      // you can verify that it correctly read the head block despite having no rows!
+      // expect(result.variables).toEqual(['s', 'p', 'o']);
     });
 
     it('aborts the controller and returns TIMEOUT when the timer expires', async() => {

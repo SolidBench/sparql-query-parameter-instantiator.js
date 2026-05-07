@@ -6,6 +6,7 @@ import { BindingsFactory } from '@comunica/utils-bindings-factory';
 import type * as RDF from '@rdfjs/types';
 import * as yaml from 'js-yaml';
 import { DataFactory } from 'rdf-data-factory';
+import { SparqlJsonParser } from 'sparqljson-parse';
 import type { Logger } from 'winston';
 import { logger } from '../logging/logger';
 import type { IQueryExecutionResult } from './QueryNextInstantiationValue';
@@ -25,6 +26,8 @@ export class QLeverInstance {
   protected volumeName: string;
   protected timeout: number;
 
+  protected sparqlJsonParser: SparqlJsonParser;
+
   private runDir: string | null = null;
   private isShuttingDown = false;
 
@@ -38,6 +41,9 @@ export class QLeverInstance {
     this.dataLocations = args.dataLocations;
     this.port = args.port;
     this.timeout = args.timeout;
+
+    // Parser for application/sparql-results+json output format
+    this.sparqlJsonParser = new SparqlJsonParser({ dataFactory: DF });
 
     // Generate unique identifiers to isolate this instance
     const id = Date.now().toString().slice(-6);
@@ -66,7 +72,7 @@ export class QLeverInstance {
           // eslint-disable-next-line ts/naming-convention
           'Content-Type': 'application/sparql-query',
           // eslint-disable-next-line ts/naming-convention
-          Accept: 'application/qlever-results+json',
+          Accept: 'application/sparql-results+json',
         },
         body: query,
         signal: controller.signal,
@@ -81,23 +87,13 @@ export class QLeverInstance {
       }
       const jsonResult = await response.json();
 
-      // Extract variables and remove the leading '?' from QLever's output
-      const variables: string[] = (jsonResult.selected || []).map((v: string) =>
-        v.startsWith('?') ? v.slice(1) : v);
-
-      // Map the 2D results array (`res`) to RDF Terms
-      const resMatrix: (string | null)[][] = jsonResult.res || [];
-      const result = resMatrix.map((row) => {
-        const resultRecord: Record<string, RDF.Term> = {};
-
-        for (const [ index, value ] of row.entries()) {
-          if (value !== null) {
-            resultRecord[variables[index]] = this.parseQLeverTerm(value);
-          }
-        }
-
-        return BF.fromRecord(resultRecord);
-      });
+      // Map the bindings array to RDF Terms
+      const bindings: Record<string, RDF.Term>[] =
+        this.sparqlJsonParser.parseJsonResults(jsonResult);
+      const result = bindings.map(bindingRecord =>
+      // Example: { messageId: Literal, message: NamedNode, ... }
+      // Simply pass it to whatever format you need downstream
+        BF.fromRecord(bindingRecord));
 
       return {
         message: 'END',
@@ -111,37 +107,6 @@ export class QLeverInstance {
     } finally {
       clearTimeout(timeoutHandle);
     }
-  }
-
-  /**
-   * Parses a raw SPARQL term string into an RDF.js Term.
-   */
-  private parseQLeverTerm(value: string): RDF.Term {
-    if (value.startsWith('<') && value.endsWith('>')) {
-      return DF.namedNode(value.slice(1, -1));
-    }
-
-    if (value.startsWith('_:')) {
-      return DF.blankNode(value.slice(2));
-    }
-
-    if (value.startsWith('"')) {
-      // Matches "lexicalForm", capturing optional @language or ^^<datatype>
-      // [\s\S]* handles potential newlines inside the literal string
-      const match = /^"([\S\s]*)"(?:@([\dA-Za-z-]+)|\^\^<([^>]+)>)?$/u.exec(value);
-
-      if (match) {
-        const [ , lexicalForm, language, datatype ] = match;
-        if (language) {
-          return DF.literal(lexicalForm, language);
-        }
-        if (datatype) {
-          return DF.literal(lexicalForm, DF.namedNode(datatype));
-        }
-        return DF.literal(lexicalForm);
-      }
-    }
-    return DF.literal(value);
   }
 
   public async start(): Promise<void> {

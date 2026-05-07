@@ -13,6 +13,7 @@ import type {
 import type { IValueTransformer } from '../lib/valuetransformer/IValueTransformer';
 
 const seedrandomFn = require('seedrandom');
+
 const rng = seedrandomFn('test');
 const DF = new DataFactory();
 
@@ -153,30 +154,30 @@ describe('QueryTemplate', () => {
           target: [ <any>{
             type: 'operation',
             operator: '=',
-            args: [ { invalidTermStructure: true } ],
+            args: [{ invalidTermStructure: true }],
           } ],
         };
         expect(() => template.mapRefinementConfigToSparqlJs([ invalidFilter ]))
-          .toThrow(/Invalid term in FILTER expression/);
+          .toThrow(/Invalid term in FILTER expression/u);
       });
       it('should convert FILTER target with JSON-based variable terms', () => {
         const filterPattern: any = {
-          type: "FILTER",
+          type: 'FILTER',
           id: 7,
-          operation: "removal",
-          description: "",
+          operation: 'removal',
+          description: '',
           location: 0,
           target: [
             {
-              type: "functionCall",
-              operator: "regex",
+              type: 'functionCall',
+              operator: 'regex',
               args: [
-                { termType: "variable", value: "firstName" },
-                { termType: "literal", datatype: "http://www.w3.org/2001/XMLSchema#string", value: "^[A-E]" },
-                { termType: "literal", datatype: "http://www.w3.org/2001/XMLSchema#string", value: "i" }
-              ]
-            }
-          ]
+                { termType: 'variable', value: 'firstName' },
+                { termType: 'literal', datatype: 'http://www.w3.org/2001/XMLSchema#string', value: '^[A-E]' },
+                { termType: 'literal', datatype: 'http://www.w3.org/2001/XMLSchema#string', value: 'i' },
+              ],
+            },
+          ],
         };
         const mapped = template.mapRefinementConfigToSparqlJs([ filterPattern ]);
         const targetExpr = (<any>mapped[0]).target[0];
@@ -197,7 +198,8 @@ describe('QueryTemplate', () => {
         // Validate Arg 3: "i" (case-insensitive flag)
         expect(targetExpr.args[2].termType).toBe('Literal');
         expect(targetExpr.args[2].value).toBe('i');
-        expect(targetExpr.args[2].datatype.value).toBe('http://www.w3.org/2001/XMLSchema#string');      });
+        expect(targetExpr.args[2].datatype.value).toBe('http://www.w3.org/2001/XMLSchema#string');
+      });
     });
 
     describe('validateBaseRefinementPattern', () => {
@@ -1397,7 +1399,7 @@ describe('QueryTemplate', () => {
         `SELECT ?s ?o WHERE {
   ?s <http://example.org/p1> ?o;
     <http://example.org/p2> ?o.
-}`
+}`,
       );
 
       // Verify the AST variables list remains strictly the original variables without duplicates
@@ -1442,7 +1444,7 @@ describe('QueryTemplate', () => {
 
       // Verify the generated string correctly merged the triples under the same subject
       expect(new Generator().stringify(transformed)).toBe(
-        `SELECT ?s ?o WHERE { ?s <http://example.org/p1> ?o. }`
+        `SELECT ?s ?o WHERE { ?s <http://example.org/p1> ?o. }`,
       );
     });
 

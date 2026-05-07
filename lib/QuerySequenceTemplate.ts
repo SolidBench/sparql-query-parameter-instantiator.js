@@ -147,7 +147,7 @@ export class QuerySequenceTemplate {
               if (isRDFTerm(term)) {
                 return term;
               }
-              throw new Error(`${this.name}: Invalid term in FILTER expression: ${JSON.stringify(term, null, 2)}`)
+              throw new Error(`${this.name}: Invalid term in FILTER expression: ${JSON.stringify(term, null, 2)}`);
             },
             {},
             this.instantiateSyntaxTreeRecurse,
