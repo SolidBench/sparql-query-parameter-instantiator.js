@@ -3,6 +3,7 @@ import type * as RDF from '@rdfjs/types';
 import type { SparqlParser } from 'sparqljs';
 import { Parser } from 'sparqljs';
 import { QueryTemplate } from './QueryTemplate';
+import type { IValueTransformer } from './valuetransformer/IValueTransformer';
 import type { IVariableTemplate } from './variable/IVariableTemplate';
 
 /**
@@ -15,16 +16,21 @@ export class QueryTemplateProvider {
 
   private readonly parser: SparqlParser;
 
+  private readonly iriTransformer?: IValueTransformer;
+
   public constructor(
     templateFilePath: string,
     destinationFilePath: string,
     variables: IVariableTemplate[],
+    iriTransformer?: IValueTransformer,
   ) {
     this.templateFilePath = templateFilePath;
     this.destinationFilePath = destinationFilePath;
     this.variables = variables;
 
     this.parser = new Parser();
+
+    this.iriTransformer = iriTransformer;
   }
 
   /**
@@ -43,7 +49,7 @@ export class QueryTemplateProvider {
       variableMappings[variableName] = (await substitutionProvider.getValues())
         .map(value => variableTemplate.createTerm(value));
     }
-    return new QueryTemplate(syntaxTree, variableMappings);
+    return new QueryTemplate(syntaxTree, variableMappings, this.iriTransformer);
   }
 
   /**

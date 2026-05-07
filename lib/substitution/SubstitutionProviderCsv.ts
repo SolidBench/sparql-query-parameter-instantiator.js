@@ -11,11 +11,13 @@ export class SubstitutionProviderCsv implements ISubstitutionProvider {
   private readonly csvFilePath: string;
   private readonly columnName: string;
   private readonly separator: string;
+  private readonly uniqueValues: boolean;
 
-  public constructor(csvFilePath: string, columnName: string, separator = ',') {
+  public constructor(csvFilePath: string, columnName: string, separator = ',', uniqueValues = false) {
     this.csvFilePath = csvFilePath;
     this.columnName = columnName;
     this.separator = separator;
+    this.uniqueValues = uniqueValues;
   }
 
   public getValues(): Promise<string[]> {
@@ -31,7 +33,12 @@ export class SubstitutionProviderCsv implements ISubstitutionProvider {
           }
           results.push(<string>data[this.columnName]);
         })
-        .on('end', () => resolve(results));
+        .on('end', () => {
+          if (this.uniqueValues) {
+            resolve([ ...new Set(results) ]);
+          }
+          resolve(results);
+        });
     });
   }
 }
