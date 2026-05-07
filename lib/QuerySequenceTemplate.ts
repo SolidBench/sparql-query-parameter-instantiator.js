@@ -144,7 +144,10 @@ export class QuerySequenceTemplate {
                   return this.dataFactory.literal(term.value, languageOrDatatype);
                 }
               }
-              return <Term>term;
+              if (isRDFTerm(term)) {
+                return term;
+              }
+              throw new Error(`${this.name}: Invalid term in FILTER expression: ${JSON.stringify(term, null, 2)}`)
             },
             {},
             this.instantiateSyntaxTreeRecurse,

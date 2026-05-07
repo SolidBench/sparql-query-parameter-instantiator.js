@@ -13,9 +13,7 @@ import type {
 import type { IValueTransformer } from '../lib/valuetransformer/IValueTransformer';
 
 const seedrandomFn = require('seedrandom');
-
 const rng = seedrandomFn('test');
-
 const DF = new DataFactory();
 
 describe('QueryTemplate', () => {
@@ -145,6 +143,61 @@ describe('QueryTemplate', () => {
         const mapped = template.mapRefinementConfigToSparqlJs([ bgpPattern ]);
         expect((<any>mapped[0]).target[0].subject.termType).toBe('Variable');
       });
+      it('should throw an error if a FILTER expression contains an invalid term config', () => {
+        const invalidFilter: IQueryRefinementPattern = {
+          type: 'FILTER',
+          id: 0,
+          operation: 'addition',
+          description: '',
+          location: 0,
+          target: [ <any>{
+            type: 'operation',
+            operator: '=',
+            args: [ { invalidTermStructure: true } ],
+          } ],
+        };
+        expect(() => template.mapRefinementConfigToSparqlJs([ invalidFilter ]))
+          .toThrow(/Invalid term in FILTER expression/);
+      });
+      it('should convert FILTER target with JSON-based variable terms', () => {
+        const filterPattern: any = {
+          type: "FILTER",
+          id: 7,
+          operation: "removal",
+          description: "",
+          location: 0,
+          target: [
+            {
+              type: "functionCall",
+              operator: "regex",
+              args: [
+                { termType: "variable", value: "firstName" },
+                { termType: "literal", datatype: "http://www.w3.org/2001/XMLSchema#string", value: "^[A-E]" },
+                { termType: "literal", datatype: "http://www.w3.org/2001/XMLSchema#string", value: "i" }
+              ]
+            }
+          ]
+        };
+        const mapped = template.mapRefinementConfigToSparqlJs([ filterPattern ]);
+        const targetExpr = (<any>mapped[0]).target[0];
+        // Validate the function call structure
+        expect(targetExpr.type).toBe('functionCall');
+        expect(targetExpr.operator).toBe('regex');
+        expect(targetExpr.args).toHaveLength(3);
+
+        // Validate Arg 1: ?firstName
+        expect(targetExpr.args[0].termType).toBe('Variable');
+        expect(targetExpr.args[0].value).toBe('firstName');
+
+        // Validate Arg 2: "^[A-E]"
+        expect(targetExpr.args[1].termType).toBe('Literal');
+        expect(targetExpr.args[1].value).toBe('^[A-E]');
+        expect(targetExpr.args[1].datatype.value).toBe('http://www.w3.org/2001/XMLSchema#string');
+
+        // Validate Arg 3: "i" (case-insensitive flag)
+        expect(targetExpr.args[2].termType).toBe('Literal');
+        expect(targetExpr.args[2].value).toBe('i');
+        expect(targetExpr.args[2].datatype.value).toBe('http://www.w3.org/2001/XMLSchema#string');      });
     });
 
     describe('validateBaseRefinementPattern', () => {
@@ -1304,6 +1357,95 @@ describe('QueryTemplate', () => {
 }`,
       );
     });
+    it('should add a triple to without duplicating variables in SELECT', () => {
+      const queryString = ` SELECT ?s ?o WHERE {
+                ?s <http://example.org/p1> ?o
+            }`;
+
+      const refinementPattern: IQueryRefinementPattern = {
+        type: 'BGP',
+        operation: 'addition',
+        description: 'Add triple reusing ?s and ?o',
+        location: 0,
+        id: 0,
+        target: [
+          {
+            subject: { value: 's', termType: 'variable' },
+            predicate: { value: 'http://example.org/p2', termType: 'namedNode' },
+            object: { value: 'o', termType: 'variable' },
+          },
+        ],
+      };
+
+      const input = createRefinementInput(
+        queryString,
+        {},
+        {},
+        refinementPattern,
+      );
+
+      const transformed = input.template.applyRefinementPattern(
+        refinementPattern,
+        input.query,
+        input.variableMapping,
+        input.variableMappingAlternative,
+        refinementState,
+      );
+
+      // Verify the generated string correctly merged the triples under the same subject
+      expect(new Generator().stringify(transformed)).toBe(
+        `SELECT ?s ?o WHERE {
+  ?s <http://example.org/p1> ?o;
+    <http://example.org/p2> ?o.
+}`
+      );
+
+      // Verify the AST variables list remains strictly the original variables without duplicates
+      expect(transformed.variables).toHaveLength(2);
+      expect((<RDF.Variable>transformed.variables[0]).value).toBe('s');
+      expect((<RDF.Variable>transformed.variables[1]).value).toBe('o');
+    });
+    it('should not add a triple already present in query', () => {
+      const queryString = ` SELECT ?s ?o WHERE {
+                ?s <http://example.org/p1> ?o
+            }`;
+
+      const refinementPattern: IQueryRefinementPattern = {
+        type: 'BGP',
+        operation: 'addition',
+        description: 'Add triple reusing ?s and ?o',
+        location: 0,
+        id: 0,
+        target: [
+          {
+            subject: { value: 's', termType: 'variable' },
+            predicate: { value: 'http://example.org/p1', termType: 'namedNode' },
+            object: { value: 'o', termType: 'variable' },
+          },
+        ],
+      };
+
+      const input = createRefinementInput(
+        queryString,
+        {},
+        {},
+        refinementPattern,
+      );
+
+      const transformed = input.template.applyRefinementPattern(
+        refinementPattern,
+        input.query,
+        input.variableMapping,
+        input.variableMappingAlternative,
+        refinementState,
+      );
+
+      // Verify the generated string correctly merged the triples under the same subject
+      expect(new Generator().stringify(transformed)).toBe(
+        `SELECT ?s ?o WHERE { ?s <http://example.org/p1> ?o. }`
+      );
+    });
+
     it('should add triple with literal to simple bgp ', () => {
       const queryString = ` SELECT ?o WHERE {
                 ?s ?p ?o
