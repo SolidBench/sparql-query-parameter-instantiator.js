@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+<a name="v2.8.0"></a>
+## [v2.8.0](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/compare/v2.7.0...v2.8.0) - 2026-05-07
+
+### Added
+* [Add query sequence generation (#16)](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/commit/3d7a5aa77717c809a1f295906d711ec44f9fcd63)
+
 <a name="v2.7.0"></a>
 ## [v2.7.0](https://github.com/SolidBench/sparql-query-parameter-instantiator.js/compare/v2.6.0...v2.7.0) - 2025-04-18
 
